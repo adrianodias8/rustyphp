@@ -26,7 +26,7 @@ pregate() {
   local free; free=$(df -g /System/Volumes/Data | awk 'NR==2{print $4}')
   [ "$free" -ge 10 ] || { echo "PRE-GATE: Data liberi ${free}G (<10)"; ko=1; }
   [ -d "$B" ] || { echo "PRE-GATE: $B assente"; ko=1; }
-  echo "PRE-GATE: bundle=montata lock=assente loadavg=$la data_free=${free}G"
+  echo "PRE-GATE: bundle=montata lock=$([ -e "$LOCK" ] && echo nostro || echo assente) loadavg=$la data_free=${free}G"
   return $ko
 }
 pregate || exit 8

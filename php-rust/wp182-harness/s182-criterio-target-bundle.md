@@ -14,3 +14,10 @@ sul volume esterno, 150 GiB nominali) è abbastanza veloce da sostituire `~/Clau
   ASSENTE · nessun phpr/php-server/cargo/ci-runner vivo · loadavg 1m < 3 · Data ≥ 10 GiB liberi.
 - **Esito**: solo numeri in `target-bundle-out/s182-target-bundle-verdetto.out` (+ du delle target e
   della bundle su disco). Rumore: se |A1−A3| caldo > 15 % la corsa non è giudicabile, si ripete.
+
+## ESITO (2026-09-29 18:36, HEAD c5c3cd21, rustc 1.98.1, tree pulito, lock nostro, loadavg 2,82 al lancio)
+freddo A 205,8 s · B 204,8 s · caldo A 147,5/147,3/149,1 · B 147,9/147,0/150,7 · **mediana B/A = 1,002** · rumore A 1,0 % ·
+du 910M/910M · bundle su disco 2,4G ⇒ **PROMOSSA a target dev** (config.toml → bundle). Lettura onesta: il profilo
+release (lto fat, cgu 1, `incremental` non impostato ⇒ OFF) è CPU-bound, il filesystem non pesa; il guadagno è la
+PERSISTENZA della cache tra sessioni (niente potatura, freddo→caldo = −58 s a build) e lo spazio sul disco interno.
+Verdetto: target-bundle-out/s182-target-bundle-verdetto.out.

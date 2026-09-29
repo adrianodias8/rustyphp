@@ -63,12 +63,14 @@ emendamenti passano dal sign-off dell'utente e dal handoff.
   build vivono sul **volume principale**. **MAI** ridirigere il `target-dir` sul
   volume esterno né usare il `target/` in-repo. Sorgente e corpus stanno sul volume
   esterno ma sono solo letti.
-- **Due target dir**: `~/Claude/php-rust-dev-output` è il default del
-  `.cargo/config.toml` locale (sviluppo ordinario ed esplorativo: un semplice
-  `cargo build --release` finisce lì). `~/Claude/php-rust-output` è la target
-  **CANONICA** e porta i binari pinnati in `release/` (il pre-flight ne confronta
-  l'hash col pin dichiarato): ci si costruisce SOLO via `scripts/pin-phpr.sh` /
-  `scripts/pin-server.sh` o nelle build di promozione, SEMPRE con
+- **Due target dir**: `~/Claude/phpr-target/dev-output` è il default del `.cargo/config.toml`
+  locale (sviluppo ordinario: un semplice `cargo build --release` finisce lì). Vive nella
+  sparsebundle APFS `phpr-target.sparsebundle` sul volume esterno: montarla con
+  `wp182-harness/phpr-target-bundle.sh mount` (da smontata il mountpoint è bloccato e cargo
+  fallisce; `status`/`compact` per spazio). Promossa S-182 (B/A 1,002 vs disco interno).
+  `~/Claude/php-rust-output` è la target **CANONICA** e porta i binari pinnati in `release/`
+  (il pre-flight ne confronta l'hash col pin dichiarato): ci si costruisce SOLO via
+  `scripts/pin-phpr.sh` / `scripts/pin-server.sh` o nelle build di promozione, SEMPRE con
   `CARGO_TARGET_DIR=$HOME/Claude/php-rust-output` esplicito.
 - Toolchain pinnata in `rust-toolchain.toml` (1.98.1): mai cambiare toolchain o
   ricetta durante un arco di misura. SEMPRE `--release` (il profilo debug rigenera

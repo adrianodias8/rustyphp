@@ -22,7 +22,7 @@ CI: job in coda da 172814ae a HEAD partono al rilascio del lock (ATTESI verdi: b
    finestra NOTTURNA senza app utente) + ORM E3/E4 (s176-orm-coppia.sh, PIN_ATTESO s181) ⇒ se t24 in banda E ORM ≤7,05 con sentinella in banda:
    t23/ORM-s181 = contaminazione ambientale DICHIARATA (chiusa); altrimenti reperto contro L-CR1 (attesa ≤0) e istruttoria vera
    (gambe media/full per motore, ictx, replica peak) · Serena attiva PRIMA del Rust · `._*` purgati a chiusura (wp181 456, phpr-ci 6787).
-   **TARGET (2026-09-29)**: il `.cargo/config.toml` locale punta ora alla DEV `~/Claude/php-rust-dev-output`; ogni build di pin/promozione
+   **TARGET (2026-09-29)**: il `.cargo/config.toml` locale punta alla DEV `~/Claude/phpr-target/dev-output` (sparsebundle APFS: `wp182-harness/phpr-target-bundle.sh mount|status` nel pre-flight); ogni build di pin/promozione
    (catena §6) va lanciata con `CARGO_TARGET_DIR=$HOME/Claude/php-rust-output` ESPLICITO, altrimenti il binario non arriva al pre-flight.
 1. **SCOMPOSIZIONE L-CR1 (az.rev. S-181, rilievi 1-4)**: bracci same-toolchain sopra il pin s181: P = placebo (modifica innocua in
    run_loop: misura la banda-layout del CANDIDATO), −a (senza split_at_mut/push diretto), −b (senza ip=1), −c (guardia Ret com'era);

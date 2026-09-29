@@ -40,7 +40,7 @@ Reimplementazione moderna di PHP 8.5 in Rust, guidata dal comportamento osservab
 > compilazione incrementale di Rust (non hard-linka la cache). Gli artefatti vivono
 > quindi sul volume principale: `~/Claude/php-rust-output` è la target CANONICA coi
 > binari pinnati (solo `scripts/pin-phpr.sh` e build di promozione); lo sviluppo
-> ordinario usa `CARGO_TARGET_DIR=$HOME/Claude/php-rust-dev-output` (dettagli in
+> ordinario va in `~/Claude/phpr-target/dev-output` (sparsebundle APFS, da montare; dettagli in
 > `php-rust/CLAUDE.md`). NON build sul volume esterno. Sorgente/corpus sul volume
 > esterno sono solo letti.
 > Engine: VM a bytecode unico (pipeline mago AST→HIR→bytecode→VM); il vecchio
