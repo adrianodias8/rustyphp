@@ -1,0 +1,5 @@
+ext/pdo/tests/bug_77849_2.phpt
+ext/pdo/tests/pdo_036.phpt
+ext/pdo/tests/pdo_uninitialized.phpt
+ext/pdo/tests/pdorow.phpt
+ext/pdo/tests/sensitive_parameter.phpt

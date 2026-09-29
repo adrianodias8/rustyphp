@@ -12,3 +12,11 @@ php-rust/[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f
 # config Cargo LOCALE (target-dir personale fuori dal volume esterno):
 # tracciato solo l'esempio .cargo/config.toml.example
 php-rust/.cargo/config.toml
+
+# ---- fork additions (rustyphp) ----
+# Benchmark raw outputs and generated inputs live in the scratch volume; only
+# the dated summaries in bench/results/*.md and the flamegraphs are committed.
+bench/symfony-app/vendor/
+bench/results/raw/
+bench/profiles/*.perf.data
+bench/profiles/*.folded

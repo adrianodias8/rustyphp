@@ -1,0 +1,37 @@
+# oracle (PHP 8.5.7)
+1) Doctrine\DBAL\Tests\Functional\ExceptionTest::testConnectionExceptionSqLite
+
+# phpr (9d4ef5ba)
+1) Doctrine\DBAL\Tests\Functional\PortabilityTest::testFullFetchMode
+TypeError: Doctrine\DBAL\Portability\OptimizeFlags::__invoke(): Argument #2 ($flags) must be of type int, null given, called in /scratch/smoke-dbal/dbal/vendor/phpunit/phpunit/phpunit on line 42
+
+2) Doctrine\DBAL\Tests\Functional\PortabilityTest::testCaseConversion with data set "lower" (Doctrine\DBAL\ColumnCase Enum (LOWER), ['test_int', 'test_string', 'test_null'])
+TypeError: Doctrine\DBAL\Portability\OptimizeFlags::__invoke(): Argument #2 ($flags) must be of type int, null given, called in /scratch/smoke-dbal/dbal/vendor/phpunit/phpunit/phpunit on line 42
+
+3) Doctrine\DBAL\Tests\Functional\PortabilityTest::testCaseConversion with data set "upper" (Doctrine\DBAL\ColumnCase Enum (UPPER), ['TEST_INT', 'TEST_STRING', 'TEST_NULL'])
+TypeError: Doctrine\DBAL\Portability\OptimizeFlags::__invoke(): Argument #2 ($flags) must be of type int, null given, called in /scratch/smoke-dbal/dbal/vendor/phpunit/phpunit/phpunit on line 42
+
+4) Doctrine\DBAL\Tests\Functional\PortabilityTest::testCaseConversionColumnName with data set "lower" (Doctrine\DBAL\ColumnCase Enum (LOWER), ['test_int', 'test_string', 'test_null'])
+TypeError: Doctrine\DBAL\Portability\OptimizeFlags::__invoke(): Argument #2 ($flags) must be of type int, null given, called in /scratch/smoke-dbal/dbal/vendor/phpunit/phpunit/phpunit on line 42
+
+5) Doctrine\DBAL\Tests\Functional\PortabilityTest::testCaseConversionColumnName with data set "upper" (Doctrine\DBAL\ColumnCase Enum (UPPER), ['TEST_INT', 'TEST_STRING', 'TEST_NULL'])
+TypeError: Doctrine\DBAL\Portability\OptimizeFlags::__invoke(): Argument #2 ($flags) must be of type int, null given, called in /scratch/smoke-dbal/dbal/vendor/phpunit/phpunit/phpunit on line 42
+
+6) Doctrine\DBAL\Tests\Functional\PortabilityTest::testFetchColumn with data set "int" ('Test_Int', [1, 2])
+TypeError: Doctrine\DBAL\Portability\OptimizeFlags::__invoke(): Argument #2 ($flags) must be of type int, null given, called in /scratch/smoke-dbal/dbal/vendor/phpunit/phpunit/phpunit on line 42
+
+7) Doctrine\DBAL\Tests\Functional\PortabilityTest::testFetchColumn with data set "string" ('Test_String', ['foo', 'foo'])
+TypeError: Doctrine\DBAL\Portability\OptimizeFlags::__invoke(): Argument #2 ($flags) must be of type int, null given, called in /scratch/smoke-dbal/dbal/vendor/phpunit/phpunit/phpunit on line 42
+
+8) Doctrine\DBAL\Tests\Functional\PortabilityTest::testFetchAllNullColumn
+TypeError: Doctrine\DBAL\Portability\OptimizeFlags::__invoke(): Argument #2 ($flags) must be of type int, null given, called in /scratch/smoke-dbal/dbal/vendor/phpunit/phpunit/phpunit on line 42
+
+9) Doctrine\DBAL\Tests\Functional\PortabilityTest::testGetDatabaseName
+TypeError: Doctrine\DBAL\Portability\OptimizeFlags::__invoke(): Argument #2 ($flags) must be of type int, null given, called in /scratch/smoke-dbal/dbal/vendor/phpunit/phpunit/phpunit on line 42
+
+10) Doctrine\DBAL\Tests\Schema\Name\Parser\GenericNameParserTest::testValidInput with data set #11 ('schéma."übermäßigkeit".`àçcên...ràctér', [Doctrine\DBAL\Schema\Name\Identifier Object (...), Doctrine\DBAL\Schema\Name\Identifier Object (...), Doctrine\DBAL\Schema\Name\Identifier Object (...), Doctrine\DBAL\Schema\Name\Identifier Object (...), Doctrine\DBAL\Schema\Name\Identifier Object (...)])
+Doctrine\DBAL\Schema\Name\Parser\Exception\ExpectedDot: Expected dot at position 9, got "�".
+
+1) Doctrine\DBAL\Tests\Functional\ExceptionTest::testConnectionExceptionSqLite
+Failed asserting that exception of type "Doctrine\DBAL\Exception\ReadOnlyException" is thrown.
+

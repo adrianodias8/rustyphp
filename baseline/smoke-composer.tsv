@@ -1,0 +1,5 @@
+run	engine	rc	wall_s	user_s	sys_s	rss_kb	vendor_files	monolog
+1	oracle	0	1.5	0.42	0.08	49732	152	3.12.1
+2	phpr	1	1.26	0.39	0.03	182592	0	-
+3	phpr	1	1.19	0.38	0.01	190812	0	-
+4	oracle	0	1.35	0.42	0.07	49596	152	3.12.1

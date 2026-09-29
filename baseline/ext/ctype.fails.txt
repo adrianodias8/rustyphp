@@ -1,0 +1,2 @@
+ext/ctype/tests/001.phpt
+ext/ctype/tests/bug25745.phpt

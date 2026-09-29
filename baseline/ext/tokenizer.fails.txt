@@ -1,0 +1,8 @@
+ext/tokenizer/tests/PhpToken_methods.phpt
+ext/tokenizer/tests/PhpToken_tokenize.phpt
+ext/tokenizer/tests/bug54089.phpt
+ext/tokenizer/tests/bug77966.phpt
+ext/tokenizer/tests/gh19507_throw.phpt
+ext/tokenizer/tests/no_inline_html_split.phpt
+ext/tokenizer/tests/token_get_all_TOKEN_PARSE_000.phpt
+ext/tokenizer/tests/token_get_all_heredoc_nowdoc.phpt

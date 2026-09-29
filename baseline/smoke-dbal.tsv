@@ -1,0 +1,5 @@
+run	engine	rc	wall_s	user_s	sys_s	rss_kb	phpunit_summary
+1	oracle	1	0.8	0.74	0.02	91028	FAILURES! Tests: 4141, Assertions: 5959, Failures: 1, Skipped: 649, Incomplete: 13.
+2	phpr	2	6.53	6.39	0.08	386760	ERRORS! Tests: 4146, Assertions: 5931, Errors: 10, Failures: 1, Skipped: 639, Incomplete: 13.
+3	phpr	2	6.38	6.28	0.04	386596	ERRORS! Tests: 4146, Assertions: 5931, Errors: 10, Failures: 1, Skipped: 639, Incomplete: 13.
+4	oracle	1	0.78	0.72	0.03	90936	FAILURES! Tests: 4141, Assertions: 5959, Failures: 1, Skipped: 649, Incomplete: 13.

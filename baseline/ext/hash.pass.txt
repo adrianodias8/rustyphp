@@ -1,0 +1,17 @@
+ext/hash/tests/bug52240.phpt
+ext/hash/tests/crc32.phpt
+ext/hash/tests/hash_equals.phpt
+ext/hash/tests/hash_file_basic.phpt
+ext/hash/tests/hash_hmac_error.phpt
+ext/hash/tests/hash_update_file.phpt
+ext/hash/tests/hash_update_stream.phpt
+ext/hash/tests/hmac-md5.phpt
+ext/hash/tests/md5.phpt
+ext/hash/tests/sha1.phpt
+ext/hash/tests/sha224.phpt
+ext/hash/tests/sha256.phpt
+ext/hash/tests/sha3.phpt
+ext/hash/tests/sha384.phpt
+ext/hash/tests/sha512-224.phpt
+ext/hash/tests/sha512-256.phpt
+ext/hash/tests/sha512.phpt

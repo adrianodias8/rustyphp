@@ -1,0 +1,1508 @@
+Zend/tests/67468.phpt	builtin	Call to undefined function highlight_string()
+Zend/tests/ArrayAccess/bug69955.phpt	vm-unsupported	`[]` has no value for reading
+Zend/tests/GHSA-wm6j-2649-pv75.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/access_modifiers/access_modifiers_001.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/access_modifiers/access_modifiers_002.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/access_modifiers/access_modifiers_003.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/access_modifiers/access_modifiers_004.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/access_modifiers/access_modifiers_005.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/access_modifiers/access_modifiers_006.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/access_modifiers/access_modifiers_013.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/anon/gh15994.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/arg_unpack/by_ref.phpt	vm-unsupported	spread call to a by-reference function
+Zend/tests/arg_unpack/by_ref_separation.phpt	vm-unsupported	spread call to a by-reference function
+Zend/tests/arg_unpack/traversable_with_by_ref_parameters.phpt	vm-unsupported	spread call to a by-reference function
+Zend/tests/arginfo_zpp_mismatch.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/arginfo_zpp_mismatch_strict.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/array_append_reading_error.phpt	vm-unsupported	expression AppendArg
+Zend/tests/array_unpack/already_occupied.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/array_unpack/in_destructuring.phpt	unsupported	spread in destructuring (line 3)
+Zend/tests/array_unpack/in_destructuring_2.phpt	unsupported	spread in destructuring (line 3)
+Zend/tests/array_unpack/unpack_invalid_type_compile_time.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/assert/expect_015.phpt	unsupported	expr:Identifier (line 146)
+Zend/tests/assert/expect_020.phpt	unsupported	expr:Identifier (line 5)
+Zend/tests/asymmetric_visibility/cpp_no_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/asymmetric_visibility/cpp_wider_set_scope.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/asymmetric_visibility/decrease_scope_private_protected.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/asymmetric_visibility/duplicate_modifier.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/asymmetric_visibility/duplicate_modifier_2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/asymmetric_visibility/no_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/asymmetric_visibility/override_private_public.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/asymmetric_visibility/override_protected_private.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/asymmetric_visibility/override_public_private.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/asymmetric_visibility/override_public_protected.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/asymmetric_visibility/static_props.phpt	unsupported	assignment target (line 68)
+Zend/tests/asymmetric_visibility/virtual_get_only.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/asymmetric_visibility/virtual_set_only.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/008_wrong_attribution.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/010_unsupported_const_expression.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/016_custom_attribute_validation.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/attributes/018_fatal_error_in_argument.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/019_variable_attribute_name.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/attributes/024_internal_target_validation.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/025_internal_repeatable_validation.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/026_unpack_in_args.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/Attribute/Attribute_on_abstract.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/Attribute/Attribute_on_enum.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/Attribute/Attribute_on_interface.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/Attribute/Attribute_on_trait.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/allow_dynamic_properties_on_enum.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/allow_dynamic_properties_on_interface.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/allow_dynamic_properties_on_trait.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/constants/ast_export.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/attributes/constants/constant_listed_as_target-internal.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/constants/multiple_constants_error.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/constants/must_target_const-internal.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/constants/not_repeatable-internal.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/constants/repeatable-internal.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/attributes/delayed_target_validation/opcache_validator_errors.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/attributes/delayed_target_validation/repetition_errors.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/delayed_target_validation/with_Override_error_get.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/delayed_target_validation/with_Override_error_method.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/delayed_target_validation/with_Override_error_prop.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/delayed_target_validation/with_Override_error_set.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/deprecated/error_on_class.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/deprecated/error_on_enum.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/deprecated/error_on_interface.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/nodiscard/006.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/attributes/nodiscard/007.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/attributes/nodiscard/009.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/attributes/nodiscard/010.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/attributes/nodiscard/suppress_cast.phpt	unsupported	void cast (line 43)
+Zend/tests/attributes/nodiscard/unsupported_clone.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/nodiscard/unsupported_constructor.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/nodiscard/unsupported_property_hook_get.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/nodiscard/unsupported_void_function.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/override/003.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/override/004.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/override/005.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/override/006.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/override/008.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/override/010.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/override/011.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/override/014.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/override/017.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/override/020.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/override/021.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/override/022.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/override/gh12189_2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/override/gh12189_4.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/override/properties_02.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/override/properties_03.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/override/properties_04.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/override/properties_05.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/override/properties_07.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/override/properties_09.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/override/properties_10.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/override/properties_13.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/override/properties_16.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/override/properties_17.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/attributes/override/properties_20.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/autoload/bug61011.phpt	unsupported	assignment target (line 16)
+Zend/tests/backtrace/bug_debug_backtrace_replace_zend_execute_ex.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/binary-32bit.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/binary.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/break_error_001.phpt	unsupported	break/continue level (line 3)
+Zend/tests/break_error_002.phpt	unsupported	non-constant break/continue level (line 3)
+Zend/tests/break_error_003.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/break_error_004.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/bug32322.phpt	vm-unsupported	reference assignment from a non-call
+Zend/tests/bug33257.phpt	vm-unsupported	by-reference builtin whose first argument is not a plain variable
+Zend/tests/bug34199.phpt	extension	requires unsupported extension 'simplexml'
+Zend/tests/bug34617.phpt	extension	requires unsupported extension 'xml'
+Zend/tests/bug35163_2.phpt	unsupported	assignment target (line 4)
+Zend/tests/bug35393.phpt	vm-unsupported	by-reference builtin whose first argument is not a plain variable
+Zend/tests/bug36513.phpt	builtin	Call to undefined function highlight_string()
+Zend/tests/bug38211.phpt	unsupported	assignment target (line 3)
+Zend/tests/bug38779.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/bug38808.phpt	builtin	Call to undefined function next()
+Zend/tests/bug40236.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/bug40770.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/bug42767.phpt	builtin	Call to undefined function highlight_string()
+Zend/tests/bug42859.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/bug43343.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/bug46701.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/bug48667_1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/bug48667_2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/bug52939.phpt	builtin	Call to undefined function array_multisort()
+Zend/tests/bug53629.phpt	builtin	Call to undefined function highlight_string()
+Zend/tests/bug54013.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/bug54547.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/bug55509.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/bug60613.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/bug61087.phpt	builtin	Call to undefined function parse_ini_file()
+Zend/tests/bug62097.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/bug64515.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/bug64660.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/bug64988.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/bug66218.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/bug66660.phpt	section	--STDIN-- section not modelled
+Zend/tests/bug67436/bug67436.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/bug68887.phpt	builtin	Call to undefined function get_resources()
+Zend/tests/bug69805.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/bug69892.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/bug69905.phpt	vm-unsupported	`[]` has no value for reading
+Zend/tests/bug70173.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/bug70182.phpt	vm-unsupported	`[]` has no value for reading
+Zend/tests/bug70258.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/bug70748.phpt	builtin	Call to undefined function parse_ini_file()
+Zend/tests/bug70918.phpt	vm-unsupported	`parent` without a parent class
+Zend/tests/bug71086.phpt	builtin	Call to undefined function highlight_string()
+Zend/tests/bug71300.phpt	unsupported	assignment target (line 6)
+Zend/tests/bug71871.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/bug71871_2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/bug71930.phpt	extension	requires unsupported extension 'curl'
+Zend/tests/bug72441.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/bug74084.phpt	unsupported	assignment target (line 2)
+Zend/tests/bug74093.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/bug76846.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/bug77660.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/bug78154.phpt	vm-unsupported	host builtin out-param is not a plain variable
+Zend/tests/bug78182.phpt	unsupported	assignment target (line 5)
+Zend/tests/bug78335_2.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/bug78340.phpt	builtin	Call to undefined function test()
+Zend/tests/bug78770.phpt	extension	requires unsupported extension 'intl'
+Zend/tests/bug79783.phpt	vm-unsupported	host builtin out-param is not a plain variable
+Zend/tests/bug79919.phpt	extension	requires unsupported extension 'simplexml'
+Zend/tests/bug80811.phpt	vm-unsupported	builtin call with named arguments
+Zend/tests/bug81070.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/builtin_functions_basic.phpt	builtin	Call to undefined function get_defined_constants()
+Zend/tests/builtin_in_write_context_error2.phpt	vm-unsupported	reference assignment from a builtin / undefined call
+Zend/tests/call_to_deprecated_function_args.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/call_user_functions/call_user_func_array_prefer_ref.phpt	builtin	Call to undefined function array_multisort()
+Zend/tests/catch_static.phpt	unsupported	catch type (line 6)
+Zend/tests/class_alias/bug54268.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/class_alias/class_alias_009.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/class_alias/gh16665_1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/class_alias/gh16665_2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/class_name/class_name_as_scalar_error_001.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/class_name/class_name_as_scalar_error_003.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/class_name/class_name_as_scalar_error_006.phpt	vm-unsupported	`parent` without a parent class
+Zend/tests/class_name/class_name_as_scalar_error_007.phpt	vm-unsupported	`self` outside class context
+Zend/tests/class_name/self_class_const_in_unknown_scope.phpt	vm-unsupported	`self` outside class context
+Zend/tests/clone/clone_002.phpt	vm-unsupported	array write with no steps
+Zend/tests/clone/clone_005.phpt	builtin	Call to undefined function clone()
+Zend/tests/clone/clone_with_001.phpt	builtin	Call to undefined function clone()
+Zend/tests/clone/clone_with_002.phpt	builtin	Call to undefined function clone()
+Zend/tests/clone/clone_with_003.phpt	builtin	Call to undefined function clone()
+Zend/tests/clone/clone_with_004.phpt	builtin	Call to undefined function clone()
+Zend/tests/clone/clone_with_007.phpt	builtin	Call to undefined function clone()
+Zend/tests/clone/clone_with_008.phpt	builtin	Call to undefined function clone()
+Zend/tests/clone/clone_with_009.phpt	builtin	Call to undefined function clone()
+Zend/tests/clone/clone_with_012.phpt	builtin	Call to undefined function clone()
+Zend/tests/closures/closure_041.phpt	unsupported	assignment target (line 21)
+Zend/tests/closures/closure_043.phpt	unsupported	assignment target (line 11)
+Zend/tests/closures/closure_044.phpt	unsupported	assignment target (line 10)
+Zend/tests/closures/closure_046.phpt	unsupported	assignment target (line 12)
+Zend/tests/closures/closure_060.phpt	unsupported	assignment target (line 8)
+Zend/tests/closures/closure_const_expr/attributes.phpt	extension	requires unsupported extension 'reflection'
+Zend/tests/closures/closure_const_expr/attributes_autoload.phpt	extension	requires unsupported extension 'reflection'
+Zend/tests/closures/closure_const_expr/attributes_scope_001.phpt	extension	requires unsupported extension 'reflection'
+Zend/tests/closures/closure_const_expr/attributes_scope_002.phpt	extension	requires unsupported extension 'reflection'
+Zend/tests/closures/closure_const_expr/disallows_non_static.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/closures/closure_const_expr/disallows_using_variables.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/closures/closure_use_auto_global.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/closures/closure_use_parameter_name.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/closures/closure_use_variable_twice.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/closures/gh12073.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/closures/gh19653_1.phpt	unsupported	named argument on a dynamic call (line 9)
+Zend/tests/closures/gh19653_2.phpt	unsupported	named argument on a dynamic call (line 4)
+Zend/tests/coalesce/assign_coalesce_001.phpt	unsupported	dynamic static property name (line 64)
+Zend/tests/coalesce/assign_coalesce_004.phpt	vm-unsupported	`??=` on this place
+Zend/tests/coalesce/assign_coalesce_005.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/coalesce/bug81684.phpt	vm-unsupported	`??=` on this place
+Zend/tests/comparison/compare_001.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/comparison/compare_001_64bit.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/comparison/compare_002.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/comparison/compare_002_64bit.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/comparison/compare_003.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/comparison/compare_003_64bit.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/comparison/compare_004.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/comparison/compare_004_64bit.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/comparison/compare_005.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/comparison/compare_005_64bit.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/comparison/compare_006.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/comparison/compare_006_64bit.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/concat/bug32833.phpt	vm-unsupported	`[]` has no value for reading
+Zend/tests/concat/bug79836_4.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/concat/concat_003.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/constants/bug65291.phpt	builtin	Call to undefined function get_defined_constants()
+Zend/tests/constants/class_constant_inheritance_mutable_data.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/constants/class_constants_001.phpt	vm-unsupported	class constant `val3` (undefined here, or an enum case)
+Zend/tests/constants/const_deprecation.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/constants/final_constants/final_const11.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/constants/final_constants/final_const12.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/constants/final_constants/final_const2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/constants/final_constants/final_const3.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/constants/final_constants/final_const5.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/constants/final_constants/final_const8.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/constants/gh18463-class-constant.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/constants/halt_compiler/bug48930.phpt	unsupported	stmt:HaltCompiler (line 9)
+Zend/tests/constants/halt_compiler/bug54804.phpt	unsupported	stmt:HaltCompiler (line 5)
+Zend/tests/constants/halt_compiler/bug70164.phpt	unsupported	stmt:HaltCompiler (line 15)
+Zend/tests/constants/halt_compiler/halt01.phpt	unsupported	stmt:HaltCompiler (line 5)
+Zend/tests/constants/halt_compiler/halt02.phpt	unsupported	stmt:HaltCompiler (line 7)
+Zend/tests/constants/halt_compiler/halt03.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/constants/halt_compiler/halt_compiler1.phpt	unsupported	stmt:HaltCompiler (line 1)
+Zend/tests/constants/halt_compiler/halt_compiler4.phpt	unsupported	stmt:HaltCompiler (line 3)
+Zend/tests/constants/iface_constant_visibility_variance.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/constants/oss_fuzz_416302790.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/constexpr/constant_expressions_cast_object_property.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/constexpr/new_not_allowed_class_constant.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/constexpr/new_not_allowed_property.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/ctor_promotion/ctor_promotion_abstract.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/ctor_promotion/ctor_promotion_additional_modifiers.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/ctor_promotion/ctor_promotion_callable_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/ctor_promotion/ctor_promotion_free_function.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/ctor_promotion/ctor_promotion_interface.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/ctor_promotion/ctor_promotion_not_a_ctor.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/ctor_promotion/ctor_promotion_null_default.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/ctor_promotion/ctor_promotion_repeated_prop.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/ctor_promotion/ctor_promotion_variadic.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/custom_assert_forbidden.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/debug_info/debug_info-error-0.0.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/debug_info/debug_info-error-0.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/debug_info/debug_info-error-1.0.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/debug_info/debug_info-error-1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/debug_info/debug_info-error-empty_str.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/debug_info/debug_info-error-false.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/debug_info/debug_info-error-object.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/debug_info/debug_info-error-resource.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/debug_info/debug_info-error-str.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/debug_info/debug_info-error-true.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/declare/bug69092.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/declare/declare_005.phpt	builtin	Call to undefined function register_tick_function()
+Zend/tests/declare/declare_006.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/declare/declare_007.phpt	builtin	Call to undefined function register_tick_function()
+Zend/tests/deprecate_dollar_brace_string_interpolation_1.phpt	unsupported	expr:Identifier (line 4)
+Zend/tests/dereference/dereference_008.phpt	vm-unsupported	reference assignment from a non-call
+Zend/tests/double_to_string.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/double_to_string_64bit.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/enum/__clone.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/__debugInfo.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/__get.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/__isset.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/__serialize.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/__set.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/__set_state.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/__sleep.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/__toString.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/__unserialize.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/__unset.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/__wakeup.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/backed-int-case-without-value.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/backed-int-const-expr.phpt	vm-unsupported	class constant `Bar` (undefined here, or an enum case)
+Zend/tests/enum/backed-int-const-invalid-expr.phpt	vm-unsupported	class constant `Bar` (undefined here, or an enum case)
+Zend/tests/enum/backed-invalid.phpt	unsupported	enum backing type (only int/string) (line 3)
+Zend/tests/enum/backed-negative-int.phpt	vm-unsupported	class constant `Bar` (undefined here, or an enum case)
+Zend/tests/enum/backed-string-heredoc.phpt	vm-unsupported	class constant `Bar` (undefined here, or an enum case)
+Zend/tests/enum/backed-type-no-union.phpt	unsupported	enum backing type (only int/string) (line 3)
+Zend/tests/enum/case-in-class.phpt	unsupported	class member (line 3)
+Zend/tests/enum/cases-refcount.phpt	builtin	Call to undefined function debug_zval_dump()
+Zend/tests/enum/comparison-internal.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/enum/gh10346.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/enum/gh21760.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/gh7792_1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/gh7792_2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/gh7792_3.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/gh7792_4.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/gh7792_5.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/implements-internal.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/enum/instanceof-backed-enum.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/enum/instanceof-unitenum.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/enum/internal_enums.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/enum/internal_enums_strict_types.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/enum/no-abstract.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/no-cases.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/no-class-implements-backed-enum.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/no-class-implements-unit-enum.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/no-clone-internal.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/enum/no-constructors.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/no-destruct.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/no-dynamic-properties-internal.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/enum/no-enum-implements-backed-enum.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/no-enum-implements-unit-enum.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/no-from.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/no-name-property.phpt	unsupported	property in enum (line 3)
+Zend/tests/enum/no-non-backed-enum-implements-backed-enum.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/no-properties.phpt	unsupported	property in enum (line 3)
+Zend/tests/enum/no-static-properties.phpt	unsupported	property in enum (line 3)
+Zend/tests/enum/no-unsed-value.phpt	unsupported	assignment target (line 7)
+Zend/tests/enum/no-value-property.phpt	unsupported	property in enum (line 3)
+Zend/tests/enum/non-backed-enum-with-expr-value.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/non-backed-enum-with-int-value.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/non-backed-enum-with-invalid-value.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/non-backed-enum-with-string-value.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/traits-no-__construct.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/traits-no-forbidden-methods.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/enum/traits-no-properties.phpt	unsupported	trait with properties used in enum (line 11)
+Zend/tests/enum/unserialize-refcount.phpt	builtin	Call to undefined function debug_zval_dump()
+Zend/tests/errmsg/errmsg_002.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/errmsg/errmsg_004.phpt	vm-unsupported	array write with no steps
+Zend/tests/errmsg/errmsg_005.phpt	vm-unsupported	array write with no steps
+Zend/tests/errmsg/errmsg_007.phpt	vm-unsupported	`[]` is not a readable place
+Zend/tests/errmsg/errmsg_008.phpt	vm-unsupported	`[]` is not a readable place
+Zend/tests/errmsg/errmsg_009.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/errmsg/errmsg_010.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/errmsg/errmsg_011.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/errmsg/errmsg_013.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/errmsg/errmsg_015.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/errmsg/errmsg_016.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/errmsg/errmsg_017.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/errmsg/errmsg_019.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/errmsg/errmsg_023.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/errmsg/errmsg_025.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/errmsg/errmsg_027.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/errmsg/errmsg_028.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/errmsg/errmsg_029.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/errmsg/errmsg_032.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/errmsg/errmsg_033.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/errmsg/errmsg_034.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/errmsg/errmsg_037.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/errmsg/errmsg_039.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/eval_parse_error_with_doc_comment.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/exceptions/bug78239.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/exceptions/exception_013.phpt	unsupported	assignment target (line 19)
+Zend/tests/exceptions/exception_during_variance_autoload_2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/exceptions/exception_from_toString.phpt	unsupported	assignment target (line 63)
+Zend/tests/exit/bug79948.phpt	ini	--INI-- value substitution not modelled: auto_prepend_file={PWD}/bug79948.inc
+Zend/tests/exit/define_die_constant.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/exit/define_die_constant_namespace.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/exit/define_die_function.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/exit/define_die_function_namespace.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/exit/define_exit_constant.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/exit/define_exit_constant_namespace.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/exit/define_exit_function.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/exit/define_exit_function_namespace.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/exit/define_goto_label_die.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/exit/define_goto_label_die_with_jump.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/exit/define_goto_label_exit.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/exit/define_goto_label_exit_with_jump.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/exit/exit_string_with_buffer_output.phpt	vm-unsupported	builtin call with named arguments
+Zend/tests/falsetoarray.phpt	vm-unsupported	`[]` has no value for reading
+Zend/tests/fibers/get-return-after-bailout.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/fibers/gh19983.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/fibers/out-of-memory-in-fiber.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/fibers/out-of-memory-in-nested-fiber.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/fibers/out-of-memory-in-recursive-fiber.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/fibers/signal-async.phpt	extension	requires unsupported extension 'pcntl'
+Zend/tests/fibers/signal-dispatch.phpt	extension	requires unsupported extension 'pcntl'
+Zend/tests/fibers/ticks.phpt	builtin	Call to undefined function register_tick_function()
+Zend/tests/first_class_callable/constexpr/attributes.phpt	extension	requires unsupported extension 'reflection'
+Zend/tests/first_class_callable/constexpr/attributes_scope_001.phpt	extension	requires unsupported extension 'reflection'
+Zend/tests/first_class_callable/constexpr/attributes_scope_002.phpt	extension	requires unsupported extension 'reflection'
+Zend/tests/first_class_callable/constexpr/case_insensitive.phpt	builtin	Call to undefined function StrRev()
+Zend/tests/first_class_callable/constexpr/error_dynamic_001.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/first_class_callable/constexpr/error_dynamic_002.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/first_class_callable/constexpr/error_dynamic_003.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/first_class_callable/constexpr/error_dynamic_004.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/first_class_callable/constexpr/error_instance_call.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/first_class_callable/constexpr/error_namespace_no_fallback_001.phpt	builtin	Call to undefined function Foo\strrev()
+Zend/tests/first_class_callable/constexpr/error_namespace_no_fallback_002.phpt	builtin	Call to undefined function Foo\strrev()
+Zend/tests/first_class_callable/constexpr/gh19637_closure_scope.phpt	extension	requires unsupported extension 'reflection'
+Zend/tests/first_class_callable/first_class_callable_008.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/first_class_callable/first_class_callable_011.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/first_class_callable/first_class_callable_012.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/first_class_callable/first_class_callable_013.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/first_class_callable/first_class_callable_assert2.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/first_class_callable/first_class_callable_assert3.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/first_class_callable/gh18062.phpt	vm-unsupported	builtin call with named arguments
+Zend/tests/foreach/bug39036.phpt	unsupported	assignment target (line 6)
+Zend/tests/foreach/foreach_list_004.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/foreach/this_in_foreach_004.phpt	vm-unsupported	$this property write
+Zend/tests/function_arguments/call_with_leading_comma_error.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/function_arguments/call_with_multi_inner_comma_error.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/function_arguments/call_with_multi_trailing_comma_error.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/function_arguments/call_with_only_comma_error.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/function_arguments/function_arguments_001.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/function_arguments/function_arguments_002.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/function_arguments/gh20435_2.phpt	unsupported	named argument on a dynamic call (line 18)
+Zend/tests/function_redecl.phpt	unsupported	function redeclaration (line 3)
+Zend/tests/gc/bug43918.phpt	extension	requires unsupported extension 'simplexml'
+Zend/tests/gc/bug78010.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/gc/gc_039.phpt	builtin	Call to undefined function mb_parse_str()
+Zend/tests/generators/bug65161.phpt	builtin	Call to undefined function foo()
+Zend/tests/generators/gh9750-008.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/generators/gh9801.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/generators/yield_from_by_reference.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/get_included_files_basic.phpt	builtin	Call to undefined function get_included_files()
+Zend/tests/get_mangled_object_vars.phpt	builtin	Call to undefined function get_mangled_object_vars()
+Zend/tests/get_required_files.phpt	builtin	Call to undefined function get_required_files()
+Zend/tests/get_resource_id.phpt	builtin	Call to undefined function get_resource_id()
+Zend/tests/gh10072-2.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/gh10072.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/gh10168/assign_dim_ref_with_prop_ref.phpt	unsupported	assignment target (line 12)
+Zend/tests/gh10168/assign_dim_with_prop_ref.phpt	unsupported	assignment target (line 12)
+Zend/tests/gh10168/assign_prop_ref_with_prop_ref.phpt	unsupported	assignment target (line 23)
+Zend/tests/gh10168/assign_prop_with_prop_ref.phpt	unsupported	assignment target (line 22)
+Zend/tests/gh10168/assign_static_prop_ref.phpt	unsupported	assignment target (line 13)
+Zend/tests/gh10168/assign_static_prop_ref_with_prop_ref.phpt	unsupported	assignment target (line 13)
+Zend/tests/gh10168/assign_static_prop_with_prop_ref.phpt	unsupported	assignment target (line 13)
+Zend/tests/gh10168/assign_static_untyped_prop_ref.phpt	unsupported	assignment target (line 13)
+Zend/tests/gh10168/assign_static_untyped_prop_ref_with_prop_ref.phpt	unsupported	assignment target (line 13)
+Zend/tests/gh10168/assign_static_untyped_prop_with_prop_ref.phpt	unsupported	assignment target (line 13)
+Zend/tests/gh10168/assign_untyped_prop_ref_with_prop_ref.phpt	unsupported	assignment target (line 23)
+Zend/tests/gh10168/assign_untyped_prop_with_prop_ref.phpt	unsupported	assignment target (line 22)
+Zend/tests/gh10168/assign_with_prop_ref.phpt	unsupported	assignment target (line 12)
+Zend/tests/gh10168/wrong_assign_to_variable.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/gh10469.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/gh11138.phpt	section	--POST_RAW-- section not modelled
+Zend/tests/gh11189.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/gh11189_1.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/gh12366.phpt	extension	requires unsupported extension 'opcache'
+Zend/tests/gh13670_001.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/gh13670_002.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/gh13670_003.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/gh14626.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/gh18026.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/gh18572.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/gh18756.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/gh19305-003.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/gh19543-001.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/gh19543-002.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/gh19679.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/gh19839.phpt	unsupported	assignment target (line 6)
+Zend/tests/gh19844.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/gh20113.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/gh8841.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/grammar/alternative_offset_syntax_compile_error_in_const_expr.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/grammar/alternative_offset_syntax_compile_error_outside_const_expr.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/grammar/alternative_offset_syntax_in_encaps_string.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/grammar/bug60099.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/grammar/bug70430.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/grammar/bug77993.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/grammar/bug78363.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/grammar/regression_003.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/grammar/regression_004.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/grammar/regression_005.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/grammar/regression_010.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/grammar/regression_012.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/grammar/semi_reserved_003.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/group_use/ns_trailing_comma_error_01.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/group_use/ns_trailing_comma_error_02.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/group_use/ns_trailing_comma_error_03.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/group_use/ns_trailing_comma_error_04.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/group_use/ns_trailing_comma_error_05.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/group_use/ns_trailing_comma_error_06.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/group_use/ns_trailing_comma_error_07.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/group_use/ns_trailing_comma_error_08.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/heredoc_nowdoc/bug35655.phpt	builtin	Call to undefined function highlight_string()
+Zend/tests/heredoc_nowdoc/bug76439_2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/heredoc_nowdoc/flexible-heredoc-complex-test4.phpt	unsupported	expr:Identifier (line 9)
+Zend/tests/heredoc_nowdoc/flexible-heredoc-error1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/heredoc_nowdoc/flexible-heredoc-error10.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/heredoc_nowdoc/flexible-heredoc-error11.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/heredoc_nowdoc/flexible-heredoc-error12.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/heredoc_nowdoc/flexible-heredoc-error13.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/heredoc_nowdoc/flexible-heredoc-error2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/heredoc_nowdoc/flexible-heredoc-error3.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/heredoc_nowdoc/flexible-heredoc-error4.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/heredoc_nowdoc/flexible-heredoc-error5.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/heredoc_nowdoc/flexible-heredoc-error6.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/heredoc_nowdoc/flexible-heredoc-error7.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/heredoc_nowdoc/flexible-heredoc-error8.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/heredoc_nowdoc/flexible-heredoc-error9.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/heredoc_nowdoc/flexible-nowdoc-error1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/heredoc_nowdoc/flexible-nowdoc-error2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/heredoc_nowdoc/flexible-nowdoc-error3.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/heredoc_nowdoc/flexible-nowdoc-error4.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/heredoc_nowdoc/flexible-nowdoc-error5.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/heredoc_nowdoc/flexible-nowdoc-error6.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/heredoc_nowdoc/flexible-nowdoc-error7.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/heredoc_nowdoc/flexible-nowdoc-error8.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/heredoc_nowdoc/heredoc_005.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/heredoc_nowdoc/heredoc_013.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/heredoc_nowdoc/heredoc_014.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/heredoc_nowdoc/nowdoc_013.phpt	builtin	Call to undefined function highlight_string()
+Zend/tests/heredoc_nowdoc/nowdoc_014.phpt	builtin	Call to undefined function highlight_string()
+Zend/tests/hex_overflow_32bit.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/in-de-crement/decrement_001.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/in-de-crement/decrement_001_64bit.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/in-de-crement/decrement_with_castable_objects_no_subtraction.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/in-de-crement/increment_001.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/in-de-crement/increment_001_64bit.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/in-de-crement/increment_function_return_error.phpt	vm-unsupported	`[]` has no value for reading
+Zend/tests/in-de-crement/increment_with_castable_objects_no_addition.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/inheritance/abstract_inheritance_003.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/inheritance/argument_restriction_001.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/inheritance/argument_restriction_002.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/inheritance/argument_restriction_003.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/inheritance/argument_restriction_005.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/inheritance/argument_restriction_006.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/inheritance/bug44414.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/inheritance/bug62609.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/inheritance/bug62814.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/inheritance/bug70957.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/inheritance/bug71428.1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/inheritance/bug72119.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/inheritance/bug73987.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/inheritance/bug73987_1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/inheritance/bug73987_2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/inheritance/bug73987_3.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/inheritance/constructor_abstract_grantparent.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/inheritance/deprecation_to_exception_during_inheritance.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/inheritance/deprecation_to_exception_during_inheritance_can_be_caught.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/inheritance/gh16508.phpt	extension	requires unsupported extension 'opcache'
+Zend/tests/inheritance/gh9407.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/inheritance/inherit_internal_static.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/inheritance/interface_constructor_prototype_001.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/inheritance/interface_constructor_prototype_002.phpt	section	--XFAIL-- section not modelled
+Zend/tests/int_overflow_32bit.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/int_overflow_64bit.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/int_underflow_32bit.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/int_underflow_64bit.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/inter_007.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/inter_05.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/internal_class_variance.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/isset/bug68162.phpt	unsupported	assignment target (line 4)
+Zend/tests/isset/bug80030.phpt	unsupported	assignment target (line 4)
+Zend/tests/isset/isset_001.phpt	unsupported	assignment target (line 7)
+Zend/tests/isset/isset_002.phpt	unsupported	assignment target (line 3)
+Zend/tests/isset/isset_expr_error.phpt	unsupported	assignment target (line 2)
+Zend/tests/isset/isset_func_error.phpt	builtin	Call to undefined function abc()
+Zend/tests/isset/this_in_isset.phpt	vm-unsupported	$this property write
+Zend/tests/iterable_or_null.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/lazy_objects/gh20905.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/lazy_objects/init_exception_reverts_initializer_changes_dyn_props_and_ht.phpt	builtin	Call to undefined function get_mangled_object_vars()
+Zend/tests/lazy_objects/init_exception_reverts_initializer_changes_props_ht.phpt	builtin	Call to undefined function get_mangled_object_vars()
+Zend/tests/lazy_objects/init_exception_reverts_initializer_changes_props_ht_ref.phpt	builtin	Call to undefined function get_mangled_object_vars()
+Zend/tests/lazy_objects/init_trigger_debug_zval_dump.phpt	builtin	Call to undefined function debug_zval_dump()
+Zend/tests/lazy_objects/init_trigger_get_mangled_object_vars.phpt	builtin	Call to undefined function get_mangled_object_vars()
+Zend/tests/lazy_objects/serialize_skip_flag_props_ht.phpt	builtin	Call to undefined function get_mangled_object_vars()
+Zend/tests/lazy_objects/unclean_shutdown.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/list/bug71030.phpt	unsupported	assignment target (line 13)
+Zend/tests/list/gh11320_3.phpt	unsupported	expr:List (line 2)
+Zend/tests/list/list_008.phpt	unsupported	assignment target (line 3)
+Zend/tests/list/list_010.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/list/list_011.phpt	unsupported	expr:List (line 3)
+Zend/tests/list/list_014.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/list/list_empty_error.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/list/list_empty_error_keyed.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/list/list_keyed_leading_comma.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/list/list_mixed_keyed_unkeyed.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/list/list_reference_004.phpt	unsupported	by-reference destructuring (line 3)
+Zend/tests/list/list_reference_010.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/list/list_reference_011.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/lsb/lsb_008.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/lsb/lsb_009.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/bug36268.phpt	builtin	Call to undefined function bar()
+Zend/tests/magic_methods/bug43201.phpt	builtin	Call to undefined function chop()
+Zend/tests/magic_methods/bug51421.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/bug51822.phpt	unsupported	assignment target (line 30)
+Zend/tests/magic_methods/bug61970_1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/bug61970_2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/bug68412.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/magic_methods/bug70215.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/bug70967.phpt	builtin	Call to undefined function undefined_function()
+Zend/tests/magic_methods/magic_by_ref_001.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/magic_by_ref_002.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/magic_by_ref_003.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/magic_by_ref_004.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/magic_by_ref_005.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/magic_by_ref_006.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/magic_by_ref_007.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/magic_methods_003.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/magic_methods_005.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/magic_methods_006.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/magic_methods_007.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/magic_methods_010.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/magic_methods_011.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/magic_methods_012.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/magic_methods_013.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/magic_methods_014.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/magic_methods_015.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/magic_methods_016.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/magic_methods_017.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/magic_methods_018.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/magic_methods_019.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/magic_methods_020.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/magic_methods_inheritance_rules_non_trivial_01.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/magic_methods_inheritance_rules_non_trivial_02.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/magic_methods_serialize.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/magic_methods_set_state.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/magic_methods_sleep.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/magic_methods_unserialize.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/magic_methods_wakeup.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/stringable_internal_class.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/magic_methods/stringable_trait_invalid.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/magic_methods/trampoline_closure_named_arguments.phpt	unsupported	named argument on a dynamic call (line 19)
+Zend/tests/match/038.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/memory_get_peak_usage.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/memory_reset_peak_usage.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/multibyte/multibyte_encoding_001.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/multibyte/multibyte_encoding_004.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/multibyte/multibyte_encoding_005.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/multibyte/multibyte_encoding_006.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/name_collision/delayed_early_binding_redeclaration.phpt	extension	requires unsupported extension 'opcache'
+Zend/tests/name_collision/name_collision_03.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/name_collision/name_collision_05.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/name_collision/name_collision_07.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/name_collision/name_collision_08.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/name_collision/name_collision_09.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/named_params/__invoke.phpt	unsupported	named argument on a dynamic call (line 17)
+Zend/tests/named_params/assert.phpt	vm-unsupported	builtin call with named arguments
+Zend/tests/named_params/attributes_duplicate_named_param.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/named_params/bug80096.phpt	vm-unsupported	builtin call with named arguments
+Zend/tests/named_params/call_user_func.phpt	vm-unsupported	builtin call with named arguments
+Zend/tests/named_params/call_user_func_array_variadic.phpt	builtin	Call to undefined function array_multisort()
+Zend/tests/named_params/internal.phpt	vm-unsupported	builtin call with named arguments
+Zend/tests/named_params/internal_variadics.phpt	vm-unsupported	builtin call with named arguments
+Zend/tests/named_params/missing_param.phpt	vm-unsupported	builtin call with named arguments
+Zend/tests/named_params/runtime_cache_init.phpt	vm-unsupported	builtin call with named arguments
+Zend/tests/named_params/unpack.phpt	vm-unsupported	spread call to a by-reference function
+Zend/tests/namespaces/bug42819.phpt	vm-unsupported	class constant `STD_PROP_LIST` (undefined here, or an enum case)
+Zend/tests/namespaces/bug77376.phpt	builtin	Call to undefined function Hello\World()
+Zend/tests/namespaces/namespace_name_namespace.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/namespaces/namespace_name_namespace_start.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/namespaces/namespaced_name_whitespace.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/namespaces/ns_026.phpt	builtin	Call to undefined function Foo\Foo\Bar()
+Zend/tests/namespaces/ns_035.phpt	vm-unsupported	class constant `STD_PROP_LIST` (undefined here, or an enum case)
+Zend/tests/namespaces/ns_036.phpt	vm-unsupported	class constant `STD_PROP_LIST` (undefined here, or an enum case)
+Zend/tests/namespaces/ns_075.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/namespaces/ns_079.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/namespaces/ns_080.phpt	unsupported	stmt:HaltCompiler (line 5)
+Zend/tests/namespaces/ns_081.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/namespaces/ns_087.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/namespaces/ns_088.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/namespaces/ns_092.phpt	builtin	Call to undefined function Foo\Bar\A()
+Zend/tests/namespaces/ns_094.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/namespaces/ns_096.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/new_oom.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/new_without_parentheses/assign_to_new.phpt	vm-unsupported	array write with no steps
+Zend/tests/new_without_parentheses/new_without_ctor_arguments_parentheses_array_access.phpt	unsupported	expr:Identifier (line 7)
+Zend/tests/new_without_parentheses/new_without_ctor_arguments_parentheses_method.phpt	unsupported	expr:Identifier (line 11)
+Zend/tests/new_without_parentheses/new_without_ctor_arguments_parentheses_property.phpt	unsupported	expr:Identifier (line 8)
+Zend/tests/new_without_parentheses/new_without_ctor_arguments_parentheses_static_method.phpt	vm-unsupported	class constant `test` (undefined here, or an enum case)
+Zend/tests/new_without_parentheses/unset_new.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/nullable_types/contravariant_nullable_return_fails.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/nullable_types/covariant_nullable_param_fails.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/nullable_types/union_nullable_property_fails.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/nullsafe_operator/004.phpt	unsupported	assignment target (line 4)
+Zend/tests/nullsafe_operator/005.phpt	unsupported	assignment target (line 4)
+Zend/tests/nullsafe_operator/006.phpt	unsupported	assignment target (line 4)
+Zend/tests/nullsafe_operator/007.phpt	unsupported	assignment target (line 4)
+Zend/tests/nullsafe_operator/008.phpt	unsupported	assignment target (line 4)
+Zend/tests/nullsafe_operator/009.phpt	unsupported	assignment target (line 4)
+Zend/tests/nullsafe_operator/010.phpt	unsupported	assignment target (line 4)
+Zend/tests/nullsafe_operator/011.phpt	unsupported	assignment target (line 13)
+Zend/tests/nullsafe_operator/017.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/nullsafe_operator/020.phpt	unsupported	assignment target (line 12)
+Zend/tests/nullsafe_operator/021.phpt	unsupported	assignment target (line 14)
+Zend/tests/nullsafe_operator/022.phpt	unsupported	assignment target (line 4)
+Zend/tests/nullsafe_operator/024.phpt	unsupported	assignment target (line 4)
+Zend/tests/nullsafe_operator/oss-fuzz-69765.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/nullsafe_operator/oss_fuzz_60011_1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/nullsafe_operator/oss_fuzz_60011_2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/number_or_str_zpp.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/numeric_literal_separator/bug78454_1.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/numeric_literal_separator/bug78454_2.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/numeric_literal_separator/numeric_literal_separator_002.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/numeric_literal_separator/numeric_literal_separator_003.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/numeric_literal_separator/numeric_literal_separator_004.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/numeric_literal_separator/numeric_literal_separator_005.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/numeric_literal_separator/numeric_literal_separator_006.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/numeric_literal_separator/numeric_literal_separator_007.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/numeric_literal_separator/numeric_literal_separator_008.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/numeric_literal_separator/numeric_literal_separator_009.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/object_types/invalid_default_value.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/object_types/missing_return_type_inheritance_in_class.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/object_types/missing_return_type_inheritance_in_interface.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/objects/objects_002.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/objects/objects_003.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/objects/objects_004.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/objects/objects_005.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/objects/objects_006.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/objects/objects_007.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/objects/objects_008.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/objects/objects_012.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/objects/objects_013.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/objects/objects_014.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/oct_whitespace.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/offsets/internal_handlers.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/offsets/internal_handlers_extended.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/offsets/runtime_compile_time_offset_access.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/oss-fuzz-465488618.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/oss_fuzz_417078295.phpt	builtin	Call to undefined function debug_zval_dump()
+Zend/tests/oss_fuzz_54325.phpt	unsupported	assignment target (line 10)
+Zend/tests/oss_fuzz_60741.phpt	ini	--INI-- value substitution not modelled: open_basedir="{TMP}"
+Zend/tests/overloaded_func_001.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/overloaded_func_002.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/parameter_default_values/bug69767.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/parameter_default_values/internal_declaration_error_class_const.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/parameter_default_values/internal_declaration_error_const.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/parameter_default_values/internal_declaration_error_false.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/parameter_default_values/internal_declaration_error_int.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/parameter_default_values/internal_declaration_error_null.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/parameter_default_values/userland_declaration_error_class_const.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/parameter_default_values/userland_declaration_error_const.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/php_tag_only.phpt	malformed	no --FILE-- section
+Zend/tests/pipe_operator/oss_fuzz_439125710.phpt	unsupported	assignment target (line 2)
+Zend/tests/pipe_operator/prec_001.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/pipe_operator/prec_003.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/pipe_operator/prec_006.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/prop_const_expr/attributes.phpt	extension	requires unsupported extension 'reflection'
+Zend/tests/prop_const_expr/enum_initializer.phpt	vm-unsupported	class constant `E` (undefined here, or an enum case)
+Zend/tests/property_hooks/abstract_get_set_readonly.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/abstract_hook_not_implemented.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/abstract_prop_without_hooks.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/backed_delegated_read_write.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/property_hooks/backed_invariant.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/bug004.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/default_on_virtual.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/default_on_virtual_with_inheritance.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/dump.phpt	builtin	Call to undefined function get_mangled_object_vars()
+Zend/tests/property_hooks/duplicate_hook.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/final.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/final_private_prop.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/final_prop.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/final_prop_2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/final_prop_promoted_1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/final_prop_promoted_2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/final_prop_promoted_3.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/final_prop_promoted_4.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/gh15140.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/gh15419_1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/gh15419_2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/gh17234.phpt	unsupported	dynamic static property name (line 6)
+Zend/tests/property_hooks/interface.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/interface_explicit_abstract.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/interface_final_hook.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/interface_final_prop.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/interface_get_set_readonly.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/interface_invalid_explicitly_abstract.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/interface_not_implemented.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/interface_not_public.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/invalid_abstract_body.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/invalid_abstract_indirect.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/invalid_abstract_indirect_2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/invalid_empty_hooks.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/invalid_static.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/override_attribute_fail.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/parent_get_not_in_class.phpt	vm-unsupported	`parent` without a parent class
+Zend/tests/property_hooks/parent_in_different_hook.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/parent_in_different_property.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/parent_outside_property.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/read_sibling_backing_value.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/property_hooks/set_value_parameter_type_variance_001.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/set_value_parameter_type_variance_002.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/set_value_parameter_type_variance_003.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/set_value_parameter_type_variance_005.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/set_value_parameter_type_variance_007.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/set_variadic.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/traits_conflict.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/type_compatibility_invalid.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/type_compatibility_invalid_2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/unknown_hook.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/unknown_hook_private.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/property_hooks/virtual_read_write.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/readonly_classes/gh10377_1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/readonly_classes/gh10377_3.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/readonly_classes/gh10377_4.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/readonly_classes/gh9285_error.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/readonly_classes/readonly_class_duplicated_modifier.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/readonly_classes/readonly_class_dynamic_property_attribute.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/readonly_classes/readonly_class_missing_type1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/readonly_classes/readonly_class_missing_type2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/readonly_classes/readonly_class_property3.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/readonly_classes/readonly_enum.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/readonly_classes/readonly_interface.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/readonly_classes/readonly_trait.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/readonly_props/multiple_modifiers.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/readonly_props/promotion_error1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/readonly_props/readonly_const.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/readonly_props/readonly_method.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/readonly_props/readonly_to_readwrite.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/readonly_props/readonly_trait_mismatch.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/readonly_props/readonly_with_default.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/readonly_props/readonly_without_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/readonly_props/readwrite_to_readonly.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/readonly_props/static.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/record_errors_001.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/restrict_globals/invalid_append.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/restrict_globals/invalid_append_isset.phpt	vm-unsupported	`[]` is not a readable place
+Zend/tests/restrict_globals/invalid_append_unset.phpt	vm-unsupported	`[]` is not a readable place
+Zend/tests/restrict_globals/invalid_assign.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/restrict_globals/invalid_assign_list.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/restrict_globals/invalid_assign_list_ref.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/restrict_globals/invalid_assign_ref_lhs.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/restrict_globals/invalid_assign_ref_rhs.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/restrict_globals/invalid_foreach.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/restrict_globals/invalid_foreach_ref.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/restrict_globals/invalid_unset.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/009.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/014.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/018.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/019.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/024.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/026.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/031.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/033.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/034.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/035.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/036.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/037.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/038.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/039.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/040.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/041.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/044.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/bug71978.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/generators002.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/generators006.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/inheritance001.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/inheritance002.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/inheritance003.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/internal_functions001.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/return_types/internal_functions002.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/return_types/internal_functions003.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/return_types/never_disallowed1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/never_disallowed2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/never_disallowed4.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/never_finally_return.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/never_generator.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/never_no_variance.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/never_parameter.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/never_return_throw.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/rfc004.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/void_disallowed1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/void_disallowed2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/void_disallowed3.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/return_types/void_parameter.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/runtime_compile_time_binary_operands.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/self_class_const_outside_class.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/self_method_or_prop_outside_class.phpt	unsupported	assignment target (line 11)
+Zend/tests/serialize/bug71841.phpt	vm-unsupported	`[]` has no value for reading
+Zend/tests/short_echo_as_identifier.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/special_name_error2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/special_name_error3.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/stack_limit/gh16041_001.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/stack_limit/gh16041_002.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/stack_limit/stack_limit_001.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/stack_limit/stack_limit_002.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/stack_limit/stack_limit_003.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/stack_limit/stack_limit_004.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/stack_limit/stack_limit_005.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/stack_limit/stack_limit_006.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/stack_limit/stack_limit_007.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/stack_limit/stack_limit_008.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/stack_limit/stack_limit_009.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/stack_limit/stack_limit_010.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/stack_limit/stack_limit_011.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/stack_limit/stack_limit_012.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/stack_limit/stack_limit_013.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/stack_limit/stack_limit_014.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/stack_limit/stack_limit_015.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/static_variables/static_variables_closure_bind.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/str_or_obj_of_class_zpp.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/str_or_obj_zpp.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/switch/034.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/ternary_associativity_1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/ternary_associativity_2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/ternary_associativity_3.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/this-reserved/030.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/this-reserved/bug71737.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/this-reserved/this_as_lexical_var_error.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/this-reserved/this_in_catch.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/throwable_003.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/abstract_method_1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/abstract_method_10.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/abstract_method_3.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/abstract_method_5.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/abstract_method_6.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/bug55524.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/traits/bug60145.phpt	unsupported	interface member (line 7)
+Zend/tests/traits/bug60153.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/bug60165d.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/bug60217b.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/bug60217c.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/bug60369.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/bug61052.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/bug62069_2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/bug62358.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/bug64235.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/bug69467.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/bug69579.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/traits/bug74269.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/bug78776.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/bug81192.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/bugs/abstract-methods05.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/bugs/abstract-methods06.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/bugs/gh13177.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/traits/bugs/interfaces.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/traits/bugs/overridding-conflicting-property-initializer.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/constant_011.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/constant_012.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/constant_013.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/constant_014.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/constant_015.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/constant_016.phpt	section	--ENV-- section not modelled
+Zend/tests/traits/error_013.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/gh14009_002.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/interface_002.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/language010.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/language014.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/language015.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/language016.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/language017.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/language018.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/language019.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/precedence_unknown_class.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/static_forward_static_call.phpt	builtin	Call to undefined function forward_static_call()
+Zend/tests/traits/static_in_trait_insteadof_list.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/traits/static_in_trait_insteadof_reference.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/try/try_finally_004.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/try/try_finally_005.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/try/try_finally_008.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/try/try_finally_009.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_coercion/float_to_int/dval_to_lval_32.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/type_coercion/float_to_int/dval_to_lval_64.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/type_coercion/float_to_int/explicit_casts_should_not_warn.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/type_coercion/float_to_int/explicit_casts_should_not_warn_32bit.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/type_coercion/float_to_int/warning_float_does_not_fit_zend_long_strings.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/type_coercion/float_to_int/warning_float_does_not_fit_zend_long_strings_32bit.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/type_coercion/type_casts/cast_to_void.phpt	unsupported	void cast (line 34)
+Zend/tests/type_coercion/type_casts/cast_to_void_ast.phpt	unsupported	void cast (line 5)
+Zend/tests/type_coercion/type_casts/cast_to_void_destructor.phpt	unsupported	void cast (line 16)
+Zend/tests/type_coercion/type_casts/cast_to_void_statement.phpt	unsupported	void cast (line 3)
+Zend/tests/type_coercion/type_casts/gh18301_cast_to_void_for.phpt	unsupported	void cast (line 12)
+Zend/tests/type_coercion/type_casts/gh18301_cast_to_void_statement_for_condition.phpt	unsupported	void cast (line 3)
+Zend/tests/type_coercion/type_casts/real_cast.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/dnf_types/redundant_types/duplicate_class_alias_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/dnf_types/redundant_types/less_restrive_type_constraint_already_present001.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/dnf_types/redundant_types/less_restrive_type_constraint_already_present002.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/dnf_types/redundant_types/less_restrive_type_constraint_already_present003.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/dnf_types/redundant_types/less_restrive_type_constraint_already_present004.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/dnf_types/redundant_types/object_and_dnf_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/dnf_types/redundant_types/object_and_dnf_type2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/dnf_types/variance/invalid1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/dnf_types/variance/invalid_covariance_drop_type1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/dnf_types/variance/invalid_covariance_drop_type2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/dnf_types/variance/invalid_covariance_intersection_to_union1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/dnf_types/variance/invalid_covariance_intersection_to_union2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/dnf_types/variance/invalid_covariance_intersection_to_union3.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/dnf_types/variance/invalid_invariance1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/dnf_types/variance/invalid_invariance1_var.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/dnf_types/variance/invalid_invariance2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/dnf_types/variance/valid9.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/bug81268.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/invalid_types/invalid_array_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/invalid_types/invalid_bool_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/invalid_types/invalid_callable_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/invalid_types/invalid_false_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/invalid_types/invalid_float_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/invalid_types/invalid_int_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/invalid_types/invalid_iterable_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/invalid_types/invalid_mixed_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/invalid_types/invalid_never_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/invalid_types/invalid_null_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/invalid_types/invalid_nullable_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/invalid_types/invalid_object_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/invalid_types/invalid_static_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/invalid_types/invalid_string_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/invalid_types/invalid_true_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/invalid_types/invalid_void_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/parse_error.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/type_declarations/intersection_types/parsing_attribute.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/type_declarations/intersection_types/redundant_types/duplicate_class_alias_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/redundant_types/duplicate_class_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/relative_types/relative_parent_type_is_not_allow_if_not_compile_time_resolve.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/relative_types/relative_parent_type_is_not_allow_if_not_compile_time_resolve2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/relative_types/relative_self_type_is_not_allow_if_not_compile_time_resolve.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/relative_types/relative_self_type_is_not_allow_if_not_compile_time_resolve2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/variance/invalid1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/variance/invalid2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/variance/invalid3.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/variance/invalid4.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/variance/invalid5.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/variance/invalid6.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/variance/invalid_covariance_drop_type1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/variance/invalid_covariance_drop_type2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/variance/invalid_covariance_intersection_to_union1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/variance/invalid_covariance_intersection_to_union2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/variance/invalid_covariance_intersection_to_union3.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/variance/invalid_invariance1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/intersection_types/variance/invalid_invariance2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/iterable/iterable_004.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/iterable/iterable_005.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/iterable/iterable_alias_redundancy_array_1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/iterable/iterable_alias_redundancy_array_2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/iterable/iterable_alias_redundancy_iterable.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/iterable/iterable_alias_redundancy_object_3.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/iterable/iterable_alias_redundancy_object_4.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/iterable/iterable_alias_redundancy_object_5.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/iterable/iterable_alias_redundancy_object_6.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/mixed/casting/mixed_cast_error.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/type_declarations/mixed/inheritance/mixed_parameter_inheritance_error1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/mixed/inheritance/mixed_parameter_inheritance_error2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/mixed/inheritance/mixed_parameter_inheritance_error3.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/mixed/inheritance/mixed_parameter_inheritance_error4.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/mixed/inheritance/mixed_property_inheritance_error1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/mixed/inheritance/mixed_property_inheritance_error2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/mixed/inheritance/mixed_property_inheritance_error3.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/mixed/inheritance/mixed_property_inheritance_error4.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/mixed/inheritance/mixed_property_inheritance_error5.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/mixed/inheritance/mixed_property_inheritance_error6.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/mixed/inheritance/mixed_property_inheritance_error7.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/mixed/inheritance/mixed_property_inheritance_error8.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/mixed/inheritance/mixed_return_inheritance_error1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/mixed/inheritance/mixed_return_inheritance_error2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/mixed/inheritance/mixed_return_inheritance_error3.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/mixed/syntax/mixed_class_error.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/mixed/syntax/mixed_parameter_error1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/mixed/syntax/mixed_parameter_error2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/mixed/syntax/mixed_return_error.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/mixed/syntax/mixed_void_return_error.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/mixed/syntax/nullable_mixed_parameter_error.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/mixed/syntax/nullable_mixed_property_error.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/mixed/syntax/nullable_mixed_return_error.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/nullable_typed_return_without_value.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/nullable_void.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/parameter_type_variance.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/parameter_type_variance_2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/relative_types/invalid_types/parent_global_function.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/relative_types/invalid_types/parent_interface.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/relative_types/invalid_types/self_global_function.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/relative_types/invalid_types/static_global_function.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/scalar_float_with_invalid_default.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/scalar_relative_typehint_disallowed.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/scalar_reserved2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/scalar_reserved2_class_alias.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/scalar_reserved2_use.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/scalar_reserved3.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/scalar_reserved3_class_alias.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/scalar_reserved3_use.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/scalar_reserved4.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/scalar_reserved4_class_alias.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/scalar_reserved4_use.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/scalar_reserved6.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/scalar_reserved6_class_alias.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/scalar_reserved6_use.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/scalar_reserved7.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/scalar_return_basic.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/type_declarations/scalar_return_basic_64bit.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/type_declarations/scalar_strict.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/type_declarations/scalar_strict_64bit.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/type_declarations/scalar_strict_declaration_placement_001.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/scalar_strict_declaration_placement_002.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/scalar_strict_declaration_placement_003.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/scalar_strict_declaration_placement_008.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/static_type_outside_class.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/static_type_param.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/static_type_property.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/strict_nested.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/typed_class_constants_inheritance_error1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/typed_class_constants_inheritance_error2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/typed_class_constants_inheritance_error3.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/typed_class_constants_inheritance_error4.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/typed_class_constants_inheritance_error5.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/typed_class_constants_inheritance_error6.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/typed_class_constants_multiple_constants.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/typed_class_constants_type_error1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/typed_class_constants_type_error10.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/typed_class_constants_type_error4.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/typed_class_constants_type_error5.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/typed_class_constants_type_error6.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/typed_properties_006.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/typed_properties_007.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/typed_properties_008.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/typed_properties_013.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/typed_properties_014.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/typed_properties_015.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/typed_properties_017.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/typed_properties_025.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/type_declarations/typed_properties_035.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/typed_properties_044.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/type_declarations/typed_properties_049.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/typed_properties_053.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/typed_properties_054.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/typed_properties_061.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/type_declarations/typed_properties_068.phpt	unsupported	assignment target (line 13)
+Zend/tests/type_declarations/typed_properties_069.phpt	unsupported	assignment target (line 13)
+Zend/tests/type_declarations/typed_properties_070.phpt	unsupported	assignment target (line 20)
+Zend/tests/type_declarations/typed_properties_075.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/type_declarations/typed_properties_079.phpt	unsupported	assignment target (line 8)
+Zend/tests/type_declarations/typed_properties_082.phpt	unsupported	assignment target (line 17)
+Zend/tests/type_declarations/typed_properties_085.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/typed_properties_095.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/type_declarations/typed_properties_097.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/type_declarations/typed_properties_101.phpt	builtin	Call to undefined function debug_zval_dump()
+Zend/tests/type_declarations/typed_properties_102.phpt	unsupported	assignment target (line 8)
+Zend/tests/type_declarations/typed_properties_107.phpt	unsupported	assignment target (line 17)
+Zend/tests/type_declarations/typed_properties_109.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/typed_properties_protected_inheritance_mismatch.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/typed_return_null_false_without_value.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/typed_return_null_without_value.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/union_types/illegal_default_value_argument.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/union_types/illegal_default_value_property.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/union_types/inheritance_internal.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/type_declarations/union_types/internal_trait_use_typed_union.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/type_declarations/union_types/never_with_class.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/union_types/redundant_types/bool_and_false.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/union_types/redundant_types/bool_and_true.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/union_types/redundant_types/bool_instead_false_and_true.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/union_types/redundant_types/bool_instead_true_and_false.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/union_types/redundant_types/duplicate_case_sensitive_relative_class_parent_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/union_types/redundant_types/duplicate_case_sensitive_relative_class_self_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/union_types/redundant_types/duplicate_class_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/union_types/redundant_types/duplicate_relative_class_parent_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/union_types/redundant_types/duplicate_relative_class_self_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/union_types/redundant_types/duplicate_relative_class_static_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/union_types/redundant_types/duplicate_resolved_relative_class_type_variation1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/union_types/redundant_types/duplicate_resolved_relative_class_type_variation2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/union_types/redundant_types/duplicate_resolved_relative_class_type_variation3.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/union_types/redundant_types/duplicate_resolved_relative_class_type_variation4.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/union_types/redundant_types/duplicate_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/union_types/redundant_types/iterable_and_Traversable.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/union_types/redundant_types/iterable_and_Traversable_2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/union_types/redundant_types/iterable_and_array.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/union_types/redundant_types/nullable_null.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/union_types/redundant_types/object_and_class_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/union_types/redundant_types/object_and_class_type2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/union_types/redundant_types/object_and_static.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/union_types/redundant_types/object_and_static2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/union_types/variance/invalid_001.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/union_types/variance/invalid_002.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/union_types/variance/invalid_003.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/union_types/variance/invalid_004.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/union_types/void_with_class.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/variance/abstract_constructor.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/variance/class_order_autoload_error1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/variance/class_order_autoload_error2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/variance/class_order_autoload_error3.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/variance/class_order_autoload_error7.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/variance/class_order_error.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/variance/internal_parent/unresolvable_inheritance_check_param.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/variance/internal_parent/unresolvable_inheritance_check_return.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/variance/override_static_with_self/static_to_self_in_non_final_class.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/variance/override_static_with_self/union_to_union_1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/variance/override_static_with_self/union_to_union_2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/variance/override_static_with_self/union_to_union_3.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/variance/override_static_with_self/union_to_union_4.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/variance/override_static_with_self/union_to_union_5.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/variance/override_static_with_self/union_to_union_6.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/variance/parent_in_class_failure1.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/variance/parent_in_class_failure2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/variance/return_type_will_change_class_error.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/variance/return_type_will_change_function_error.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/variance/return_type_will_change_property_error.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/variance/static_variance_failure.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/type_declarations/variance/trait_error.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/typehints/bug60573.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/typehints/bug60573_2.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/typehints/bug76198.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/typehints/fully_qualified_scalar.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/typehints/namespace_relative_scalar.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/unpack_iterator_by_ref_type_check.phpt	vm-unsupported	spread call to a by-reference function
+Zend/tests/unset/bug70240.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/unset/this_in_unset.phpt	vm-unsupported	$this property write
+Zend/tests/unterminated_comment.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/use_const/conflicting_use.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/use_const/define_imported.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/use_const/define_imported_before.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/use_function/case_insensivity.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/use_function/conditional_function_declaration.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/use_function/conflicting_use.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/use_function/define_imported.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/use_function/define_imported_before.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/use_function/no_global_fallback.phpt	builtin	Call to undefined function foo\bar\baz()
+Zend/tests/use_function/no_global_fallback2.phpt	builtin	Call to undefined function bar\test()
+Zend/tests/use_late_binding_conflict.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/varSyntax/globalNonSimpleVariableError.phpt	parse	mago could not parse (out-of-scope syntax)
+Zend/tests/varSyntax/writeToTempExpr.phpt	unsupported	assignment target (line 3)
+Zend/tests/variadic/adding_additional_optional_parameter_error.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/variadic/illegal_variadic_override_ref.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/variadic/illegal_variadic_override_type.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/variadic/no_default_error.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/variadic/non_variadic_implements_variadic_error.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/variadic/only_last_error.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/variadic/variadic_changed_byref_error.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/variadic/variadic_changed_typehint_error.phpt	compile-error	compile-time diagnostic not modelled
+Zend/tests/varvars_by_ref.phpt	unsupported	assignment target (line 7)
+Zend/tests/weakrefs/weakrefs_001.phpt	builtin	Call to undefined function debug_zval_dump()
+Zend/tests/zend_ini/gh11876.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/zend_ini/gh16886.phpt	builtin	Call to undefined function ini_parse_quantity()
+Zend/tests/zend_ini/gh16892.phpt	builtin	Call to undefined function ini_parse_quantity()
+Zend/tests/zend_ini/oss_fuzz_428983568.phpt	builtin	Call to undefined function parse_ini_string()
+Zend/tests/zend_ini/zend_ini_parse_quantity.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/zend_ini/zend_ini_parse_quantity_binary_prefixes.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/zend_ini/zend_ini_parse_quantity_error.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/zend_ini/zend_ini_parse_quantity_hex_prefixes.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/zend_ini/zend_ini_parse_quantity_ini_set_error.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/zend_ini/zend_ini_parse_quantity_ini_setting_error.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/zend_ini/zend_ini_parse_quantity_octal_prefixes.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/zend_ini/zend_ini_parse_quantity_overflow.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/zend_ini/zend_ini_parse_quantity_zero.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/zend_ini/zend_ini_parse_uquantity_overflow.phpt	extension	requires unsupported extension 'zend_test'
+Zend/tests/zend_signed_multiply-32bit.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/zend_signed_multiply-64bit-2.phpt	section	--SKIPIF-- section not modelled
+Zend/tests/zend_signed_multiply-64bit.phpt	section	--SKIPIF-- section not modelled
+tests/basic/002.phpt	section	--POST-- section not modelled
+tests/basic/003.phpt	section	--POST-- section not modelled
+tests/basic/004.phpt	section	--POST-- section not modelled
+tests/basic/005.phpt	section	--POST-- section not modelled
+tests/basic/011.phpt	section	--SKIPIF-- section not modelled
+tests/basic/011_empty_query.phpt	section	--SKIPIF-- section not modelled
+tests/basic/011_register_argc_argv_disabled.phpt	section	--SKIPIF-- section not modelled
+tests/basic/011_windows.phpt	section	--GET-- section not modelled
+tests/basic/012.phpt	section	--ARGS-- section not modelled
+tests/basic/012_register_argc_argv_disabled.phpt	section	--ARGS-- section not modelled
+tests/basic/013.phpt	section	--POST-- section not modelled
+tests/basic/014.phpt	section	--POST-- section not modelled
+tests/basic/015.phpt	section	--POST-- section not modelled
+tests/basic/016.phpt	section	--POST-- section not modelled
+tests/basic/017.phpt	section	--POST-- section not modelled
+tests/basic/018.phpt	section	--POST-- section not modelled
+tests/basic/019.phpt	section	--POST-- section not modelled
+tests/basic/020.phpt	section	--POST-- section not modelled
+tests/basic/021.phpt	section	--POST_RAW-- section not modelled
+tests/basic/022.phpt	section	--COOKIE-- section not modelled
+tests/basic/023.phpt	section	--COOKIE-- section not modelled
+tests/basic/025.phpt	section	--POST-- section not modelled
+tests/basic/028.phpt	section	--POST_RAW-- section not modelled
+tests/basic/029.phpt	section	--POST_RAW-- section not modelled
+tests/basic/030.phpt	section	--POST_RAW-- section not modelled
+tests/basic/031.phpt	section	--POST_RAW-- section not modelled
+tests/basic/032.phpt	section	--POST_RAW-- section not modelled
+tests/basic/GHSA-9pqp-7h25-4f32.phpt	section	--SKIPIF-- section not modelled
+tests/basic/bug20539.phpt	section	--SKIPIF-- section not modelled
+tests/basic/bug53180.phpt	section	--POST-- section not modelled
+tests/basic/bug55500.phpt	section	--POST_RAW-- section not modelled
+tests/basic/bug61000.phpt	section	--POST-- section not modelled
+tests/basic/bug67198.phpt	section	--SKIPIF-- section not modelled
+tests/basic/bug78236.phpt	section	--POST-- section not modelled
+tests/basic/bug78929.phpt	section	--COOKIE-- section not modelled
+tests/basic/bug79699.phpt	section	--COOKIE-- section not modelled
+tests/basic/consistent_float_string_casts.phpt	section	--SKIPIF-- section not modelled
+tests/basic/enable_post_data_reading_01.phpt	section	--POST_RAW-- section not modelled
+tests/basic/enable_post_data_reading_02.phpt	section	--POST_RAW-- section not modelled
+tests/basic/enable_post_data_reading_03.phpt	section	--POST_RAW-- section not modelled
+tests/basic/enable_post_data_reading_04.phpt	section	--POST_RAW-- section not modelled
+tests/basic/enable_post_data_reading_05.phpt	section	--POST_RAW-- section not modelled
+tests/basic/enable_post_data_reading_06.phpt	section	--POST_RAW-- section not modelled
+tests/basic/enable_post_data_reading_07.phpt	section	--POST_RAW-- section not modelled
+tests/basic/errorlog_permission.phpt	section	--SKIPIF-- section not modelled
+tests/basic/gh16998.phpt	section	--SKIPIF-- section not modelled
+tests/basic/gh7896.phpt	section	--SKIPIF-- section not modelled
+tests/basic/header_register_callback.phpt	builtin	Call to undefined function header_register_callback()
+tests/basic/header_register_callback_after_output.phpt	builtin	Call to undefined function header_register_callback()
+tests/basic/ini_parse_quantity_basic.phpt	builtin	Call to undefined function ini_parse_quantity()
+tests/basic/ini_parse_quantity_warnings.phpt	builtin	Call to undefined function ini_parse_quantity()
+tests/basic/req44164.phpt	section	--ENV-- section not modelled
+tests/basic/req60524-win.phpt	section	--SKIPIF-- section not modelled
+tests/basic/rfc1867_anonymous_upload.phpt	section	--POST_RAW-- section not modelled
+tests/basic/rfc1867_array_upload.phpt	section	--POST_RAW-- section not modelled
+tests/basic/rfc1867_boundary_1.phpt	section	--POST_RAW-- section not modelled
+tests/basic/rfc1867_boundary_2.phpt	section	--POST_RAW-- section not modelled
+tests/basic/rfc1867_empty_upload.phpt	section	--POST_RAW-- section not modelled
+tests/basic/rfc1867_file_upload_disabled.phpt	section	--POST_RAW-- section not modelled
+tests/basic/rfc1867_garbled_mime_headers.phpt	section	--POST_RAW-- section not modelled
+tests/basic/rfc1867_invalid_boundary.phpt	section	--POST_RAW-- section not modelled
+tests/basic/rfc1867_malicious_input.phpt	section	--POST_RAW-- section not modelled
+tests/basic/rfc1867_max_file_size.phpt	section	--POST_RAW-- section not modelled
+tests/basic/rfc1867_max_file_uploads_empty_files.phpt	section	--POST_RAW-- section not modelled
+tests/basic/rfc1867_missing_boundary.phpt	section	--POST_RAW-- section not modelled
+tests/basic/rfc1867_missing_boundary_2.phpt	section	--POST_RAW-- section not modelled
+tests/basic/rfc1867_multiple_webkitdirectory.phpt	section	--POST_RAW-- section not modelled
+tests/basic/rfc1867_post_max_filesize.phpt	section	--POST_RAW-- section not modelled
+tests/basic/rfc1867_post_max_size.phpt	section	--POST_RAW-- section not modelled
+tests/basic/timeout_variation_0.phpt	section	--SKIPIF-- section not modelled
+tests/basic/timeout_variation_1.phpt	section	--SKIPIF-- section not modelled
+tests/basic/timeout_variation_10.phpt	section	--SKIPIF-- section not modelled
+tests/basic/timeout_variation_2.phpt	section	--SKIPIF-- section not modelled
+tests/basic/timeout_variation_4.phpt	section	--SKIPIF-- section not modelled
+tests/basic/timeout_variation_7.phpt	section	--SKIPIF-- section not modelled
+tests/basic/timeout_variation_8.phpt	section	--SKIPIF-- section not modelled
+tests/basic/timeout_variation_9.phpt	section	--SKIPIF-- section not modelled
+tests/classes/__call_002.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/__set__get_002.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/__set__get_003.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/abstract_redeclare.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/autoload_001.phpt	section	--SKIPIF-- section not modelled
+tests/classes/autoload_002.phpt	section	--SKIPIF-- section not modelled
+tests/classes/autoload_003.phpt	section	--SKIPIF-- section not modelled
+tests/classes/autoload_004.phpt	section	--SKIPIF-- section not modelled
+tests/classes/autoload_005.phpt	section	--SKIPIF-- section not modelled
+tests/classes/autoload_006.phpt	section	--SKIPIF-- section not modelled
+tests/classes/bug29446.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/constants_basic_001.phpt	vm-unsupported	class constant `c19` (undefined here, or an enum case)
+tests/classes/constants_error_001.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/constants_error_005.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/constants_error_006.phpt	unsupported	assignment target (line 8)
+tests/classes/constants_error_007.phpt	unsupported	assignment target (line 8)
+tests/classes/constants_visibility_005.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/constants_visibility_006.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/constants_visibility_error_003.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/constants_visibility_error_004.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/ctor_in_interface_01.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/ctor_in_interface_02.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/ctor_in_interface_03.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/ctor_in_interface_04.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/inheritance_003.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/inheritance_004.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/interface_and_extends.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/interface_class.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/interface_constant_inheritance_006.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/interface_constant_inheritance_007.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/interface_member.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/interface_method.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/interface_method_private.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/interface_must_be_implemented.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/interfaces_002.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/iterators_005.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/method_override_optional_arg_001.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/method_override_optional_arg_002.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/property_override_protectedStatic_private.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/property_override_protectedStatic_privateStatic.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/property_override_protectedStatic_protected.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/property_override_protectedStatic_public.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/property_override_protected_private.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/property_override_protected_privateStatic.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/property_override_protected_protectedStatic.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/property_override_protected_publicStatic.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/property_override_publicStatic_private.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/property_override_publicStatic_privateStatic.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/property_override_publicStatic_protected.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/property_override_publicStatic_protectedStatic.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/property_override_publicStatic_public.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/property_override_public_private.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/property_override_public_privateStatic.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/property_override_public_protected.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/property_override_public_protectedStatic.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/property_override_public_publicStatic.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/static_mix_1.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/static_mix_2.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/static_properties_004.phpt	unsupported	assignment target (line 15)
+tests/classes/static_properties_undeclared_assignRef.phpt	unsupported	assignment target (line 4)
+tests/classes/static_properties_undeclared_isset.phpt	unsupported	assignment target (line 3)
+tests/classes/static_this.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/this.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/type_hinting_005a.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/type_hinting_005c.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/type_hinting_005d.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/visibility_000a.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/visibility_000b.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/visibility_001a.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/visibility_001b.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/visibility_002a.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/visibility_002b.phpt	compile-error	compile-time diagnostic not modelled
+tests/classes/visibility_003b.phpt	compile-error	compile-time diagnostic not modelled
+tests/func/005a.phpt	section	--SKIPIF-- section not modelled
+tests/func/010.phpt	section	--SKIPIF-- section not modelled
+tests/func/ini_alter.phpt	builtin	Call to undefined function ini_alter()
+tests/lang/024.phpt	unsupported	assignment target (line 16)
+tests/lang/034.phpt	section	--SKIPIF-- section not modelled
+tests/lang/045.phpt	section	--SKIPIF-- section not modelled
+tests/lang/bug21820.phpt	compile-error	compile-time diagnostic not modelled
+tests/lang/bug25145.phpt	section	--GET-- section not modelled
+tests/lang/bug30638.phpt	section	--SKIPIF-- section not modelled
+tests/lang/bug32924.phpt	ini	--INI-- value substitution not modelled: include_path={PWD}
+tests/lang/bug35382.phpt	malformed	no --FILE-- section
+tests/lang/bug38579.phpt	section	--SKIPIF-- section not modelled
+tests/lang/bug45392.phpt	section	--SKIPIF-- section not modelled
+tests/lang/bug71897.phpt	compile-error	compile-time diagnostic not modelled
+tests/lang/comments2.phpt	malformed	no --FILE-- section
+tests/lang/constants/PHP_INT_32bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/constants/PHP_INT_64bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/engine_assignExecutionOrder_008.phpt	unsupported	assignment target (line 13)
+tests/lang/integer_literals/binary_32bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/integer_literals/binary_64bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/integer_literals/hexadecimal_32bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/integer_literals/hexadecimal_64bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/integer_literals/octal_32bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/integer_literals/octal_64bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/invalid_octal.phpt	parse	mago could not parse (out-of-scope syntax)
+tests/lang/operators/add_basiclong_64bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/operators/bitwiseAnd_basiclong_64bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/operators/bitwiseNot_basiclong_64bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/operators/bitwiseOr_basiclong_64bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/operators/bitwiseShiftLeft_basiclong_64bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/operators/bitwiseShiftLeft_variationStr_64bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/operators/bitwiseShiftRight_basiclong_64bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/operators/bitwiseXor_basiclong_64bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/operators/divide_basiclong_64bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/operators/modulus_basiclong_64bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/operators/multiply_basiclong_64bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/operators/negate_basiclong_64bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/operators/operator_equals_variation.phpt	section	--SKIPIF-- section not modelled
+tests/lang/operators/operator_equals_variation_64bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/operators/operator_gt_or_equal_variation.phpt	section	--SKIPIF-- section not modelled
+tests/lang/operators/operator_gt_or_equal_variation_64bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/operators/operator_gt_variation_64bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/operators/operator_identical_variation.phpt	section	--SKIPIF-- section not modelled
+tests/lang/operators/operator_identical_variation_64bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/operators/operator_lt_or_equal_variation.phpt	section	--SKIPIF-- section not modelled
+tests/lang/operators/operator_lt_or_equal_variation_64bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/operators/operator_lt_variation_64bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/operators/operator_notequals_variation.phpt	section	--SKIPIF-- section not modelled
+tests/lang/operators/operator_notequals_variation_64bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/operators/operator_notidentical_variation.phpt	section	--SKIPIF-- section not modelled
+tests/lang/operators/operator_notidentical_variation_64bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/operators/postdec_basiclong_64bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/operators/postinc_basiclong_64bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/operators/predec_basiclong_64bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/operators/preinc_basiclong_64bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/operators/subtract_basiclong_64bit.phpt	section	--SKIPIF-- section not modelled
+tests/lang/passByReference_012.phpt	vm-unsupported	by-reference builtin whose first argument is not a plain variable
+tests/lang/returnByReference.004.phpt	vm-unsupported	reference assignment from a non-call
+tests/lang/returnByReference.007.phpt	vm-unsupported	reference assignment from a non-call
+tests/lang/static_basic_002.phpt	compile-error	compile-time diagnostic not modelled
+tests/lang/string/unicode_escape_empty.phpt	compile-error	compile-time diagnostic not modelled
+tests/lang/string/unicode_escape_incomplete.phpt	compile-error	compile-time diagnostic not modelled
+tests/lang/string/unicode_escape_large_codepoint.phpt	compile-error	compile-time diagnostic not modelled
+tests/lang/string/unicode_escape_sign.phpt	compile-error	compile-time diagnostic not modelled
+tests/lang/string/unicode_escape_sign2.phpt	compile-error	compile-time diagnostic not modelled
+tests/lang/string/unicode_escape_whitespace.phpt	compile-error	compile-time diagnostic not modelled
+tests/lang/type_hints_003.phpt	compile-error	compile-time diagnostic not modelled
+tests/output/bug70970.phpt	compile-error	compile-time diagnostic not modelled
+tests/output/gh14808.phpt	extension	requires unsupported extension 'iconv'
+tests/output/gh15179.phpt	section	--SKIPIF-- section not modelled
+tests/output/gh20352.phpt	expectf-%r	%r placeholder not supported
+tests/output/gh20837.phpt	compile-error	compile-time diagnostic not modelled
+tests/output/ob_011.phpt	section	--SKIPIF-- section not modelled
+tests/output/ob_013.phpt	builtin	Call to undefined function ob_list_handlers()
+tests/output/ob_018.phpt	section	--ENV-- section not modelled
+tests/output/ob_020.phpt	builtin	Call to undefined function ob_list_handlers()
+tests/output/ob_implicit_flush_basic_001.phpt	builtin	Call to undefined function ob_implicit_flush()
+tests/output/ob_implicit_flush_basic_002.phpt	builtin	Call to undefined function ob_implicit_flush()
+tests/output/ob_start_basic_003.phpt	builtin	Call to undefined function cause_fatal_error()
+tests/output/ob_start_basic_005.phpt	builtin	Call to undefined function ob_list_handlers()
+tests/output/ob_start_basic_006.phpt	builtin	Call to undefined function ob_list_handlers()
+tests/output/ob_start_callback_output/functions_that_output.phpt	builtin	Call to undefined function phpcredits()
+tests/output/ob_start_callback_output/functions_that_output_nested.phpt	builtin	Call to undefined function phpcredits()
+tests/output/ob_start_error_005.phpt	compile-error	compile-time diagnostic not modelled
+tests/output/sapi_windows_vt100_support_no_warning_on_cast.phpt	section	--SKIPIF-- section not modelled
+tests/output/sapi_windows_vt100_support_non_castable_user_stream.phpt	section	--SKIPIF-- section not modelled
+tests/output/sapi_windows_vt100_support_notwindows.phpt	section	--SKIPIF-- section not modelled
+tests/output/sapi_windows_vt100_support_winko_err.phpt	section	--SKIPIF-- section not modelled
+tests/output/sapi_windows_vt100_support_winko_in-err.phpt	section	--SKIPIF-- section not modelled
+tests/output/sapi_windows_vt100_support_winko_in-out-err.phpt	section	--SKIPIF-- section not modelled
+tests/output/sapi_windows_vt100_support_winko_in-out.phpt	section	--SKIPIF-- section not modelled
+tests/output/sapi_windows_vt100_support_winko_out-err.phpt	section	--SKIPIF-- section not modelled
+tests/output/sapi_windows_vt100_support_winko_out.phpt	section	--SKIPIF-- section not modelled
+tests/output/sapi_windows_vt100_support_winok_err.phpt	section	--SKIPIF-- section not modelled
+tests/output/sapi_windows_vt100_support_winok_in-err.phpt	section	--SKIPIF-- section not modelled
+tests/output/sapi_windows_vt100_support_winok_in-out-err.phpt	section	--SKIPIF-- section not modelled
+tests/output/sapi_windows_vt100_support_winok_in-out.phpt	section	--SKIPIF-- section not modelled
+tests/output/sapi_windows_vt100_support_winok_out-err.phpt	section	--SKIPIF-- section not modelled
+tests/output/sapi_windows_vt100_support_winok_out.phpt	section	--SKIPIF-- section not modelled
+tests/output/stream_isatty_err.phpt	section	--SKIPIF-- section not modelled
+tests/output/stream_isatty_in-err.phpt	section	--SKIPIF-- section not modelled
+tests/output/stream_isatty_in-out-err.phpt	section	--SKIPIF-- section not modelled
+tests/output/stream_isatty_in-out.phpt	section	--SKIPIF-- section not modelled
+tests/output/stream_isatty_no_warning_on_cast.phpt	section	--SKIPIF-- section not modelled
+tests/output/stream_isatty_out-err.phpt	section	--SKIPIF-- section not modelled
+tests/output/stream_isatty_out.phpt	section	--SKIPIF-- section not modelled
+tests/run-test/extensions-shared.phpt	section	--SKIPIF-- section not modelled
+tests/run-test/test010.phpt	section	--STDIN-- section not modelled
+tests/run-test/test011.phpt	malformed	no --EXPECT(F)-- section
+tests/run-test/test012.phpt	malformed	no --EXPECT(F)-- section
+tests/run-test/test013.phpt	malformed	no --EXPECT(F)-- section
+tests/security/open_basedir_001.phpt	section	--SKIPIF-- section not modelled
+tests/security/open_basedir_link.phpt	section	--SKIPIF-- section not modelled
+tests/security/open_basedir_linkinfo.phpt	section	--SKIPIF-- section not modelled
+tests/security/open_basedir_parse_ini_file.phpt	section	--SKIPIF-- section not modelled
+tests/security/open_basedir_readlink.phpt	section	--SKIPIF-- section not modelled
+tests/security/open_basedir_realpath.phpt	section	--SKIPIF-- section not modelled
+tests/security/open_basedir_symlink.phpt	section	--SKIPIF-- section not modelled
+tests/strings/004.phpt	builtin	Call to undefined function highlight_string()
+tests/strings/bug26703.phpt	builtin	Call to undefined function highlight_string()

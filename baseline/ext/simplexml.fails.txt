@@ -1,0 +1,1 @@
+ext/simplexml/tests/gh16317.phpt
