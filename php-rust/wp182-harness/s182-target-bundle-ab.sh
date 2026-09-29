@@ -14,9 +14,13 @@ LOCK=/private/tmp/phpr-measure.lock
 pregate() {
   local ko=0
   mount | grep -q " $MP " || { echo "PRE-GATE: bundle NON montata ($MP)"; ko=1; }
-  [ -e "$LOCK" ] && { echo "PRE-GATE: lock di misura presente ($LOCK)"; ko=1; }
-  local p; p=$(pgrep -fl 'phpr|php-server|ci-runner|cargo build' | grep -v "$0" || true)
+  # lock di misura: accettato SOLO se è il nostro (token s182-target-bundle, messo dal waiter)
+  if [ -e "$LOCK" ] && ! grep -q 's182-target-bundle' "$LOCK"; then echo "PRE-GATE: lock di misura ALTRUI ($LOCK: $(cat "$LOCK"))"; ko=1; fi
+  # processi: il ci-runner in pausa (quiet_wait) è idle e NON conta; contano job CI in corso e binari vivi
+  local p; p=$(pgrep -fl 'phpr |php-server|corpus-gate|phpt-runner|cargo ' | grep -v -e "$0" -e 'target-bundle' || true)
   [ -n "$p" ] && { echo "PRE-GATE: processi vivi:"; echo "$p"; ko=1; }
+  local last; last=$(tail -1 "/Volumes/Extreme Pro/Claude/phpr-ci/CI_FEED.log")
+  case "$last" in START*) echo "PRE-GATE: job CI in corso ($last)"; ko=1;; esac
   local la; la=$(sysctl -n vm.loadavg | awk '{print $2}')
   awk -v l="$la" 'BEGIN{exit !(l<3)}' || { echo "PRE-GATE: loadavg 1m = $la (>=3)"; ko=1; }
   local free; free=$(df -g /System/Volumes/Data | awk 'NR==2{print $4}')
