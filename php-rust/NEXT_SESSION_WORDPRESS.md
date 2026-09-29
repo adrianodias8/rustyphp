@@ -24,6 +24,7 @@ CI: job in coda da 172814ae a HEAD partono al rilascio del lock (ATTESI verdi: b
    (gambe media/full per motore, ictx, replica peak) · Serena attiva PRIMA del Rust · `._*` purgati a chiusura (wp181 456, phpr-ci 6787).
    **TARGET (2026-09-29)**: il `.cargo/config.toml` locale punta alla DEV `~/Claude/phpr-target/dev-output` (sparsebundle APFS: `wp182-harness/phpr-target-bundle.sh mount|status` nel pre-flight); ogni build di pin/promozione
    (catena §6) va lanciata con `CARGO_TARGET_DIR=$HOME/Claude/php-rust-output` ESPLICITO, altrimenti il binario non arriva al pre-flight.
+   Sviluppo: `cargo build --profile dev-release` (incrementale, edit 27 s vs 148 s; MAI pin/misura/CI — verdetti wp182-harness/target-bundle-out/).
 1. **SCOMPOSIZIONE L-CR1 (az.rev. S-181, rilievi 1-4)**: bracci same-toolchain sopra il pin s181: P = placebo (modifica innocua in
    run_loop: misura la banda-layout del CANDIDATO), −a (senza split_at_mut/push diretto), −b (senza ip=1), −c (guardia Ret com'era);
    giudice calls-dq + prop-dq/arith-dq con ESITO ESPLICITO dell'attesa |D|<1 nello script (non solo regressione); attesa: (b) ≈ 3-4
