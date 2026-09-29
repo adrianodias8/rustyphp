@@ -3,22 +3,37 @@
 ## MANDATORY: tooling per ogni sessione
 È **obbligatorio** usare in OGNI sessione su questo progetto:
 
-- **Serena** (`mcp__serena__*`) per navigazione ed editing **simbolici** —
+- **Serena** (`mcp__serena__*`) per navigazione ed editing **simbolici** del Rust —
   `find_symbol`, `get_symbols_overview`, `find_referencing_symbols`,
-  `replace_symbol_body`, `insert_after_symbol`. All'avvio:
-  `mcp__serena__activate_project` (`php-rust`) + `mcp__serena__initial_instructions`.
-- **Vexp** (`mcp__vexp__*`) per orientarsi a basso costo di token —
-  `get_context_capsule`, `get_skeleton`, `get_impact_graph`, `search_logic_flow`.
+  `replace_symbol_body`, `insert_after_symbol`, `search_for_pattern`. All'avvio:
+  `mcp__serena__initial_instructions` (progetto `php-rust`).
+- **Vexp** (`mcp__vexp__*`) per il C di php-src e per orientarsi a basso costo di
+  token — `get_skeleton`, `expand_vexp_ref`, `run_pipeline`, `index_status`.
 
-Usare grep/Read grezzi **solo come fallback**. Questo vale soprattutto per i file
-grossi (`crates/php-runtime/src/vm/mod.rs` ~11k righe).
+grep/cat/Read sui `.rs` via Bash sono **BLOCCATI** dall'hook `serena-vexp-guard.sh`
+(e `git add` di `.rs`: usare `git add -u` + `git commit -F`). Non è un fallback:
+usare Serena. Vale soprattutto per i file grossi
+(`crates/php-runtime/src/vm/mod.rs` ~26k righe, `run.rs` ~7,4k con cap LOC dichiarato).
 
 **REGOLA OBBLIGATORIA — Serena + file `._*`:** quando Serena dà errore
 (`UnicodeDecodeError 0xb0`, panic su `._*.rs`) per via dei file `._*` AppleDouble
 (il volume esterno li ricrea durante i build), **NON** usare bash/grep come
-fallback. DEVI: (1) `/usr/bin/find . -name '._*' -type f -not -path './.git/*' -delete`,
-e (2) **riprovare ancora con Serena** la stessa operazione. Ripetere se ricompaiono.
-grep/Read diretti NON sono un fallback accettabile per evitare Serena.
+fallback. DEVI: (1) `scripts/clean-appledouble.sh` (equivale a
+`/usr/bin/find . -name '._*' -type f -not -path './.git/*' -delete`; `--git` pulisce
+anche `.git/`), e (2) **riprovare ancora con Serena** la stessa operazione. Ripetere
+se ricompaiono.
+
+## Ordine di lettura (una fonte sola per ogni fatto)
+1. [../AGENTS.md](../AGENTS.md) — mappa delle fonti, layout, invarianti, ambiente.
+2. [REGOLE.md](REGOLE.md) — l'UNICA lista del processo (misura, pin, gate, rotazione;
+   cap 25 righe).
+3. [NEXT_SESSION_WORDPRESS.md](NEXT_SESSION_WORDPRESS.md) — l'UNICO posto dello STATO:
+   pin correnti, batteria, corpus, ordine del giorno, veti.
+4. [migration/RULEBOOK.md](migration/RULEBOOK.md) — invarianti architetturali.
+5. L'ultimo `sessions/WP_SESSION_<N>.md` e `wp<N>-harness/revisione-s<N>.md`.
+
+Apertura/chiusura sessione: skill `apri-sessione` (pre-flight meccanico) e
+`chiudi-sessione` (verbale + rotazione handoff).
 
 ## Rulebook di traduzione (LEGGERE prima di toccare semantica)
 Le regole del porting — posture byte-parity/functional-parity, correct-or-absent,
@@ -31,30 +46,41 @@ emendamenti passano dal sign-off dell'utente e dal handoff.
 
 ## Stato & copertura
 - **[COVERAGE.md](COVERAGE.md)** è la pagina dati (misurata, non stimata): funzioni
-  1017/2143, 47% (core stdlib 539/654 = 82%), corpus Zend 2650 pass (baseline gate
-  **1417 fail per nome**, riferimento aggiornato S-102/S-103), aree complete,
-  mancanti per estensione. **[README.md](README.md)**
-  è la pagina di progetto; la home GitHub del repo è il README della root.
-  Rigenerare con `scripts/measure-coverage.sh` / skill `gh-status-sync` quando i
-  numeri cambiano in modo sostanziale. Divergenze note in
+  per estensione, corpus Zend, WordPress, aree complete. I numeri correnti di
+  pin/batteria/corpus stanno SOLO in NEXT_SESSION_WORDPRESS.md. Storia:
+  [PIN_REGISTRY.md](PIN_REGISTRY.md), [PERF_MAP.md](PERF_MAP.md),
+  [gaps/GAP_TREND.md](gaps/GAP_TREND.md). **[README.md](README.md)** è la pagina
+  di progetto; la home GitHub del repo è il README della root. Rigenerare con
+  `scripts/measure-coverage.sh` / skill `gh-status-sync` quando i numeri cambiano
+  in modo sostanziale. Divergenze note in
   [PHPR_DIVERGENCES_FROM_PHP.md](PHPR_DIVERGENCES_FROM_PHP.md) (principio
   **correct-or-absent**).
 
 ## Build & test (regole)
 - **⚠️ FILESYSTEM — il volume esterno "Extreme Pro" NON supporta la compilazione
   incrementale di Rust** (non sa hard-linkare la cache → cargo stampa "hard linking
-  files … failed" e può lasciare binari stale/incoerenti). Per questo TUTTI gli
-  artefatti di build vivono sul **volume principale** (`/Users/francescotinti/Claude/php-rust-output`).
-  Questo è già imposto da `php-rust/.cargo/config.toml` (`target-dir = …`), quindi
-  un semplice `cargo build --release` basta. **MAI** ridirigere il `target-dir`
-  sul volume esterno né usare il `target/` in-repo. Sorgente e corpus stanno sul
-  volume esterno ma sono solo letti (nessun artefatto di compilazione lì).
-- Build: `CARGO_TARGET_DIR=$HOME/Claude/php-rust-output cargo build --release`
-  (equivalente al config.toml; l'env è ridondante ma innocuo).
-- Unit: `CARGO_TARGET_DIR=$HOME/Claude/php-rust-output cargo test --release` → il
-  workspace deve restare **1739 passed / 0 failed** (baseline S-103; il numero
-  cresce coi denti nuovi — non regredire MAI). SEMPRE `--release` in sessione
-  (il profilo debug rigenera ~3,8G di artefatti).
-- Corpus: `$HOME/Claude/php-rust-output/release/phpt-runner --list-fails --isolate "/Volumes/Extreme Pro/Claude/php-8.5.7/Zend/tests"` (foreground, timeout 600000). Delta vs baseline con `comm`; disciplina **zero pass→fail**.
-- Oracle: `$HOME/Claude/php-oracle/php-src/sapi/cli/php`; CLI nostro `phpr` = `$HOME/Claude/php-rust-output/release/phpr`. Metodo: `diff <(oracle x.php) <(phpr x.php)` finché IDENTICAL.
+  files … failed" e può lasciare binari stale/incoerenti). TUTTI gli artefatti di
+  build vivono sul **volume principale**. **MAI** ridirigere il `target-dir` sul
+  volume esterno né usare il `target/` in-repo. Sorgente e corpus stanno sul volume
+  esterno ma sono solo letti.
+- **Due target dir**: `~/Claude/php-rust-output` (default di `.cargo/config.toml`)
+  è la target **CANONICA** e porta i binari pinnati in `release/` (il pre-flight ne
+  confronta l'hash col pin dichiarato): ci si costruisce SOLO via
+  `scripts/pin-phpr.sh` / `scripts/pin-server.sh` o nelle build di promozione.
+  Sviluppo ordinario ed esplorativo: `CARGO_TARGET_DIR=$HOME/Claude/php-rust-dev-output cargo build --release`.
+- Toolchain pinnata in `rust-toolchain.toml` (1.98.1): mai cambiare toolchain o
+  ricetta durante un arco di misura. SEMPRE `--release` (il profilo debug rigenera
+  ~3,8G di artefatti).
+- Unit: `cargo test --release` → rc dal comando, MAI da pipe; il workspace non deve
+  MAI regredire la batteria dichiarata in NEXT_SESSION_WORDPRESS.md (il numero cresce
+  coi denti nuovi).
+- Corpus: `scripts/corpus-gate.sh` (fail-set CONGELATO per NOME, ×2 modi). Il runner
+  grezzo `~/Claude/php-rust-output/release/phpt-runner --list-fails --isolate "/Volumes/Extreme Pro/Claude/php-8.5.7/Zend/tests"`
+  (foreground, timeout 600000) serve solo per indagine; delta con `comm`.
+  Disciplina **zero pass→fail**.
+- Potatura target a fine sessione: `scripts/target-prune.sh`. CI locale per-commit
+  (allarme precoce, NON gate di record): `ci/README.md`, feed `phpr-ci/CI_FEED.log`.
+- Oracle: `/opt/homebrew/opt/php/bin/php` (PHP 8.5.7, lo stesso degli script);
+  CLI nostro `phpr` = `~/Claude/php-rust-output/release/phpr` (pin). Metodo:
+  `diff <(oracle x.php) <(phpr x.php)` finché IDENTICAL.
 - Commit **e** push a ogni step concluso (no chiedere).
