@@ -73,8 +73,12 @@ emendamenti passano dal sign-off dell'utente e dal handoff.
   `scripts/pin-phpr.sh` / `scripts/pin-server.sh` o nelle build di promozione, SEMPRE con
   `CARGO_TARGET_DIR=$HOME/Claude/php-rust-output` esplicito.
 - Toolchain pinnata in `rust-toolchain.toml` (1.98.1): mai cambiare toolchain o
-  ricetta durante un arco di misura. SEMPRE `--release` (il profilo debug rigenera
-  ~3,8G di artefatti).
+  ricetta durante un arco di misura.
+- **Build di sviluppo**: `cargo build --profile dev-release` (S-182: eredita release,
+  `incremental = true`, lto off, cgu 16; edit tipico 27 s contro 148 s del release, parità
+  arith verificata). Binario in `target/dev-release/phpr`: MAI pin, MAI braccio di misura,
+  MAI CI. La ricetta del pin resta `cargo build --release` (fat LTO, cgu 1). Il profilo
+  debug non si usa (rigenera ~3,8G di artefatti).
 - Unit: `cargo test --release` → rc dal comando, MAI da pipe; il workspace non deve
   MAI regredire la batteria dichiarata in NEXT_SESSION_WORDPRESS.md (il numero cresce
   coi denti nuovi).

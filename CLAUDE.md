@@ -30,7 +30,9 @@ Reimplementazione moderna di PHP 8.5 in Rust, guidata dal comportamento osservab
 ## Comandi
 
 - Test: `cd php-rust && cargo test --release` (SEMPRE `--release`: il profilo
-  debug rigenera ~3,8G di artefatti in `php-rust-output`)
+  debug rigenera ~3,8G di artefatti)
+- Build di sviluppo: `cargo build --profile dev-release` (incrementale, edit tipico ~27 s;
+  binario in `target/dev-release/`, mai pin né misura). Pin/CI: `cargo build --release`.
 - CLI: `cargo run -p php-cli -- script.php` (binario `phpr`, php drop-in)
 - Runner .phpt: `cargo run -p phpt-runner -- <dir o file .phpt>` (`--isolate`, `--list-fails`)
 - Logging: `PHPR_LOG=debug|trace` (stderr), `PHPR_LOG_FILE=<path>`,

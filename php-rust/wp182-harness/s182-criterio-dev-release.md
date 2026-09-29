@@ -21,3 +21,11 @@ Gamba **EDIT** (giudica lei, stesse soglie): a ogni round si APPENDE a `coerce.r
 nuova (contenuto diverso a ogni build di ogni braccio), A = `--release` · B = `--profile dev-release`, R=2
 interleaved A B A B; ripristino con copia salvata (`cmp` al byte a fine corsa, nessun comando git sui `.rs`).
 La gamba `touch` resta a verbale come limite inferiore. Esito in `target-bundle-out/s182-dev-release-edit-verdetto.out`.
+
+## ESITO (2026-09-29 19:56, HEAD 4e5b660f, rustc 1.98.1, tree pulito, lock nostro)
+Gamba `touch` (limite inferiore): freddo dev-release 114,6 s (release 204,8) · caldo A 164,1/151,2/160,0 · B 4,4/3,9/4,3 ·
+mediana B/A 0,026 · rumore A 2,4 % · parità arith on/off: release=ok dev-release=ok · du release 909M · dev-release 1,3G.
+Gamba **EDIT** (giudica, E1): A 151,1/147,5 · B 28,4/27,5 · **mediana B/A = 0,186** · ripristino coerce.rs al byte ⇒
+**PROMOSSO**: `cargo build --profile dev-release` è il comando ordinario di sviluppo (docs). Il binario sta in
+`target/dev-release/` e NON è mai pin, braccio di misura o artefatto CI: la ricetta del pin resta `--release`.
+Verdetti: target-bundle-out/s182-dev-release-verdetto.out, s182-dev-release-edit-verdetto.out.
