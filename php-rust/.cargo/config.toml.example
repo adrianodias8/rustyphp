@@ -1,10 +1,10 @@
 # ESEMPIO di config locale NON tracciata (copiare in .cargo/config.toml).
 # Il target-dir personale resta fuori dal repo (audit Sol P0.1): su questa
 # macchina punta al disco interno perche' il volume esterno non supporta gli
-# hardlink della cache incrementale di cargo.
-# Build artifacts are redirected off the "Extreme Pro" external volume, whose
-# filesystem cannot hard-link the incremental-compilation cache (cargo prints
-# "hard linking files ... failed" and can leave stale/inconsistent binaries).
-# Keeping the target dir on the internal disk makes incremental builds reliable.
+# hardlink della cache incrementale di cargo (cargo stampa "hard linking
+# files ... failed" e puo' lasciare binari stale/incoerenti).
+# Dal 2026-09-29 (S-182) il default e' la target di SVILUPPO; la target CANONICA
+# ~/Claude/php-rust-output porta i binari pinnati e la usano SOLO scripts/pin-*.sh
+# e le build di promozione, sempre con CARGO_TARGET_DIR esplicito.
 [build]
-target-dir = "/Users/francescotinti/Claude/php-rust-output"
+target-dir = "/Users/francescotinti/Claude/php-rust-dev-output"

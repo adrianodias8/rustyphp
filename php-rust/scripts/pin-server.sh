@@ -3,6 +3,9 @@
 # Build con ricetta + SMOKE VERO (--axum serve una pagina) + stash + registro,
 # in un atto. Smoke fallito => niente stash (la classe de67cb64 muore qui).
 set -euo pipefail
+# Target CANONICA esplicita (S-182): il .cargo/config.toml locale punta alla target
+# di sviluppo, il pin deve nascere e essere hashato in php-rust-output.
+export CARGO_TARGET_DIR="$HOME/Claude/php-rust-output"
 REPO="/Volumes/Extreme Pro/Claude/php-rust-experiment/php-rust"
 BIN="$HOME/Claude/php-rust-output/release/php-server"
 PHPR="$HOME/Claude/php-rust-output/release/phpr"

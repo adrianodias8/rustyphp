@@ -55,9 +55,11 @@ per cartella di output al primo commit dell'harness).
   Profilo release: fat LTO, 1 codegen unit. Mai cambiare toolchain o ricetta
   durante un arco di misura.
 - Target canonica `~/Claude/php-rust-output` (porta i binari pinnati): nessuna
-  build esplorativa lì. Sviluppo ordinario su target dedicata APFS interna
-  (`CARGO_TARGET_DIR=$HOME/Claude/php-rust-dev-output`); sempre `--release`.
-  Il volume esterno ExFAT non regge la cache incrementale.
+  build esplorativa lì; pin e promozione la nominano con `CARGO_TARGET_DIR`
+  esplicito. Sviluppo ordinario su target dedicata APFS interna
+  `~/Claude/php-rust-dev-output`, default del `.cargo/config.toml` locale dal
+  2026-09-29 (S-182); sempre `--release`. Il volume esterno ExFAT non regge la
+  cache incrementale.
 - Rust si naviga e si edita con **Serena**; il C di php-src con **Vexp**.
   Hook locali bloccano cat/grep sui `.rs` e `git add` di `.rs` (usare `add -u`
   + `commit -F`).
