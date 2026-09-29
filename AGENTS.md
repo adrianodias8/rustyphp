@@ -60,9 +60,9 @@ per cartella di output al primo commit dell'harness).
   sparsebundle `phpr-target.sparsebundle` sul volume esterno (mount via
   `wp182-harness/phpr-target-bundle.sh`), default del `.cargo/config.toml` locale
   dal 2026-09-29 (S-182, B/A 1,002 vs disco interno). Il volume esterno ExFAT non regge la
+  cache incrementale.
   Build di sviluppo: `cargo build --profile dev-release` (incrementale, S-182: edit
   tipico 0,19× del release); pin, misure e CI restano `--release`.
-  cache incrementale.
 - Rust si naviga e si edita con **Serena**; il C di php-src con **Vexp**.
   Hook locali bloccano cat/grep sui `.rs` e `git add` di `.rs` (usare `add -u`
   + `commit -F`).
