@@ -1,0 +1,72 @@
+--- ../wp181-harness/s181-pair.sh	2026-09-22 14:16:16
++++ s182-pair.sh	2026-09-29 16:23:10
+@@ -1,4 +1,9 @@
+ #!/bin/bash
++# s182-pair.sh <tentativo> — S-182 ISTRUTTORIA: RIMISURA della coppia full/media WP sullo STESSO pin s181 (t24; criterio s182-criterio-istruttoria.md).
++# COPIA DICHIARATA di wp181-harness/s181-pair.sh (manifest s182-pair-copia.diff) coi SOLI adattamenti:
++# nomi s182/pair182/t24; harness wp182; pin s181 = PIN_ATTESO/SRV_ATTESO dagli stash (avvio-istruttoria-s182.sh);
++# mediane storiche con t23=1,799 (t22 abortita rc=8, nessuna mediana; banda giudizio INVARIATA [1,738;1,799]); messaggio GIU': stesso pin,
++# lettura. Tutto il resto INVARIATO (testo S-181 conservato sotto).
+ # s181-pair.sh <tentativo> — coppia full/media WP @ pin s181 (DOVUTA: pin nuovo, promozione L-CR1 S-181).
+ # COPIA DICHIARATA di wp180-harness/s180-pair.sh (manifest s181-pair-copia.diff) coi SOLI adattamenti:
+ # nomi s181/pair181/t22; harness wp181; pin s181 = PIN_ATTESO/SRV_ATTESO dagli stash (s181-lancio-coppia.sh);
+@@ -29,17 +34,17 @@
+ set -u
+ export PATH=/usr/bin:/bin:/usr/sbin:/opt/homebrew/bin
+ REPO="/Volumes/Extreme Pro/Claude/php-rust-experiment/php-rust"
+-H="$REPO/wp181-harness"
++H="$REPO/wp182-harness"
+ H109="$REPO/wp109-harness"
+ QUIESCE="$REPO/wp129-harness/s129-quiescenza.sh"
+ T="${1:?tentativo (es. t2)}"
+ OUT="$H/pair-out"; mkdir -p "$OUT"
+-VERD="$H/s181-pair-verdetto-$T.out"
++VERD="$H/s182-pair-verdetto-$T.out"
+ if [ -e "$VERD" ]; then
+   echo "verdetto $VERD ESISTE — tentativo nuovo = file nuovo (az.rev. S-131 #5)" >&2
+   exit 7
+ fi
+-DONE="$OUT/pair181-$T.done"
++DONE="$OUT/pair182-$T.done"
+ WPDEV="/Users/francescotinti/Claude/wpdev"
+ ORACLE=/opt/homebrew/opt/php/bin/php
+ PHPR="$HOME/Claude/php-rust-output/release/phpr"
+@@ -164,8 +169,8 @@
+         m = re.search(r"^\s*(\d+)\s+peak memory footprint", l); d.update(pf=int(m.group(1))) if m else None
+     return d
+ legs = ["leg1-on", "leg2-on", "leg3-on", "leg4-on", "leg5-on", "leg6-on"]
+-print(f"== s181 coppia WP full+media sul pin s181 MISURATO phpr={PINH} server={SRVH} tentativo={T} (criteri s132/s146/s148 EREDITATI + s181-criterio-pair-t22.md: giudizio a MEDIANA per finestra, az.rev.3 S-149) ==")
+-print(f"grade=VERDICT  # derivazione meccanica dai .time; rc autoritativo = pair-out/pair181-{T}.done")
++print(f"== s182 ISTRUTTORIA t24: RIMISURA coppia WP full+media sul pin s181 MISURATO phpr={PINH} server={SRVH} tentativo={T} (criteri s132/s146/s148 EREDITATI + s182-criterio-istruttoria.md: giudizio a MEDIANA per finestra, az.rev.3 S-149) ==")
++print(f"grade=VERDICT  # derivazione meccanica dai .time; rc autoritativo = pair-out/pair182-{T}.done")
+ print("# full: cpu=user+sys (etichettato); media: CANONICA=user-only + companion (az.rev. S-128 #3)")
+ print("# az.rev. S-131 #3: riferimento PER CONFIGURAZIONE, ON-ONLY = canonico; firma per gamba")
+ print("# az.rev. S-136 #2: lettura firma PRE-REGISTRATA: >150% med MOTORE = SPORCA (esclusa); 120-150% = ELEVATA (nel canone, annotata); <=120% pulita")
+@@ -238,18 +243,18 @@
+     print(f"full_{cfg}_only_coppie_proprie={min(props):.3f}-{max(props):.3f} (N={len(props)}){canon}")
+     print(f"full_{cfg}_only_intervallo={min(sp.values())/max(so.values()):.3f}-{max(sp.values())/min(so.values()):.3f}")
+     if cfg == "on":
+-        # s181-criterio-pair-t22.md p.2 (az.rev.3 S-149): GIUDIZIO CANONICO a
+-        # MEDIANA per finestra vs mediane storiche t1=1,799 t2=1,738 t3=1,789 t4=1,781 t5=1,757 t6=1,771 t7=1,795 t8=1,754 t9=1,767 t10=1,760 t11=1,765 t12=1,767 t13=1,763 t14=1,761 t15=1,746 t16=1,749 t17=1,776 t18=1,769 t19=1,772 t20=1,765 t21=1,744;
++        # s182-criterio-istruttoria.md p.4 (az.rev.3 S-149): GIUDIZIO CANONICO a
++        # MEDIANA per finestra vs mediane storiche t1=1,799 t2=1,738 t3=1,789 t4=1,781 t5=1,757 t6=1,771 t7=1,795 t8=1,754 t9=1,767 t10=1,760 t11=1,765 t12=1,767 t13=1,763 t14=1,761 t15=1,746 t16=1,749 t17=1,776 t18=1,769 t19=1,772 t20=1,765 t21=1,744 t23=1,799 (t22 abortita);
+         # la banda-unione resta SOLO companion descrittivo.
+         MED_LO, MED_HI = 1.738, 1.799
+-        med_t22 = statistics.median(props)
+-        print(f"mediana_t22={med_t22:.3f} (N={len(props)} coppie proprie ON PULITE; mediane storiche t1=1.799 t2=1.738 t3=1.789 t4=1.781 t5=1.757 t6=1.771 t7=1.795 t8=1.754 t9=1.767 t10=1.760 t11=1.765 t12=1.767 t13=1.763 t14=1.761 t15=1.746 t16=1.749 t17=1.776 t18=1.769 t19=1.772 t20=1.765 t21=1.744)")
+-        if MED_LO <= med_t22 <= MED_HI:
+-            print(f"giudizio_MEDIANA (canonico, criterio t22 p.2): COMPATIBILE (mediana in [{MED_LO}; {MED_HI}]) — nessun claim")
+-        elif med_t22 < MED_LO:
+-            print(f"giudizio_MEDIANA (canonico, criterio t22 p.2): direzione GIU' SEGNALATA (mediana {med_t22:.3f} < {MED_LO}) — attesa: L-CR1 Call/Ret magri (calls-dq D=[+8,17;+8,50] ns/chiamata): direzione ≤0 SOTTO-risoluzione (quota chiamate utente ad arità esatta nel workload WP non censita) — lettura")
++        med_t24 = statistics.median(props)
++        print(f"mediana_t24={med_t24:.3f} (N={len(props)} coppie proprie ON PULITE; mediane storiche t1=1.799 t2=1.738 t3=1.789 t4=1.781 t5=1.757 t6=1.771 t7=1.795 t8=1.754 t9=1.767 t10=1.760 t11=1.765 t12=1.767 t13=1.763 t14=1.761 t15=1.746 t16=1.749 t17=1.776 t18=1.769 t19=1.772 t20=1.765 t21=1.744 t23=1.799)")
++        if MED_LO <= med_t24 <= MED_HI:
++            print(f"giudizio_MEDIANA (canonico, criterio istruttoria p.4): COMPATIBILE (mediana in [{MED_LO}; {MED_HI}]) — nessun claim")
++        elif med_t24 < MED_LO:
++            print(f"giudizio_MEDIANA (canonico, criterio istruttoria p.4): direzione GIU' SEGNALATA (mediana {med_t24:.3f} < {MED_LO}) — stesso pin s181 (rimisura di istruttoria): lettura, non è una leva")
+         else:
+-            print(f"giudizio_MEDIANA (canonico, criterio t22 p.2): REGRESSIONE SEGNALATA (mediana {med_t22:.3f} > {MED_HI}) — indagine PRIMA di ogni altra leva")
++            print(f"giudizio_MEDIANA (canonico, criterio istruttoria p.4): REGRESSIONE SEGNALATA (mediana {med_t24:.3f} > {MED_HI}) — in finestra pulita = REPERTO contro L-CR1 (criterio istruttoria p.5)")
+         print(f"companion banda-unione (descrittivo): coppie in [1.722-1.823]: {sum(1 for r in props if 1.722 <= r <= 1.823)}/{len(props)}")
+         # s140-criterio-pair.md p.4: FONDAZIONE banda ON-config (N>=5 gambe pulite)
+         if len(props) >= 5:
