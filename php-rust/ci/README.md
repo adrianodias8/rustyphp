@@ -7,8 +7,10 @@ il hook `post-receive` accoda il commit in `phpr-ci/queue/` e DEMONIZZA
 SCARTATO: EX_CONFIG/TCC sui volumi esterni per gli agenti). Il runner consuma
 la coda UNO alla volta: **build release → batteria (cargo test) →
 corpus-gate**, con target dir SEPARATA su disco locale APFS
-`/private/tmp/phpr-ci-target` (cargo su ExFAT = no; MAI php-rust-output),
-PRUNE a fine job e guardia disco (job saltato se <10G liberi).
+`~/Claude/phpr-target/ci-target` sulla sparsebundle APFS (S-182: cache
+PERSISTENTE, niente prune; MAI php-rust-output; cargo su ExFAT = no); guardie:
+bundle smontata o <8G liberi sulla bundle ⇒ il commit torna in coda e il runner
+esce (lo riprende il prossimo push, dopo il mount nel pre-flight).
 
 Esiti: `phpr-ci/out/<sha12>/status` (OK · build-FAIL · batteria-FAIL ·
 corpus-FAIL · skipped-busy) + log per passo + riga in `phpr-ci/CI_FEED.log`

@@ -17,10 +17,14 @@ export PATH=/usr/bin:/bin:/usr/sbin:/opt/homebrew/bin:"$HOME/.cargo/bin"
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
 CI="/Volumes/Extreme Pro/Claude/phpr-ci"
 Q="$CI/queue"; OUT="$CI/out"; WORK="$CI/work"
-# target su disco LOCALE APFS (cargo su ExFAT = terreno minato: niente
-# symlink/permessi) e PRUNE a fine job: build a freddo, ma il disco locale
-# (budget pre-flight ≥15G) non tiene cache CI residenti.
-export CARGO_TARGET_DIR="/private/tmp/phpr-ci-target"
+# target sulla SPARSEBUNDLE APFS (decisione utente 2026-09-29, S-182: le target
+# incrementali vivono in ~/Claude/phpr-target — dev-output per lo sviluppo,
+# ci-target per la CI): cache PERSISTENTE tra i job (niente prune, niente
+# build a freddo da 22 min per un commit di soli docs), niente pressione su
+# Data. Bundle smontata (es. dopo un reboot) ⇒ il job TORNA IN CODA e si esce
+# (stesso modello della guardia disco); la monta il pre-flight di sessione.
+BUNDLE_MP="$HOME/Claude/phpr-target"
+export CARGO_TARGET_DIR="$BUNDLE_MP/ci-target"
 LOCK="$CI/runner.lock"
 FEED="$CI/CI_FEED.log"
 MLOCK="/private/tmp/phpr-measure.lock"
@@ -96,9 +100,16 @@ while :; do
     fail_job "skipped-busy"
     continue
   fi
-  # guardia disco: picco misurato del job ~4G (smoke 76544e8); sotto 8G il
-  # commit TORNA IN CODA (lo riprova il runner del prossimo push) e si esce.
-  FREE=$(df -g /private/tmp | awk 'NR==2{print $4}')
+  # guardia bundle: smontata ⇒ il commit TORNA IN CODA e si esce.
+  if ! mount | grep -q " $BUNDLE_MP "; then
+    echo "$SHA" > "$Q/$(date +%s)-${S12}"
+    echo "REQUEUE $S12 bundle-unmounted $(date '+%F %T')" >> "$FEED"
+    notify "$S12: requeue bundle-unmounted"
+    break
+  fi
+  # guardia disco sulla BUNDLE: picco misurato del job ~4G (smoke 76544e8); sotto
+  # 8G il commit TORNA IN CODA (lo riprova il runner del prossimo push) e si esce.
+  FREE=$(df -g "$BUNDLE_MP" | awk 'NR==2{print $4}')
   if [ "${FREE:-0}" -lt 8 ]; then
     echo "$SHA" > "$Q/$(date +%s)-${S12}"
     echo "REQUEUE $S12 disk-low(${FREE}G) $(date '+%F %T')" >> "$FEED"
@@ -136,5 +147,6 @@ while :; do
   echo "$ST" > "$O/status"
   echo "DONE $S12 $ST $(date '+%F %T')" >> "$FEED"
   notify "$S12: $ST"
-  rm -rf "$CARGO_TARGET_DIR"   # prune: il disco locale non tiene cache CI
+  # niente prune: la cache CI vive sulla bundle (compattazione manuale con
+  # phpr-target-bundle.sh compact quando serve)
 done
