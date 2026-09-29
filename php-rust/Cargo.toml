@@ -42,3 +42,13 @@ static_assertions = "1.1"
 [profile.release]
 lto = "fat"
 codegen-units = 1
+
+# Development profile (S-182, user decision 2026-09-29): inherits release but
+# keeps the incremental cache alive (fat LTO + 1 CGU disable it). Output goes to
+# target/dev-release/ and is NEVER a pin, a measurement arm or a CI artifact:
+# the pin recipe stays `cargo build --release` above, byte for byte.
+[profile.dev-release]
+inherits = "release"
+incremental = true
+lto = false
+codegen-units = 16
