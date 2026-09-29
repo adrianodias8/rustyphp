@@ -105,7 +105,7 @@ copy-the-whole-string fallback — the quadratic `$s .= $i` loop of §5.1, which
 
 | | `Zend/bench` | `arrays` | `oop` | `symfony-steady` | `strings` |
 |---|---:|---:|---:|---:|---:|
-| `Rc` + `RefCell` + alloc | **10.7 %** | **31.9 %** | **22.3 %** | **20.3 %** | **19.8 %** |
+| `Rc` + `RefCell` + alloc | **10.7 %** | **31.9 %** | **22.3 %** | **20.3 %** | **19.7 %** |
 | PLAN threshold for option A | < 25 % | | | | |
 | PLAN threshold for option B | ≥ 40 % | | | | |
 
