@@ -1,6 +1,6 @@
 --- ../wp181-harness/s181-leva-build.sh	2026-09-22 14:05:47
-+++ s182-scomp-build.sh	2026-09-29 16:39:31
-@@ -1,61 +1,59 @@
++++ s182-scomp-build.sh	2026-09-29 23:51:10
+@@ -1,61 +1,65 @@
  #!/bin/bash
 -# s181-leva-build.sh — bracci Z (gemello del pin s180) e B (leva L-CR1) + MUTANTE (criterio s181-criterio-cr1.md p.2/p.3/p.6):
 -# COPIA DICHIARATA di ../wp177-harness/s177-leva-build.sh (manifest s181-leva-build-copia.diff) coi SOLI adattamenti:
@@ -23,7 +23,8 @@
 +# ASSERT di unicità sull'archivio (mai sul tree, mai sed globale — lezione S-181 cr1b): Z = base (atteso byte-id col pin
 +# 19a2faa83a492745; se ≠ = «gemello a contenuto», dichiarato), P = placebo (`cf.argc` dopo il ciclo), MA = −a, MB = −b,
 +# MC = −c, M2 = mutante «ip=1 anche sul cammino LENTO di MethodCall» (dispatch_instance_call, ENTRAMBI i siti di bind);
-+# (2) pin atteso s181, lock TOKEN s182, out ab-out/s182-scomp, sorgente/target /Volumes/Extreme Pro/Claude/s182-scomp{,-tgt};
++# (2) pin atteso s181, lock TOKEN s182, out ab-out/s182-scomp, sorgente /Volumes/Extreme Pro/Claude/s182-scomp, TARGET sulla
++# sparsebundle ~/Claude/phpr-target/s182-scomp-tgt (montata: gate nel pre-flight; mai ExFAT, mai la canonica);
 +# (3) parità di P/MA/MB/MC: fx-sw2-gc == pin a blocchi, fx-sw1/sl1/sl2/sl3/cr1 == oracle byte-id; M2 DEVE divergere
 +# dall'oracle su fx-cr1 ESATTAMENTE sulle righe «ACE m» (sparite solo righe ACE m; in più solo warning/vuote);
 +# (4) disasm run_loop (istr/bl/blr/sp_refs) del pin e di ogni braccio; (5) SKIP_BUILD=1 riusa i binari già costruiti.
@@ -49,7 +50,10 @@
 -FXCR="$H/fx-cr1.php"
 -SRC="/Volumes/Extreme Pro/Claude/s181-leva"; TGT="/Volumes/Extreme Pro/Claude/s181-leva-tgt"
 +FXCR="$H1/fx-cr1.php"
-+SRC="/Volumes/Extreme Pro/Claude/s182-scomp"; TGT="/Volumes/Extreme Pro/Claude/s182-scomp-tgt"
++SRC="/Volumes/Extreme Pro/Claude/s182-scomp"
++# TARGET dei bracci sulla SPARSEBUNDLE APFS (decisione utente 2026-09-29: target incrementali/separate sulla bundle, mai
++# su ExFAT né sulla canonica php-rust-output); la bundle DEVE essere montata (phpr-target-bundle.sh status) altrimenti rc=8
++BUNDLE_MP="$HOME/Claude/phpr-target"; TGT="$BUNDLE_MP/s182-scomp-tgt"
  : > "$VERD"
  fin(){ echo "rc=$1 $(date +%T)" > "$DONE"; exit "$1"; }
  note(){ echo "$*" >> "$VERD"; }
@@ -68,6 +72,8 @@
 +DAT=$(df -g /System/Volumes/Data | awk 'NR==2{print $4}')
 +note "== s182 bracci SCOMPOSIZIONE L-CR1 — riferimento A = pin s181 $PH, BASE = commit ${SHA0:0:12} (sorgente del pin), bracci Z/P/MA(−a)/MB(−b)/MC(−c)/M2, fixture fx-cr1 $(wc -l < "$FXCR" | tr -d ' ') righe; Extreme ${AVX}G Data ${DAT}G $(date '+%F %T') =="
  awk -v a="$AVX" 'BEGIN{exit !(a+0 < 15)}' && { note "rc=8 Extreme ${AVX}G < 15G: niente build"; fin 8; }
++mount | grep -q " $BUNDLE_MP " || { note "rc=8 bundle NON montata ($BUNDLE_MP): 'wp182-harness/phpr-target-bundle.sh mount' prima della build"; fin 8; }
++BFREE=$(df -g "$BUNDLE_MP" | awk 'NR==2{print $4}'); [ "${BFREE:-0}" -ge 10 ] || { note "rc=8 bundle ${BFREE}G liberi < 10G"; fin 8; }
 +[ "${DAT:-0}" -ge 10 ] || { note "rc=8 Data ${DAT}G < 10G: niente build"; fin 8; }
  
 -# riferimento: pin su fx-sw2-gc (marcatore) e gate bilaterale fx-sw1 + fx-cr1 sul pin (sanità del gate)
@@ -89,7 +95,7 @@
  
  archivio(){ # $1=sha
    rm -rf "$SRC"; mkdir -p "$SRC/php-rust"
-@@ -68,6 +66,51 @@
+@@ -68,6 +72,51 @@
        cargo build --release -p php-cli ) > "$OUT/build-$1.log" 2>&1 || return 1
    cp "$TGT/release/phpr" "$OUT/phpr-$1"; shasum -a 256 "$OUT/phpr-$1" | cut -c1-16
  }
@@ -141,7 +147,7 @@
  rotte(){ # $1=ref.out $2=mut.out → stdout etichette rotte (blocchi per etichetta)
    python3 - "$1" "$2" <<'PY'
  import sys, re
-@@ -84,79 +127,65 @@
+@@ -84,79 +133,65 @@
  PY
  }
  
