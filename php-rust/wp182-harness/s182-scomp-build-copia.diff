@@ -1,5 +1,5 @@
 --- ../wp181-harness/s181-leva-build.sh	2026-09-22 14:05:47
-+++ s182-scomp-build.sh	2026-09-29 16:37:15
++++ s182-scomp-build.sh	2026-09-29 16:39:31
 @@ -1,61 +1,59 @@
  #!/bin/bash
 -# s181-leva-build.sh — bracci Z (gemello del pin s180) e B (leva L-CR1) + MUTANTE (criterio s181-criterio-cr1.md p.2/p.3/p.6):
@@ -133,7 +133,7 @@
 +if arm == 'M2':
 +    s = rd(pmod)
 +    anchor = 'bind_params(&mut frame, args);\n' + ' ' * 16 + 'frame.this = Some(this);\n' + ' ' * 16 + 'frame.class = Some(defc);\n'
-+    s = rep(s, anchor, anchor + ' ' * 16 + 'if matches!(callee.ops.first(), Some(Op::CheckArity { .. })) { frame.ip = 1; } // MUTANTE M2 s182\n', 2)
++    s = rep(s, anchor, anchor + ' ' * 16 + 'if matches!(callee.ops.first(), Some(crate::bytecode::Op::CheckArity { .. })) { frame.ip = 1; } // MUTANTE M2 s182 (Op non importato nel modulo: path completo)\n', 2)
 +    wr(pmod, s); print('M2: ip=1 inserito sui DUE siti lenti di dispatch_instance_call (mutante)'); sys.exit(0)
 +raise SystemExit(f'braccio sconosciuto {arm}')
 +PY

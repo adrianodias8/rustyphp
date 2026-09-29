@@ -106,7 +106,7 @@ if arm == 'MC':
 if arm == 'M2':
     s = rd(pmod)
     anchor = 'bind_params(&mut frame, args);\n' + ' ' * 16 + 'frame.this = Some(this);\n' + ' ' * 16 + 'frame.class = Some(defc);\n'
-    s = rep(s, anchor, anchor + ' ' * 16 + 'if matches!(callee.ops.first(), Some(Op::CheckArity { .. })) { frame.ip = 1; } // MUTANTE M2 s182\n', 2)
+    s = rep(s, anchor, anchor + ' ' * 16 + 'if matches!(callee.ops.first(), Some(crate::bytecode::Op::CheckArity { .. })) { frame.ip = 1; } // MUTANTE M2 s182 (Op non importato nel modulo: path completo)\n', 2)
     wr(pmod, s); print('M2: ip=1 inserito sui DUE siti lenti di dispatch_instance_call (mutante)'); sys.exit(0)
 raise SystemExit(f'braccio sconosciuto {arm}')
 PY
