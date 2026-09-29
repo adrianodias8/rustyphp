@@ -1,11 +1,11 @@
 # NEXT_SESSION — phpr: OBIETTIVO PARITÀ (≥1×) con l'oracle; ≤3× = tappa (REGOLE §1)
-⏱ **FONDAMENTALI**: **S-181 = leva L-CR1 «Call/Ret magri» PROMOSSA, PIN NUOVO phpr `19a2faa83a492745` + server `b2802f08c5887e77`**
+⏱ **FONDAMENTALI**: **S-182 = APPARATO (0 leve, anomalia dichiarata: CLAUDE.md riallineati · target dev su sparsebundle B/A 1,002 · profilo dev-release edit 0,19×; istruttoria t24/ORM NON eseguita ⇒ primo atto di S-183) · S-181 = leva L-CR1 «Call/Ret magri» PROMOSSA, PIN NUOVO phpr `19a2faa83a492745` + server `b2802f08c5887e77`**
 (sorgente leva 172814ae, HEAD alla build f5f746cf, tree == pin; toolchain 1.98.1). Micro s181: **arith 2,1 · prop 2,3 · calls 4,0 · str 4,1 · arr 2,8 · re 2,6**
 (calls 4,5→4,0 = leva; il resto tick/trasversale). **calls-dq** (giudice nuovo, N=60M): 98,83→90,83 ns/iter (oracle 21,67; 4,56×→4,19×),
 CIFRA [+8,00;+8,17] (cr1c di record; cr1/cr1b repliche concordi a guardia per un campione di GoogleUpdater), conferma post-pin +8,00 5/5
 su layout diverso. Guardie: **prop-dq +2,40/+2,47 (5/5, replicata post-pin)** e arith-dq +0,72: effetto TRASVERSALE deterministico
 (sp_refs di run_loop −8 %), quota del meccanismo NON ripartita (rilievi 1-4 revisione S-181). Leve: 1 (PROMOSSA) · A/B: 3 corse ·
-incidenti: 1 (lanciatore cr1b con nome del copione errato, rc=127 senza misura) · revisione S-181 (lente MISURA): wp181-harness/revisione-s181.md.
+incidenti: 1 (lanciatore cr1b con nome del copione errato, rc=127 senza misura) · revisione S-181 (MISURA): wp181-harness/revisione-s181.md · revisione S-182 (SEMANTICA): wp182-harness/revisione-s182.md.
 **COPPIA LETTA: WP t23 mediana **1,799** = bordo superiore della banda [1,738;1,799] ⇒ giudizio canonico REGRESSIONE SEGNALATA (coppie proprie 1,735/1,783/1,799/1,799/1,809/1,814, banda_ON 0,079 vs 0,030 a t21; media user-only 2,44-2,53 vs 2,42-2,44: finestra più lenta su TUTTE le gambe, macchina in uso con carico 4-5,5; t22 abortita rc=8 per loadavg 7,9) — VOCE, non cifra.** **ORM sul pin s181 FINESTRA CONTAMINATA: leg1 net 6,721 · leg2 8,250 SEGNALATA dal gate ictx (phpr2 5250/s vs 188, user 43,3 s vs 34,9, sys 3,28), sentinella oracle 5,25/5,30 FUORI banda [4,84;5,04] ⇒ nessun claim, regola 4 NON giudicabile; parità ORM 16 · dbal 10 ok; dbal [7,472;7,909] (wp181-harness/s181-orm-coppia-verdetto.out).** ⇒ **ISTRUTTORIA in apertura di S-182 (criterio t22 p.1: «indagine PRIMA di ogni altra leva»): rerun WP t24 + ORM E3/E4 in finestra NOTTURNA quieta (carico <3, nessuna app utente); se t24 rientra in banda e ORM torna ≤7,05 ⇒ t23/ORM-s181 = contaminazione ambientale dichiarata; se persiste ⇒ reperto CONTRO L-CR1 (attesa era ≤0), istruttoria vera prima di ogni leva.**
 
 ## Scoreboard (PIN s181, micro R=5 di record 2026-09-22 15:2x, E2 PASS t8, quiescenza t3)
@@ -14,14 +14,14 @@ incidenti: 1 (lanciatore cr1b con nome del copione errato, rc=127 senza misura) 
 **ORM s181 [6,721;8,250] CONTAMINATA (leg2 ictx, sentinella fuori banda: nessun claim)** (t21 [7,008;7,060], regola 4 sospesa alla rimisura) · corpus 2655 (1412 congelati) · batteria 1748/0/2 (s181, denti dichiarati) ·
 CI: job in coda da 172814ae a HEAD partono al rilascio del lock (ATTESI verdi: batteria del tree rc=0, cap LOC run.rs 7404 dichiarato).
 
-## §S-182 — ordine
+## §S-183 — ordine (= l'ordine S-182 non eseguito: la sessione S-182 è stata di apparato)
 0. **PRE-FLIGHT**: pin s181 per hash (phpr 19a2faa83a492745, server b2802f08c5887e77) · rustc 1.98.1 · Data ≥10G + swap (S-181: 11G→5G
    in batteria per lo swap; cache Google 1,5G purgata) · **CPU totale <150 % ×4 prima di OGNI misura (E2: l'IDE + questo processo
-   pesano 70-80 %: silenzio durante le finestre)** · MySQL wp8 · lock col TOKEN `s182` · tree pulito · CI_FEED (job da 172814ae) ·
+   pesano 70-80 %: silenzio durante le finestre)** · MySQL wp8 · lock col TOKEN `s183` · tree pulito · CI_FEED (job da 172814ae) ·
    **ISTRUTTORIA OBBLIGATORIA (primo atto, prima di ogni leva)**: WP t24 (copia di s181-pair.sh con tentativo t24, pre-gate di carico <3 ×6,
    finestra NOTTURNA senza app utente) + ORM E3/E4 (s176-orm-coppia.sh, PIN_ATTESO s181) ⇒ se t24 in banda E ORM ≤7,05 con sentinella in banda:
    t23/ORM-s181 = contaminazione ambientale DICHIARATA (chiusa); altrimenti reperto contro L-CR1 (attesa ≤0) e istruttoria vera
-   (gambe media/full per motore, ictx, replica peak) · Serena attiva PRIMA del Rust · `._*` purgati a chiusura (wp181 456, phpr-ci 6787).
+   (gambe media/full per motore, ictx, replica peak) · Serena attiva PRIMA del Rust · `._*` purgati a chiusura · bundle `wp182-harness/phpr-target-bundle.sh status` = MONTATA · CI: coda smaltita (24 job da 8bf40222 a HEAD, attesi verdi).
    **TARGET (2026-09-29)**: il `.cargo/config.toml` locale punta alla DEV `~/Claude/phpr-target/dev-output` (sparsebundle APFS: `wp182-harness/phpr-target-bundle.sh mount|status` nel pre-flight); ogni build di pin/promozione
    (catena §6) va lanciata con `CARGO_TARGET_DIR=$HOME/Claude/php-rust-output` ESPLICITO, altrimenti il binario non arriva al pre-flight.
    Sviluppo: `cargo build --profile dev-release` (incrementale, edit 27 s vs 148 s; MAI pin/misura/CI — verdetti wp182-harness/target-bundle-out/).
@@ -39,7 +39,7 @@ CI: job in coda da 172814ae a HEAD partono al rilascio del lock (ATTESI verdi: b
 5. Quesiti residui: readonly write-once NON MISURATO (49 % dei miss ORM) · ictx oracle1 · c0 positivo · census server (29° slitt.) ·
    ratifiche §3 · dtor-in-dtor · Sweep-skip esteso · sito phprust.com «MIT» · gh-status-sync a mano (skill con `model:`) ·
    licenza PHP-3.01 clausole 4/6: DECISO dall'utente (2026-09-22) — si risolverà più avanti CAMBIANDO la licenza; non è un blocco né una decisione da richiedere (rilievo 8 S-180 chiuso come «differito») · E3 (updater ≥2 campioni)
-   da tenere o togliere nel lanciatore-modello (rilievo 5) · divergenza dtor del locale al ritorno = famiglia §3.28 (ii) (osservata in fx-cr1).
+   da tenere o togliere nel lanciatore-modello (rilievo 5) · azioni della revisione S-182 (lente semantica: wp182-harness/revisione-s182.md) · divergenza dtor del locale al ritorno = famiglia §3.28 (ii) (osservata in fx-cr1).
 
 ## Aperture per NOME
 **VOCE WP t23 1,799 a filo (regressione segnalata) + ORM s181 contaminata (istruttoria S-182)** · VOCE ORM [7,008;7,060] a filo di 7,05 (regola 4 sospesa) · quota trasversale di L-CR1 (prop-dq +2,47 non ripartita) · meccanismo (a) vs disasm (bl +9) ·
@@ -49,7 +49,7 @@ sonda strmap · gamba server census · §3.29 · §3.27 · §3.26 · §3.25 · �
 objmap → GC · evalcls 316,9× · refl 42,4× · re +2 · get_gc · latin1 · dbal 10 nomi · pavimento 4 ns/iter su loop corti.
 
 ## NON riproporre (i veti restano)
-**S-181: cifra di una leva composta senza scomposizione né placebo (la cifra è «binario vs pin») · guardie a sola regressione con attesa
+**S-182: `touch` come proxy di un edit per la cache incrementale (hash invariato) · `pgrep -f` col pattern nel proprio argv · catena di replace con assert a metà (commit parziale) · build nella canonica senza CARGO_TARGET_DIR esplicito (il config locale punta alla bundle) · apparato oltre ½ sessione senza parola dell'utente.** **S-181: cifra di una leva composta senza scomposizione né placebo (la cifra è «binario vs pin») · guardie a sola regressione con attesa
 pre-registrata muta · meccanismo dichiarato senza il disasm che lo conferma (bl atteso −1, misurato +9) · copie di lanciatori con sed
 globale sul tag (ha rinominato il copione invocato: rc=127) · limiti cablati nei patch dei mutanti (4000 caratteri) · finestre senza E3 con
 updater periodico (un campione da 30 s ⇒ guardia) · misure con l'IDE attivo sopra 150 % totale.** S-180: chiudere un fronte su una misura
@@ -60,7 +60,7 @@ mentre un braccio lo usa · verdetti rc≠8 con |A−PREV| >4. S-176..170: promo
 mentre gira · build sulla target canonica fuori catena · sleep in foreground · Data <10G senza watchdog · token phpr/php-server negli argv
 delle attese · skill con `model:` a metà sessione · lock senza TOKEN · rm -rf di target intere. Trasversali: NaN-boxing/fn-table/arena (⚖️) ·
 BOLT/PGO · pin senza collaudo · rc da pipe · promozione sotto banda · cifre composte.
-**Riscritto** 2026-09-22 (chiusura S-181; storia in `sessions/` · `gaps/`).
-Pre-flight S-182: pin phpr **s181 19a2faa83a492745** + server **b2802f08c5887e77** (tree == pin) · toolchain 1.98.1 · Data ≥10G + swap + E2 ·
-MySQL wp8 · uploads sotto guardia · corpus 1412 · lock col TOKEN `s182` · CI feed · lettura: REGOLE.md → QUI → wp181-harness/s181-cr1c-verdetto.out
-→ s181-promo-verdetto.out → revisione-s181.md → s181-criterio-cr1.md → (pair t22 + ORM) → WP_SESSION_181 → gaps/GAP_TREND → PERF_MAP.
+**Riscritto** 2026-09-29 (chiusura S-182; storia in `sessions/` · `gaps/`).
+Pre-flight S-183: pin phpr **s181 19a2faa83a492745** + server **b2802f08c5887e77** (tree == pin) · toolchain 1.98.1 · Data ≥10G + swap + E2 ·
+MySQL wp8 · uploads sotto guardia · corpus 1412 · bundle MONTATA · lock col TOKEN `s183` · CI feed · lettura: REGOLE.md → QUI → wp182-harness/revisione-s182.md → wp182-harness/s182-criterio-istruttoria.md → wp181-harness/s181-cr1c-verdetto.out
+→ revisione-s181.md → s181-criterio-cr1.md → WP_SESSION_182 → WP_SESSION_181 → gaps/GAP_TREND → PERF_MAP.
