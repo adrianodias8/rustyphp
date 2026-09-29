@@ -17,7 +17,11 @@ OUT="$H/target-bundle-out"; mkdir -p "$OUT"
 AB="${1:-$H/s182-target-bundle-ab.sh}"; N="${2:-waiter}"
 LOG="$OUT/$N.log"; DONE="$OUT/$N.done"
 rm -f "$DONE"
-if [ -e "$LOCK" ]; then echo "$(date '+%F %T') ABORT lock altrui: $(cat "$LOCK")" >> "$LOG"; echo 9 > "$DONE"; exit 9; fi
+# lock in CATENA: se è nostro (waiter precedente) si aspetta il rilascio; altrui = abort
+while [ -e "$LOCK" ]; do
+  grep -q 's182-target-bundle' "$LOCK" || { echo "$(date '+%F %T') ABORT lock altrui: $(cat "$LOCK")" >> "$LOG"; echo 9 > "$DONE"; exit 9; }
+  sleep 2
+done
 echo "s182-target-bundle pid=$$ $(date '+%F %T')" > "$LOCK"
 trap 'rm -f "$LOCK"; echo "$(date "+%F %T") LOCK rilasciato" >> "$LOG"' EXIT
 echo "$(date '+%F %T') LOCK preso ($LOCK)" >> "$LOG"

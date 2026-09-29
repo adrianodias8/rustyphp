@@ -13,3 +13,11 @@ Il profilo release del pin NON cambia; il binario dev-release non è mai pin, br
   facoltativo (resta nel Cargo.toml, non nei docs) · > 0,80 ⇒ bocciato, profilo rimosso.
 - **Pre-gate** come s182-target-bundle-ab.sh (bundle montata, lock nostro o assente, nessun job CI, loadavg < 3).
 - **Esito**: solo numeri in `target-bundle-out/s182-dev-release-verdetto.out`; rumore A > 15 % ⇒ non giudicabile.
+
+## EMENDA E1 (dichiarata 2026-09-29 19:4x, PRIMA della gamba, durante la corsa `touch`)
+Il `touch` cambia l'mtime ma non il contenuto: il release ricompila comunque il crate, dev-release riconosce
+l'hash invariato e riusa tutto (warm-B1 4,4 s) ⇒ la gamba `touch` è il CASO MIGLIORE di B, non l'edit tipico.
+Gamba **EDIT** (giudica lei, stesse soglie): a ogni round si APPENDE a `coerce.rs` una `pub fn __s182_probe_<i>()`
+nuova (contenuto diverso a ogni build di ogni braccio), A = `--release` · B = `--profile dev-release`, R=2
+interleaved A B A B; ripristino con copia salvata (`cmp` al byte a fine corsa, nessun comando git sui `.rs`).
+La gamba `touch` resta a verbale come limite inferiore. Esito in `target-bundle-out/s182-dev-release-edit-verdetto.out`.
