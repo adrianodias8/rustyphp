@@ -27,6 +27,11 @@ RUN curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal \
     && cargo install --locked inferno samply \
     && rm -rf /opt/cargo/registry /opt/cargo/git
 
+# perf 6.12 (Debian) leaves Rust v0 symbols mangled; rustfilt demangles the
+# folded stacks. Separate layer so adding it did not rebuild the toolchain.
+RUN cargo install --locked rustfilt \
+    && rm -rf /opt/cargo/registry /opt/cargo/git
+
 # Build artefacts live on a named volume, never in the bind-mounted repo
 # (upstream rule: no in-repo target/).
 ENV CARGO_TARGET_DIR=/target \

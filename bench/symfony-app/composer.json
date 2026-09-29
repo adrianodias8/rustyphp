@@ -1,0 +1,17 @@
+{
+    "name": "bench/symfony-boot",
+    "description": "Minimal Symfony HttpKernel app for bench/symfony-boot.php (PLAN.md 2.1).",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.2",
+        "symfony/http-kernel": "^7.3",
+        "symfony/http-foundation": "^7.3",
+        "symfony/routing": "^7.3",
+        "symfony/event-dispatcher": "^7.3"
+    },
+    "config": {
+        "sort-packages": true,
+        "optimize-autoloader": false
+    }
+}
