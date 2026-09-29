@@ -1,5 +1,5 @@
 --- ../wp181-harness/s181-ab-cr1.sh	2026-09-22 13:50:12
-+++ s182-ab-scomp.sh	2026-09-29 16:34:56
++++ s182-ab-scomp.sh	2026-09-29 23:59:20
 @@ -1,31 +1,32 @@
  #!/bin/bash
 -# s181-ab-cr1.sh — A/B della leva L-CR1 «Call/Ret magri» (criterio s181-criterio-cr1.md p.3-5): COPIA DICHIARATA di
@@ -44,7 +44,7 @@
  for f in "$CD" "$PD" "$GD" "$A" "$ZZ" "$BB" "$O"; do [ -s "$f" ] || { echo "file assente o VUOTO: $f" | tee -a "$VERD"; echo 7 > "$RC"; exit 7; }; done
  [ -e "$EMPTY" ] || { echo "driver del pavimento assente: $EMPTY (VUOTO per costruzione: [ -e ], emenda S-170 p.4)" | tee -a "$VERD"; echo 7 > "$RC"; exit 7; }
 -grep -qw s181 /private/tmp/phpr-measure.lock 2>/dev/null || { echo "lock s181 assente (per TOKEN)" | tee -a "$VERD"; echo 9 > "$RC"; exit 9; }
-+grep -qw s182 /private/tmp/phpr-measure.lock 2>/dev/null || { echo "lock s182 assente (per TOKEN)" | tee -a "$VERD"; echo 9 > "$RC"; exit 9; }
++grep -qw s183 /private/tmp/phpr-measure.lock 2>/dev/null || { echo "lock s183 assente (per TOKEN)" | tee -a "$VERD"; echo 9 > "$RC"; exit 9; }
  "$H/../wp129-harness/s129-quiescenza.sh" "$OUT/quiesce-$TAG.rc" > /dev/null 2>&1 || { echo "quiescenza FAIL" | tee -a "$VERD"; echo 8 > "$RC"; exit 8; }
  AM="$(shasum -a 256 "$A" | cut -c1-8)"; ZM="$(shasum -a 256 "$ZZ" | cut -c1-8)"; BM="$(shasum -a 256 "$BB" | cut -c1-8)"
  [ "$AM" = "$AEXP" ] || { echo "A misurato $AM != atteso $AEXP" | tee -a "$VERD"; echo 1 > "$RC"; exit 1; }

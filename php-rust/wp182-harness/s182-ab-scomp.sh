@@ -26,7 +26,7 @@ VERD="$H/s182-$TAG-verdetto.out"; RC="$OUT/$TAG.rc"
 [ -e "$VERD" ] && { echo "verdetto ESISTE — TAG nuovo" >&2; exit 7; }
 for f in "$CD" "$PD" "$GD" "$A" "$ZZ" "$BB" "$O"; do [ -s "$f" ] || { echo "file assente o VUOTO: $f" | tee -a "$VERD"; echo 7 > "$RC"; exit 7; }; done
 [ -e "$EMPTY" ] || { echo "driver del pavimento assente: $EMPTY (VUOTO per costruzione: [ -e ], emenda S-170 p.4)" | tee -a "$VERD"; echo 7 > "$RC"; exit 7; }
-grep -qw s182 /private/tmp/phpr-measure.lock 2>/dev/null || { echo "lock s182 assente (per TOKEN)" | tee -a "$VERD"; echo 9 > "$RC"; exit 9; }
+grep -qw s183 /private/tmp/phpr-measure.lock 2>/dev/null || { echo "lock s183 assente (per TOKEN)" | tee -a "$VERD"; echo 9 > "$RC"; exit 9; }
 "$H/../wp129-harness/s129-quiescenza.sh" "$OUT/quiesce-$TAG.rc" > /dev/null 2>&1 || { echo "quiescenza FAIL" | tee -a "$VERD"; echo 8 > "$RC"; exit 8; }
 AM="$(shasum -a 256 "$A" | cut -c1-8)"; ZM="$(shasum -a 256 "$ZZ" | cut -c1-8)"; BM="$(shasum -a 256 "$BB" | cut -c1-8)"
 [ "$AM" = "$AEXP" ] || { echo "A misurato $AM != atteso $AEXP" | tee -a "$VERD"; echo 1 > "$RC"; exit 1; }

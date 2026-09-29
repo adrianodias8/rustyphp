@@ -6,7 +6,7 @@
 # predicato del riaggancio-r5b s163 ora PRE-registrato), DICHIARA la
 # finestra quieta (uptime + top nel log) e lancia s182-pair.sh t24.
 # COPIA DICHIARATA di s181-lancio-pair-t23.sh (manifest s182-lancio-pair-copia.diff):
-# nomi s182/t24 + QUATTRO EMENDE t24 dichiarate: (i) lock col TOKEN s182 scritto qui dopo la quiete CI,
+# nomi s182/t24 + QUATTRO EMENDE t24 dichiarate: (i) lock col TOKEN s183 (istruttoria eseguita in S-183: apparato nato in S-182, retoken dichiarato) scritto qui dopo la quiete CI,
 # (ii) pre-gate loadavg1 <3 (era <5), (iii) E2 calma CPU totale <150 % ×4 (predicato copiato da
 # s181-promozione.sh, ripetuto finché passa), (iv) watchdog disco Data a 60 s (s181-pair.sh NON ne ha uno;
 # veto S-17x: Data <10G senza watchdog). Il resto INVARIATO (blocco anti-flare EREDITATO).
@@ -21,10 +21,10 @@ if pgrep -qx cargo || pgrep -qx rustc || pgrep -qf phpt-runner; then
   while pgrep -qx cargo || pgrep -qx rustc || pgrep -qf phpt-runner; do sleep 60; done
   sleep 60
 fi
-# EMENDA t24 (i): LOCK col TOKEN s182 — apre la finestra multi-gamba (la CI si mette in mutex sul lock); rimosso a chiusura di sessione
+# EMENDA t24 (i): LOCK col TOKEN s183 — apre la finestra multi-gamba (la CI si mette in mutex sul lock); rimosso a chiusura di sessione
 MLOCK=/private/tmp/phpr-measure.lock
-echo "s182 istruttoria t24 $(date '+%F %T') pid=$$" > "$MLOCK"
-echo "$(date '+%F %T') lock scritto: $MLOCK (TOKEN s182)" >> "$LOG"
+echo "s183 istruttoria t24 (apparato S-182) $(date '+%F %T') pid=$$" > "$MLOCK"
+echo "$(date '+%F %T') lock scritto: $MLOCK (TOKEN s183)" >> "$LOG"
 # predicato anti-flare PRE-registrato (criterio p.6b): quiete CONTINUA 6x30s
 echo "$(date '+%F %T') CI quieta — attesa quiete continua anti-flare (6x30s <5%)" >> "$LOG"
 calm=0

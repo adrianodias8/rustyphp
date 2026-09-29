@@ -5,7 +5,7 @@
 # ASSERT di unicità sull'archivio (mai sul tree, mai sed globale — lezione S-181 cr1b): Z = base (atteso byte-id col pin
 # 19a2faa83a492745; se ≠ = «gemello a contenuto», dichiarato), P = placebo (`cf.argc` dopo il ciclo), MA = −a, MB = −b,
 # MC = −c, M2 = mutante «ip=1 anche sul cammino LENTO di MethodCall» (dispatch_instance_call, ENTRAMBI i siti di bind);
-# (2) pin atteso s181, lock TOKEN s182, out ab-out/s182-scomp, sorgente /Volumes/Extreme Pro/Claude/s182-scomp, TARGET sulla
+# (2) pin atteso s181, lock TOKEN s183 (esecuzione in S-183), out ab-out/s182-scomp, sorgente /Volumes/Extreme Pro/Claude/s182-scomp, TARGET sulla
 # sparsebundle ~/Claude/phpr-target/s182-scomp-tgt (montata: gate nel pre-flight; mai ExFAT, mai la canonica);
 # (3) parità di P/MA/MB/MC: fx-sw2-gc == pin a blocchi, fx-sw1/sl1/sl2/sl3/cr1 == oracle byte-id; M2 DEVE divergere
 # dall'oracle su fx-cr1 ESATTAMENTE sulle righe «ACE m» (sparite solo righe ACE m; in più solo warning/vuote);
@@ -34,7 +34,7 @@ BUNDLE_MP="$HOME/Claude/phpr-target"; TGT="$BUNDLE_MP/s182-scomp-tgt"
 fin(){ echo "rc=$1 $(date +%T)" > "$DONE"; exit "$1"; }
 note(){ echo "$*" >> "$VERD"; }
 
-grep -qw s182 "$LOCK" 2>/dev/null || { note "rc=9 lock s182 assente (per TOKEN)"; fin 9; }
+grep -qw s183 "$LOCK" 2>/dev/null || { note "rc=9 lock s183 assente (per TOKEN)"; fin 9; }
 for f in "$FX2" "$FX1" "$H2/fx-sl1.php" "$H2/fx-sl2.php" "$H2/fx-sl3.php" "$FXCR"; do [ -s "$f" ] || { note "rc=7 fixture assente: $f"; fin 7; }; done
 PH=$(shasum -a 256 "$PIN" | cut -c1-16)
 [ "$PH" = "$PIN_ATTESO" ] || { note "rc=9 pin $PH ≠ atteso $PIN_ATTESO"; fin 9; }
