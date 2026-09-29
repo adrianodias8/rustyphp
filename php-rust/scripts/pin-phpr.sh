@@ -11,6 +11,8 @@
 # giudica NOMI (congelato s109) E CONTENUTO (golden digest) E off↔on — ogni
 # pin/promozione lo usa al posto del confronto solo-nomi.
 set -euo pipefail
+# az.rev. S-182: il config locale punta alla bundle di sviluppo; qui SOLO la canonica.
+export CARGO_TARGET_DIR="$HOME/Claude/php-rust-output"
 BIN="$HOME/Claude/php-rust-output/release/phpr"
 ORACLE=/opt/homebrew/opt/php/bin/php
 MICRO="/Volumes/Extreme Pro/Claude/php-rust-experiment/php-rust/wp97-harness/micro/arith_small.php"

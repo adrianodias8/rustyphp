@@ -8,7 +8,9 @@ per ogni fatto**. Questo file dice DOVE sta la verità, mai la duplica.
 
 Reimplementazione in Rust del comportamento osservabile di **PHP 8.5.7**. Non è
 una traduzione di Zend: il contratto lo definiscono l'oracle eseguibile
-(`/opt/homebrew/opt/php/bin/php`), i `.phpt` ufficiali
+(`/opt/homebrew/opt/php/bin/php`: vale per i `diff` su stdout e per gli script; il corpus
+giudica con le proprie `--EXPECT--`; il build php-src in `~/Claude/php-oracle` ha meno
+estensioni e nessun ini — rilievo 4 rev. S-182), i `.phpt` ufficiali
 (`/Volumes/Extreme Pro/Claude/php-8.5.7`) e le applicazioni reali (WordPress,
 Doctrine ORM/DBAL, Symfony, PHPUnit). Diario e documenti in italiano; codice,
 commenti e messaggi di commit in inglese. Non attribuire documenti a modelli che

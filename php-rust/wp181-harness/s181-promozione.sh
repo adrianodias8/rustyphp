@@ -57,9 +57,15 @@ git merge-base --is-ancestor "$CAND_COMMIT" HEAD || stop "PRE: il commit del can
 [ -e /private/tmp/phpr-measure.lock ] && note "lock CI: presente (finestra di sessione, non lo tocco)" || note "lock CI: ASSENTE — la sessione lo doveva creare (proseguo, dichiarato)"
 
 disk_guard build
+# az.rev. S-182 rilievo 1: il config locale punta alla target di sviluppo (bundle);
+# la catena §6 costruisce e hasha SOLO nella canonica, e il binario DEVE risultare
+# ricostruito (mtime >= inizio build), altrimenti il gate «build ×2» è una tautologia.
+export CARGO_TARGET_DIR="$HOME/Claude/php-rust-output"
+T0=$(date +%s)
 SOURCE_DATE_EPOCH=0 CARGO_INCREMENTAL=0 cargo build --release > "$OUT/build.log" 2>&1
 rc=$?; echo "$rc" > "$OUT/build.rc"
 [ "$rc" = 0 ] || stop "build rc=$rc"
+[ "$(stat -f %m "$BIN")" -ge "$T0" ] || stop "build: $BIN NON ricostruito (mtime < inizio build) — target sbagliata? STOP"
 HB=$(shasum -a 256 "$BIN" | cut -c1-16)
 if [ "$HB" = "$CH" ]; then note "promozione: build ricetta di HEAD $HEAD0 = braccio B $CH AL BYTE"; else note "promozione: build ricetta di HEAD $HEAD0 = $HB ≠ braccio B $CH (target separata: candidato A CONTENUTO, dichiarato — LC_UUID/firma; il pin nasce da QUESTA build)"; fi
 disk_guard batteria
@@ -87,9 +93,11 @@ grep -E '^test .*debug_backtrace_array_fields' "$OUT/batteria.log" | grep -q ' o
   && note "promozione batteria: debug_backtrace_array_fields VERDE" \
   || stop "batteria: debug_backtrace_array_fields NON verde/assente"
 
+T0=$(date +%s)
 SOURCE_DATE_EPOCH=0 CARGO_INCREMENTAL=0 cargo build --release > "$OUT/build2.log" 2>&1
 rc=$?; echo "$rc" > "$OUT/build2.rc"
 [ "$rc" = 0 ] || stop "build2 rc=$rc"
+[ "$(stat -f %m "$BIN")" -ge "$T0" ] || stop "build2: $BIN NON ricostruito (mtime < inizio build) — STOP"
 H2=$(shasum -a 256 "$BIN" | cut -c1-16)
 [ "$H2" = "$HB" ] || stop "re-hash post-batteria $H2 != $HB (churn) — STOP"
 note "promozione: churn batteria neutralizzato (build ricetta → $H2 al byte)"
