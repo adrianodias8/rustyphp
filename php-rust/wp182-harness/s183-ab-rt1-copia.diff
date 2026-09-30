@@ -1,0 +1,76 @@
+--- ../wp181-harness/s181-ab-cr1.sh	2026-09-22 13:50:12
++++ s183-ab-rt1.sh	2026-09-30 20:07:43
+@@ -1,6 +1,8 @@
+ #!/bin/bash
+-# s181-ab-cr1.sh — A/B della leva L-CR1 «Call/Ret magri» (criterio s181-criterio-cr1.md p.3-5): COPIA DICHIARATA di
+-# ../wp177-harness/s177-ab-cm1b.sh (manifest s181-ab-cr1-copia.diff) coi SOLI adattamenti: (1) TRE bracci: A = pin s180
++# s183-ab-rt1.sh — A/B della leva L-RT1 «Ret in place» (criterio s183-criterio-rt1.md p.3-5): COPIA DICHIARATA di
++# ../wp181-harness/s181-ab-cr1.sh (manifest s183-ab-rt1-copia.diff) coi SOLI adattamenti: A = pin s181, token s183, PREV prop-dq 31,60,
++# attesa [+1;+4], ESITO ESPLICITO dell'attesa |D|<1 sulle guardie (rilievo 1 S-181), verdetto s183-<TAG>. Testo S-181 sotto:
++# ---- (1) TRE bracci: A = pin s180
+ # (884399fc), Z = gemello del pin ricostruito nella target separata (se byte-id: |A−Z| = solo rumore, dichiarato), B = tree
+ # + L-CR1 (ab-out/s181-leva/phpr-B); (2) GIUDICE NUOVO calls-dq (wp181-harness/calls-dq.php, N dal driver): D = A−B,
+ # NOMINATA se ≥ max(4, rumore, SL) con ENTRAMBI gli stimatori; GUARDIE prop-dq e arith-dq a SOLA regressione (D < −max(4,
+@@ -14,18 +16,18 @@
+ set -u
+ export PATH=/usr/bin:/bin:/usr/sbin:/opt/homebrew/bin
+ H="$(cd -P "$(dirname -- "$0")" && pwd -P)"
+-A="${1:?APATH}"; AEXP="${2:?AEXP8}"; ZZ="${3:?ZPATH}"; ZEXP="${4:?ZEXP8}"; BB="${5:?BPATH}"; BEXP="${6:?BEXP8}"; TAG="${7:?TAG}"; R="${8:-5}"; PREVPD="${9:-34.20}"
++A="${1:?APATH}"; AEXP="${2:?AEXP8}"; ZZ="${3:?ZPATH}"; ZEXP="${4:?ZEXP8}"; BB="${5:?BPATH}"; BEXP="${6:?BEXP8}"; TAG="${7:?TAG}"; R="${8:-5}"; PREVPD="${9:-31.60}"
+ O=/opt/homebrew/opt/php/bin/php
+ CD="$H/calls-dq.php"
+ GD="$H/../wp164-harness/arith-dq.php"
+ PD="$H/../wp172-harness/prop-dq.php"
+ EMPTY="$H/../wp160-harness/empty.php"
+ OUT="$H/ab-out"; mkdir -p "$OUT"
+-VERD="$H/s181-$TAG-verdetto.out"; RC="$OUT/$TAG.rc"
++VERD="$H/s183-$TAG-verdetto.out"; RC="$OUT/$TAG.rc"
+ [ -e "$VERD" ] && { echo "verdetto ESISTE — TAG nuovo" >&2; exit 7; }
+ for f in "$CD" "$PD" "$GD" "$A" "$ZZ" "$BB" "$O"; do [ -s "$f" ] || { echo "file assente o VUOTO: $f" | tee -a "$VERD"; echo 7 > "$RC"; exit 7; }; done
+ [ -e "$EMPTY" ] || { echo "driver del pavimento assente: $EMPTY (VUOTO per costruzione: [ -e ], emenda S-170 p.4)" | tee -a "$VERD"; echo 7 > "$RC"; exit 7; }
+-grep -qw s181 /private/tmp/phpr-measure.lock 2>/dev/null || { echo "lock s181 assente (per TOKEN)" | tee -a "$VERD"; echo 9 > "$RC"; exit 9; }
++grep -qw s183 /private/tmp/phpr-measure.lock 2>/dev/null || { echo "lock s183 assente (per TOKEN)" | tee -a "$VERD"; echo 9 > "$RC"; exit 9; }
+ "$H/../wp129-harness/s129-quiescenza.sh" "$OUT/quiesce-$TAG.rc" > /dev/null 2>&1 || { echo "quiescenza FAIL" | tee -a "$VERD"; echo 8 > "$RC"; exit 8; }
+ AM="$(shasum -a 256 "$A" | cut -c1-8)"; ZM="$(shasum -a 256 "$ZZ" | cut -c1-8)"; BM="$(shasum -a 256 "$BB" | cut -c1-8)"
+ [ "$AM" = "$AEXP" ] || { echo "A misurato $AM != atteso $AEXP" | tee -a "$VERD"; echo 1 > "$RC"; exit 1; }
+@@ -39,7 +41,7 @@
+ ucpu(){ { /usr/bin/time -p perl -e 'alarm 900; exec @ARGV or die' -- "$@" > /dev/null; } 2>&1 | awk '/^user/{print $2}'; }
+ floor3(){ local a b c; a=$(ucpu "$@" "$EMPTY"); b=$(ucpu "$@" "$EMPTY"); c=$(ucpu "$@" "$EMPTY"); printf '%s\n%s\n%s\n' "$a" "$b" "$c" | sort -n | awk 'NR==2'; }
+ {
+-echo "== s181 LEVA L-CR1 $TAG — A=$AM MISURATO ($A, pin s180) Z=$ZM MISURATO ($ZZ, gemello del pin ricostruito$( [ "$ZM" = "$AM" ] && echo ' — BYTE-ID col pin: |A−Z| = solo rumore, SL in-run NON stimabile' )) B=$BM MISURATO ($BB, tree + L-CR1) — R=$R, N: calls-dq=$NCD arith-dq=$NGD prop-dq=$NPD, PREV prop-dq A (stesso binario, S-180): $PREVPD, $(date '+%F %T') =="
++echo "== s183 LEVA L-RT1 $TAG — A=$AM MISURATO ($A, pin s181) Z=$ZM MISURATO ($ZZ, gemello del pin ricostruito$( [ "$ZM" = "$AM" ] && echo ' — BYTE-ID col pin: |A−Z| = solo rumore, SL in-run NON stimabile' )) B=$BM MISURATO ($BB, tree + L-CR1) — R=$R, N: calls-dq=$NCD arith-dq=$NGD prop-dq=$NPD, PREV prop-dq A (stesso binario, S-181/S-183: 31,60/31,73/31,60): $PREVPD, $(date '+%F %T') =="
+ echo "sentinella LS: $(pgrep -fl 'rust-analyzer|Antigravity|serena' 2>/dev/null | grep -v pgrep | awk '{print $2}' | sort -u | tr '\n' ' ')"
+ # PARITÀ vs ATTESO: l'atteso è l'output dell'ORACLE sullo stesso driver (generato qui, una volta per driver, `[ -s ]`).
+ for D in "$CD" "$GD" "$PD"; do
+@@ -113,14 +115,16 @@
+     print(f"{name} {lab}: {alab}={med(A):.2f} {lab}={med(X):.2f} ns/iter D={alab}−{lab} colonna={Dc:+.2f} appaiata={Dp:+.2f} soglia={thr:.2f} (rumore drop-1 {alab}'={dr1(A):.2f} {lab}'={dr1(X):.2f}, SL={sl:.2f}) segni {sg}/{R} -> {cifra}; direzione {dirs} ({lab} {'più veloce' if Dc > 0 else 'più lento'}); regressione (D < −max(4,rumore)): {'SÌ' if reg else 'no'}")
+     return Dc, Dp, noise, nom, reg, sg
+ print(f"GIUDICE calls-dq (BERSAGLIO, 1 Call+CheckArity+BinarySS+Ret per iter): oracle={med(cO):.2f} ns/iter; A/oracle={med(cA)/med(cO):.2f}× Z/oracle={med(cZ)/med(cO):.2f}× B/oracle={med(cB)/med(cO):.2f}×")
+-DCc, DCp, nC, nomC, regC, sgC = stat("GIUDICE calls-dq L-CR1 (D = A−B)", cA, cB, "B", "A", SLc)
++DCc, DCp, nC, nomC, regC, sgC = stat("GIUDICE calls-dq L-RT1 (D = A−B)", cA, cB, "B", "A", SLc)
+ DC = min(DCc, DCp)
+-print(f"ATTESA (criterio-cr1 p.4): D ∈ [4;12]: {'CENTRATA' if 4 <= DC <= 12 else 'FUORI'} ({DCc:+.2f}/{DCp:+.2f})")
++print(f"ATTESA (criterio-rt1 p.4): D ∈ [1;4]: {'CENTRATA' if 1 <= DC <= 4 else 'FUORI'} ({DCc:+.2f}/{DCp:+.2f})")
+ print(f"GUARDIA prop-dq (sola regressione, nessun Call nel loop): oracle={med(pO):.2f} ns/iter; A/oracle={med(pA)/med(pO):.2f}× Z/oracle={med(pZ)/med(pO):.2f}× B/oracle={med(pB)/med(pO):.2f}×")
+ DPc, DPp, nP, nomP, regP, sgP = stat("GUARDIA prop-dq (attesa |D| < 1)", pA, pB, "B", "A", SLp)
++print(f"GUARDIA prop-dq ESITO attesa |D|<1: {'RISPETTATA' if max(abs(DPc),abs(DPp)) < 1 else ('VIOLATA — segni pieni: effetto TRASVERSALE firmato' if sgP in (0,R) else 'VIOLATA — segni misti')} (D {DPc:+.2f}/{DPp:+.2f}, segni {sgP}/{R})")
+ print(f"GUARDIA arith-dq (sola regressione, nessun Call nel loop): oracle={med(gO):.2f} ns/iter; A/oracle={med(gA)/med(gO):.2f}× Z/oracle={med(gZ)/med(gO):.2f}× B/oracle={med(gB)/med(gO):.2f}×")
+ DGc, DGp, nG, nomG, regG, sgG = stat("GUARDIA arith-dq (attesa |D| < 1)", gA, gB, "B", "A", SLg)
+-print(f"PREV per la prossima misura (same-binary pin s180): calls-dq A={med(cA):.2f} arith-dq A={med(gA):.2f} prop-dq A={med(pA):.2f} (S-180: {prevpd:.2f})")
++print(f"GUARDIA arith-dq ESITO attesa |D|<1: {'RISPETTATA' if max(abs(DGc),abs(DGp)) < 1 else ('VIOLATA — segni pieni: effetto TRASVERSALE firmato' if sgG in (0,R) else 'VIOLATA — segni misti')} (D {DGc:+.2f}/{DGp:+.2f}, segni {sgG}/{R})")
++print(f"PREV per la prossima misura (same-binary pin s181): calls-dq A={med(cA):.2f} arith-dq A={med(gA):.2f} prop-dq A={med(pA):.2f} (PREV: {prevpd:.2f})")
+ if rc == 8:
+     print("ESITO rc=8"); sys.exit(8)
+ # ESITI (criterio-cr1 p.5)
+@@ -129,9 +133,9 @@
+ elif nomC:
+     print(f"PROMOZIONE: D calls-dq NOMINATA da entrambi gli stimatori [{min(DCc,DCp):+.2f};{max(DCc,DCp):+.2f}] (soglia max(4,rumore,SL)), guardie senza regressione ⇒ promozione del TREE con copia dichiarata di s180-promozione.sh (tag s181) + coppia t22 + ORM E3/E4 (rc=0)")
+ elif DC >= max(nC, SLc) and sgC == R:
+-    print(f"SOLO DIREZIONE: D {DCc:+.2f}/{DCp:+.2f} ≥ max(rumore {nC:.2f}, SL {SLc:.2f}) con segni {sgC}/{R} ma sotto la soglia ⇒ L-CR1 TENUTA nel tree (keep-partial-wins), non promossa (rc=3)"); rc = 3
++    print(f"SOLO DIREZIONE: D {DCc:+.2f}/{DCp:+.2f} ≥ max(rumore {nC:.2f}, SL {SLc:.2f}) con segni {sgC}/{R} ma sotto la soglia ⇒ L-RT1 TENUTA nel tree (keep-partial-wins), non promossa (rc=3)"); rc = 3
+ else:
+-    print(f"KILL L-CR1: D {DCc:+.2f}/{DCp:+.2f} < max(rumore {nC:.2f}, SL {SLc:.2f}) o segni misti ({sgC}/{R}) ⇒ i corpi tolti non pesano: revert al byte del commit L-CR1, meccanismo a verbale (rc=4)"); rc = 4
++    print(f"KILL L-RT1: D {DCc:+.2f}/{DCp:+.2f} < max(rumore {nC:.2f}, SL {SLc:.2f}) o segni misti ({sgC}/{R}) ⇒ i corpi tolti non pesano: revert al byte del commit L-RT1, meccanismo a verbale (rc=4)"); rc = 4
+ print(f"ESITO rc={rc}")
+ sys.exit(rc)
+ PY

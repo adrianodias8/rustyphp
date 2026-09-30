@@ -4324,21 +4324,50 @@ impl<'m> super::Vm<'m> {
                             }
                         }
                     }
-                    let dead = self.frames.pop().expect("Ret pops the active frame");
-                    if self.frames.is_empty() && !self.final_flush {
-                        // The script `main` is returning: park its frame — the
-                        // slots ARE the global variables, and Zend keeps them
-                        // alive through the shutdown-function phase. Object
-                        // destruction is unaffected (survivors are driven from
-                        // `created`, not from this frame's drop).
-                        self.retired_main = Some(dead);
+                    // L-RT1 (S-183, wp182-harness/s183-criterio-rt1.md): Ret IN PLACE
+                    // ad AMMISSIONE — un frame senza `$this`, iteratori, `ext` e
+                    // variabili dinamiche (ogni funzione semplice) rilascia SOLO
+                    // slots e stack: le note GC nello STESSO ordine di
+                    // `gc_note_frame` (slots poi stack), lo svuotamento nello STESSO
+                    // ordine di `recycle_frame` (slots poi stack, front-to-back), e il
+                    // Frame residuo (campi Copy/None/vuoti: nessun Rc) muore con
+                    // `truncate` invece di viaggiare per valore attraverso `pop` +
+                    // `recycle_frame`. Ogni altro frame (main, metodi, foreach, ext)
+                    // passa dal cammino di prima, INVARIATO.
+                    let in_place = self.frames.len() > 1 && {
+                        let f = &self.frames[top];
+                        f.this.is_none() && f.iters.is_empty() && f.ext.is_none() && f.dyn_vars.is_none()
+                    };
+                    if in_place {
+                        let mut slots = std::mem::take(&mut self.frames[top].slots);
+                        let mut stack = std::mem::take(&mut self.frames[top].stack);
+                        for v in &slots {
+                            self.gc_note(v);
+                        }
+                        for v in &stack {
+                            self.gc_note(v);
+                        }
+                        slots.clear();
+                        stack.clear();
+                        self.frames.truncate(top);
+                        self.frame_pool.put(slots, stack);
                     } else {
-                        // The returning frame's locals, leftover operands and `$this`
-                        // release their references now: note any tracked objects so
-                        // the next sweep reconsiders them (drives destruction of an
-                        // object whose last reference was a returning function's local).
-                        self.gc_note_frame(&dead);
-                        self.recycle_frame(dead);
+                        let dead = self.frames.pop().expect("Ret pops the active frame");
+                        if self.frames.is_empty() && !self.final_flush {
+                            // The script `main` is returning: park its frame — the
+                            // slots ARE the global variables, and Zend keeps them
+                            // alive through the shutdown-function phase. Object
+                            // destruction is unaffected (survivors are driven from
+                            // `created`, not from this frame's drop).
+                            self.retired_main = Some(dead);
+                        } else {
+                            // The returning frame's locals, leftover operands and `$this`
+                            // release their references now: note any tracked objects so
+                            // the next sweep reconsiders them (drives destruction of an
+                            // object whose last reference was a returning function's local).
+                            self.gc_note_frame(&dead);
+                            self.recycle_frame(dead);
+                        }
                     }
                     if let Some(guard) = guard {
                         for key in guard {
