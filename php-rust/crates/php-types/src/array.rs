@@ -1094,6 +1094,24 @@ impl PhpArray {
         })
     }
 
+    /// Positional iteration for a by-value `foreach` (fork slice 4): the
+    /// domain of positions, live entries and tombstones alike. Stable while
+    /// the caller holds its `Rc` — any write to the array separates it first.
+    #[inline]
+    pub fn positions(&self) -> usize {
+        self.slots_len()
+    }
+
+    /// The live entry at position `pos` (`< positions()`), or `None` for a
+    /// tombstone. A packed slot's key is its index.
+    #[inline]
+    pub fn entry_at(&self, pos: usize) -> Option<(Key, &Zval)> {
+        match &self.repr {
+            Repr::Packed(slots) => slots[pos].as_ref().map(|v| (Key::Int(pos as i64), v)),
+            Repr::Hashed { entries, .. } => entries[pos].as_ref().map(|(k, v)| (k.clone(), v)),
+        }
+    }
+
     /// `reset($a)`: move the pointer to the first live entry; return its value.
     pub fn ptr_reset(&mut self) -> Option<Zval> {
         self.set_cursor(

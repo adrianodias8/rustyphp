@@ -3360,11 +3360,11 @@ impl<'m> super::Vm<'m> {
                     // re-entrant state machine in `IterNext` (step 51); an array /
                     // plain object is snapshotted by value (GEN).
                     let scope = self.frames[top].class;
-                    let it_state = match &deref {
-                        Zval::Generator(gs) => IterState::Gen { rc: Rc::clone(gs), primed: false },
+                    let it_state = match deref {
+                        Zval::Generator(gs) => IterState::Gen { rc: gs, primed: false },
                         Zval::Object(o) if self.is_traversable(o.borrow().class_id as usize) => {
                             IterState::Object {
-                                it: deref.clone(),
+                                it: Zval::Object(o),
                                 stage: ObjStage::Start,
                                 pending: None,
                                 cur_val: None,
@@ -3373,10 +3373,12 @@ impl<'m> super::Vm<'m> {
                         // A plain (non-Traversable) object iterates its visible
                         // properties (declared first, then dynamic): the key set is
                         // fixed here, values are read live at each step.
-                        Zval::Object(_) => {
-                            IterState::ObjVals { obj: deref.clone(), scope, yielded: Vec::new() }
+                        Zval::Object(o) => {
+                            IterState::ObjVals { obj: Zval::Object(o), scope, yielded: Vec::new() }
                         }
-                        _ => IterState::ByVal { entries: snapshot_entries(&iterable), pos: 0 },
+                        // The array is held, not copied (see `IterState::ByVal`).
+                        Zval::Array(a) => IterState::ByVal { arr: a, pos: 0 },
+                        _ => IterState::ByVal { arr: Rc::new(PhpArray::new()), pos: 0 },
                     };
                     self.frames[top].iters.push(it_state);
                 }
@@ -3571,26 +3573,32 @@ impl<'m> super::Vm<'m> {
                     // the slots — keeping the `iters` and `slots` borrows disjoint.
                     let pair = {
                         let it = self.frames[top].iters.last_mut().expect("IterNext without iterator");
-                        let IterState::ByVal { entries, pos } = it else {
+                        let IterState::ByVal { arr, pos } = it else {
                             unreachable!("IterNext on a by-reference iterator");
                         };
-                        if *pos >= entries.len() {
-                            None
-                        } else {
-                            let pair = entries[*pos].clone();
+                        // The next live position of the held array; the key is
+                        // materialised only when the loop binds one.
+                        let n = arr.positions();
+                        let mut pair = None;
+                        while *pos < n {
+                            let p = *pos;
                             *pos += 1;
-                            Some(pair)
+                            if let Some((k, v)) = arr.entry_at(p) {
+                                // Deref at bind time: a reference element is read
+                                // live here (the lingering-ref gotcha).
+                                pair = Some((key.map(|_| key_to_zval(&k)), v.deref_clone()));
+                                break;
+                            }
                         }
+                        pair
                     };
                     match pair {
                         None => self.frames[top].ip = *end as usize,
                         Some((k, v)) => {
-                            // Deref at bind time: a reference element snapshots its
-                            // cell and is read live here. `store_slot` writes
-                            // *through* a value slot that is itself a reference (the
-                            // lingering-ref gotcha), matching the tree-walker.
-                            store_slot(&mut self.frames[top].slots[*value as usize], v.deref_clone());
-                            if let Some(ks) = key {
+                            // `store_slot` writes *through* a value slot that is
+                            // itself a reference, matching the tree-walker.
+                            store_slot(&mut self.frames[top].slots[*value as usize], v);
+                            if let (Some(ks), Some(k)) = (key, k) {
                                 store_slot(&mut self.frames[top].slots[*ks as usize], k);
                             }
                         }

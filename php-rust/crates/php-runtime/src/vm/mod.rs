@@ -2176,10 +2176,7 @@ fn census_walk_cell(
 fn census_walk_iter(it: &IterState, seen: &mut rustc_hash::FxHashSet<usize>) -> u64 {
     use php_types::memcensus as mc;
     match it {
-        IterState::ByVal { entries, .. } => entries
-            .iter()
-            .map(|(k, v)| mc::deep_size(k, seen, 0) + mc::deep_size(v, seen, 0))
-            .sum(),
+        IterState::ByVal { arr, .. } => mc::deep_size(&Zval::Array(Rc::clone(arr)), seen, 0),
         IterState::ByRef { keys, .. } => (keys.len() * 32) as u64,
         IterState::ObjVals { obj, .. } | IterState::ObjRefs { obj, .. } => {
             mc::deep_size(obj, seen, 0)
@@ -2841,7 +2838,15 @@ impl FramePool {
 /// element of the source variable live each step, so body writes land back in
 /// the array.
 enum IterState {
-    ByVal { entries: Vec<(Zval, Zval)>, pos: usize },
+    /// `foreach` by value over an array: the array is HELD (one `Rc` clone)
+    /// for the loop and walked by position (fork slice 4). This replaced an
+    /// element-wise snapshot into a `Vec<(Zval, Zval)>` — an allocation and
+    /// two clones per element before the first iteration. The semantics are
+    /// PHP's own: the loop's reference keeps the array alive and unchanged,
+    /// and a write to the source through the body separates it (COW), so the
+    /// loop never sees the modification; a reference element is still read
+    /// live at bind time. A non-array iterates an empty array.
+    ByVal { arr: Rc<PhpArray>, pos: usize },
     ByRef { source: Slot, keys: Vec<Key>, pos: usize },
     /// `foreach` over a plain (non-Traversable) object: fully *live* hash-cursor
     /// semantics (PHP iterates the property table by position) — each step
@@ -4730,12 +4735,7 @@ impl<'m> Vm<'m> {
     /// carrying variants need walking.
     fn gc_note_iter(&mut self, it: &IterState) {
         match it {
-            IterState::ByVal { entries, .. } => {
-                for (k, v) in entries {
-                    self.gc_note(k);
-                    self.gc_note(v);
-                }
-            }
+            IterState::ByVal { arr, .. } => self.gc_note(&Zval::Array(Rc::clone(arr))),
             IterState::ObjVals { obj, .. } | IterState::ObjRefs { obj, .. } => {
                 self.gc_note(obj);
             }
