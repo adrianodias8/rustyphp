@@ -4,7 +4,10 @@
 # morde); DUE corse A/B a 3 bracci sullo stesso A = pin s181: scomp1 (Z=P placebo, B=−b) e scomp2 (Z=−a, B=−c) con la banda-placebo
 # |D_P| di scomp1 passata a scomp2 (PLAC_BAND letta dal verdetto); bracci come SYMLINK NEUTRI arm-A/arm-Z/arm-B; token s183; PREV
 # same-binary prop-dq 31,60; E2 + quiescenza (60 tentativi) + watchdog E3 EREDITATI. rc (ab-out/lancio-scomp.rc): 0 = due corse in
-# finestra pulita · 6 = finestra sporca · 7 = bracci/build assenti o rc≠0 · 8 = calma/quiescenza mai PASS · 9 = pre-condizioni.
+# finestra pulita · 6 = finestra sporca · 7 = bracci/build assenti o rc≠0 · 9 = pre-condizioni (pin/lock/Data).
+# EMENDA S-183 (dichiarata dopo il rc=9 delle 09:38 «updater vivo: Littlebird»): le pre-condizioni AMBIENTALI (updater/app utente,
+# calma CPU, quiescenza) si ASPETTANO senza limite di tentativi, con log ogni campione — il lanciatore vive finché la macchina
+# non è quieta (stesso modello dei gate del lanciatore pair t24); i gate restano INVARIATI nella sostanza.
 set -u
 export PATH=/usr/bin:/bin:/usr/sbin:/opt/homebrew/bin
 SRC="/Volumes/Extreme Pro/Claude/php-rust-experiment/php-rust"
@@ -35,22 +38,22 @@ grep -qw s183 /private/tmp/phpr-measure.lock 2>/dev/null || fine 9 "lock senza t
 sleep 30
 while pgrep -qx cargo || pgrep -qx rustc || pgrep -qf phpt-runner; do sleep 60; done
 D0=$(data_g); [ "$D0" -ge 10 ] || fine 9 "Data ${D0}G <10G"
-U0=$(updater); [ -z "$U0" ] || fine 9 "updater vivo: $U0"
+uc=0
+while [ "$uc" -lt 2 ]; do U0=$(updater | head -1); if [ -z "$U0" ]; then uc=$((uc+1)); else uc=0; l "updater/app utente vivo: $U0 — attesa"; fi; [ "$uc" -lt 2 ] && sleep 60; done
 calm=0; tries=0
 while [ "$calm" -lt 4 ]; do
   c=$(ps -Ao %cpu | awk 'NR>1{s+=$1} END{printf "%d", s}')
   if [ "$c" -lt 150 ]; then calm=$((calm+1)); else calm=0; fi
   l "calma CPU tot=${c}% calm=$calm"; tries=$((tries+1))
-  [ "$tries" -ge 180 ] && fine 8 "calma CPU mai raggiunta in 90 min"
   [ "$calm" -lt 4 ] && sleep 30
 done
 Q=0
-for i in $(seq 1 60); do
-  /bin/bash "$SRC/wp129-harness/s129-quiescenza.sh" "$O/quiesce-scomp.rc" > "$O/quiesce-scomp-$i.log" 2>&1
+i=0
+while :; do
+  i=$((i+1)); /bin/bash "$SRC/wp129-harness/s129-quiescenza.sh" "$O/quiesce-scomp.rc" > "$O/quiesce-scomp-$i.log" 2>&1
   if [ "$(cat "$O/quiesce-scomp.rc" 2>/dev/null)" = 0 ]; then Q=$i; break; fi
-  l "quiescenza tentativo $i FAIL: $(tail -1 "$O/quiesce-scomp-$i.log")"; sleep 30
+  l "quiescenza tentativo $i FAIL: $(tail -1 "$O/quiesce-scomp-$i.log")"; sleep 60
 done
-[ "$Q" -gt 0 ] || fine 8 "quiescenza mai PASS in 60 tentativi"
 { echo "== finestra A/B SCOMPOSIZIONE L-CR1: quiescenza PASS al tentativo $Q, Data ${D0}G, A=$PIN8 P=$P8 −a=$MA8 −b=$MB8 −c=$MC8 =="; sentinelle INIZIO; } > "$DECL"
 : > "$WDL"
 ( prev=0; while :; do d=$(data_g); s=$(updater | head -1)
