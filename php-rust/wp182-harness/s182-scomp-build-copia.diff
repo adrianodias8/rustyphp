@@ -1,5 +1,5 @@
---- wp181-harness/s181-leva-build.sh	2026-09-22 14:05:47
-+++ wp182-harness/s182-scomp-build.sh	2026-09-30 04:19:40
+--- ../wp181-harness/s181-leva-build.sh	2026-09-22 14:05:47
++++ s182-scomp-build.sh	2026-09-30 04:19:40
 @@ -1,61 +1,65 @@
  #!/bin/bash
 -# s181-leva-build.sh — bracci Z (gemello del pin s180) e B (leva L-CR1) + MUTANTE (criterio s181-criterio-cr1.md p.2/p.3/p.6):
