@@ -1,0 +1,47 @@
+== s182 SCOMPOSIZIONE L-CR1 scomp1 — A=19a2faa8 MISURATO (/Volumes/Extreme Pro/Claude/php-rust-experiment/php-rust/wp182-harness/ab-out/arm-A, pin s181) Z=5a42d5ff MISURATO (/Volumes/Extreme Pro/Claude/php-rust-experiment/php-rust/wp182-harness/ab-out/arm-Z, braccio P, attesa calls-dq [-2;2]) B=895d596d MISURATO (/Volumes/Extreme Pro/Claude/php-rust-experiment/php-rust/wp182-harness/ab-out/arm-B, braccio -b, attesa calls-dq [3;5]) — R=5, N: calls-dq=60000000 arith-dq=250000000 prop-dq=150000000, PREV prop-dq A (pin s181, S-181): 31.60, placebo: PLAC_ARM=Z PLAC_BAND=0, 2026-09-30 19:44:18 ==
+sentinella LS: /Applications/Antigravity /Users/francescotinti/.local/share/uv/tools/serena-agent/bin/python3 /Users/francescotinti/.rustup/toolchains/1.98.1-aarch64-apple-darwin/libexec/rust-analyzer-proc-macro-srv /Users/francescotinti/.rustup/toolchains/stable-aarch64-apple-darwin/bin/rust-analyzer 
+parità calls-dq: A==Z==B==atteso oracle (60000000 )
+parità arith-dq: A==Z==B==atteso oracle (85937499750000000 )
+parità prop-dq: A==Z==B==atteso oracle (300000000 )
+floors: A=0.03 Z=0.02 B=0.02 oracle=0.05
+  coppia1 [AZB]: callsA=5.45 callsZ=5.49 callsB=5.59 propA=4.79 propZ=4.79 propB=4.81 dqA=4.56 dqZ=4.56 dqB=4.59 | callsO=1.36 propO=2.15 dqO=2.21
+  coppia2 [BAZ]: callsA=5.47 callsZ=5.40 callsB=5.60 propA=4.79 propZ=4.78 propB=4.79 dqA=4.61 dqZ=4.59 dqB=4.56 | callsO=1.38 propO=2.14 dqO=2.22
+  coppia3 [ZBA]: callsA=5.39 callsZ=5.41 callsB=5.64 propA=4.77 propZ=4.78 propB=4.80 dqA=4.55 dqZ=4.57 dqB=4.59 | callsO=1.35 propO=2.15 dqO=2.21
+  coppia4 [ABZ]: callsA=5.36 callsZ=5.51 callsB=5.58 propA=4.82 propZ=4.78 propB=4.79 dqA=4.60 dqZ=4.56 dqB=4.59 | callsO=1.34 propO=2.17 dqO=2.21
+  coppia5 [BZA]: callsA=5.43 callsZ=5.45 callsB=5.56 propA=4.78 propZ=4.80 propB=4.80 dqA=4.55 dqZ=4.59 dqB=4.57 | callsO=1.34 propO=2.15 dqO=2.21
+A (pin s181): calls-dq=90.00 (PREV 90.50 sola lettura, |A−PREV|=0.50) prop-dq=31.73 (PREV 31.60, |A−PREV|=0.13) arith-dq=18.12; rumore drop-1 A: calls 1.33 prop 0.13 arith 0.20
+oracle: calls-dq=21.67 prop-dq=14.00 arith-dq=8.64 ns/iter; A/oracle calls 4.15× prop 2.27× arith 2.10×
+PLACEBO P (braccio Z): D_P calls-dq colonna=+0.50 appaiata=+0.50 ⇒ banda-placebo = 0.50 ns/iter (sotto 2: layout del candidato non nominato)
+GIUDICE calls-dq braccio P (Z): A=90.00 P=90.50 ns/iter D=P−A colonna=+0.50 appaiata=+0.50 soglia=4.00 (rumore drop-1 1.50, banda-placebo 0.00) segni 4/5 -> placebo (nessun componente); attesa [-2.0;+2.0]: CENTRATA
+GUARDIA prop-dq braccio P (Z): A=31.73 P=31.73 D=P−A colonna=+0.00 appaiata=+0.07 (rumore 0.13) segni 4/5 -> attesa |D|<1: RISPETTATA
+GUARDIA arith-dq braccio P (Z): A=18.12 P=18.20 D=P−A colonna=+0.08 appaiata=+0.04 (rumore 0.20) segni 3/5 -> attesa |D|<1: RISPETTATA
+GIUDICE calls-dq braccio -b (B): A=90.00 -b=92.83 ns/iter D=-b−A colonna=+2.83 appaiata=+2.50 soglia=4.00 (rumore drop-1 1.33, banda-placebo 0.50) segni 5/5 -> DIREZIONE (sotto la soglia, segni pieni); attesa [+3.0;+5.0]: FUORI
+GUARDIA prop-dq braccio -b (B): A=31.73 -b=31.87 D=-b−A colonna=+0.13 appaiata=+0.20 (rumore 0.13) segni 4/5 -> attesa |D|<1: RISPETTATA
+GUARDIA arith-dq braccio -b (B): A=18.12 -b=18.28 D=-b−A colonna=+0.16 appaiata=+0.12 (rumore 0.20) segni 4/5 -> attesa |D|<1: RISPETTATA
+PREV per la prossima misura (same-binary pin s181): calls-dq A=90.00 prop-dq A=31.73 arith-dq A=18.12
+ESITO rc=0 (verdetto EMESSO: nessuna promozione/revert deriva da qui (criterio-scomp p.5))
+sentinella LS fine: /Applications/Antigravity /Users/francescotinti/.local/share/uv/tools/serena-agent/bin/python3 /Users/francescotinti/.rustup/toolchains/1.98.1-aarch64-apple-darwin/libexec/rust-analyzer-proc-macro-srv /Users/francescotinti/.rustup/toolchains/stable-aarch64-apple-darwin/bin/rust-analyzer 
+== finestra A/B SCOMPOSIZIONE L-CR1: quiescenza PASS al tentativo 1, Data 16G, A=19a2faa8 P=5a42d5ff −a=a8d63e31 −b=895d596d −c=536e770e ==
+-- sentinelle INIZIO 2026-09-30 19:44:07: Data=16G · total = 7168.00M  used = 5561.62M  free = 1606.38M  (encrypted) · load averages: 1.37 1.94 3.37
+   updater: 
+   top-8 CPU:
+       5.1 /Applications/Google
+       4.8 /Applications/Google
+       4.4 com.macpaw.CleanMyMac5.HealthMonitor
+       3.4 /usr/libexec/sysmond
+       2.5 com.macpaw.CleanMyMac5.Menu
+       1.1 /System/Library/CoreServices/Finder.app/Contents/MacOS/Finder
+       1.1 /usr/libexec/fskitd
+       1.1 /Applications/Google
+-- sentinelle FINE 2026-09-30 19:54:39: Data=16G · total = 7168.00M  used = 5489.62M  free = 1678.38M  (encrypted) · load averages: 1.88 2.08 2.70
+   updater: 
+   top-8 CPU:
+       6.3 /usr/libexec/sysmond
+       4.9 /Applications/Google
+       4.2 /Applications/Google
+       3.0 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/mdworker_shared
+       1.6 /Applications/Google
+       1.3 /usr/libexec/fskitd
+       1.2 /System/Library/PrivateFrameworks/UVFSXPCService.framework/Versions/A/XPCServices/UVFSService.xpc/Contents/MacOS/UVFSService
+       0.9 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/mds
+watchdog: 22 campioni, Data min=16G, campioni con updater=0, allarmi=0
