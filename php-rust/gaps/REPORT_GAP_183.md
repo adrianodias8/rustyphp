@@ -20,7 +20,7 @@ Giudici sul pin s181 in S-183 (same-binary, E1 pulita): calls-dq 89,67 / 90,00 /
 | −b ip=1 | +2,83/+2,50 | 5/5 | [3;5] FUORI di poco | rispettate |
 | −c guardia Ret | +2,33/+2,67 | 5/5 | [0;1] FUORI | rispettate |
 | P placebo | +0,50 | 4/5 | [−2;2] centrata | rispettate |
-Somma 8,50-9,17 ≈ cifra S-181 [8,00;8,17]: nessun residuo di layout; disasm −a = pin s180 (bl 6123, sp_refs 11613) ⇒ il −8 % di sp_refs e il +2,47 su prop-dq sono di (a). Meccanismo (a) riscritto: non «copia del Frame evitata» ma forma del handler senza `enter_callee` (regalloc).
+Somma INDICATIVA 8,50-9,17 accanto alla cifra S-181 [8,00;8,17] (non cifra: −a include il trasversale, regola 3); nessun residuo di layout nominato; disasm −a = pin s180 (bl 6123, sp_refs 11613) ⇒ il −8 % di sp_refs e il +2,47 su prop-dq sono di (a). Meccanismo (a) riscritto: non «copia del Frame evitata» ma forma del handler senza `enter_callee` (regalloc).
 
 ## Leva L-RT1 «Ret in place» (s183-rt1-verdetto.out) — rc=3 SOLA DIREZIONE
 A 89,67 · Z 90,33 (gemello a contenuto, |A−Z| 0,67) · **B 86,83** ns/iter (3,95×); D +2,83/+2,50, rumore 1,83/1,00, segni 5/5, attesa [1;4] CENTRATA; guardie prop −0,07 · arith +0,08 (|D|<1 rispettate). Sotto il pavimento 4 ⇒ tenuta nel tree, si compone con la prossima leva sullo stesso giudice. Disasm B bl 6141 / istr 72457 / sp_refs 10706 (pin 6132/72321/10685: atteso bl −2, misurato +9: il fast path porta inline gc_note ×2 + put + truncate).
