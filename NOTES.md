@@ -97,7 +97,7 @@ record run; the 8-worker hello figure is not a FrankenPHP ceiling.
 What the numbers say:
 
 - **Hello** is the SAPI floor: phpr's thread-per-connection front end and in-process request
-  loop answer in 6 µs of CPU per request per worker (164 k/s ÷ 4); php-fpm pays the nginx hop and
+  loop answer in 24 µs per request per worker (164 k/s ÷ 4); php-fpm pays the nginx hop and
   FastCGI, FrankenPHP the Caddy→PHP hand-off.
 - **Symfony** is where the interpreter shows. Per worker: phpr ≈ 273 µs/request, FrankenPHP
   ≈ 173 µs, php-fpm (with nginx) ≈ 295 µs. In-process, the same request loop is 230 µs on phpr
