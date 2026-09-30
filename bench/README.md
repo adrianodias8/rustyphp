@@ -9,6 +9,7 @@ Everything runs inside the dev container; nothing is installed on the host.
 | `docker/run.sh /work/php-rust/bench/alloc/count.sh` | allocations per loop iteration (builds a `mem-census` phpr in `/target/census`) | stdout (TSV) |
 | `PRIV=1 docker/run.sh /work/php-rust/bench/profile.sh` | `perf` profiles of a debug-info build in `/target/prof`, flamegraphs, bucket attribution | `bench/profiles/` |
 | `docker/run.sh php -n bench/concat-scaling.php` (and the same with `phpr`) | growth of `.=` with a non-string operand | stdout |
+| `docker/run.sh /work/php-rust/bench/path-sensitivity.sh [phpr] [bench] [R]` | the same script under four path names, one binary: the heap-layout band of a section (session 4: `prop_rmw_1m` 171–201 ms) | stdout |
 
 Rules the harness enforces:
 

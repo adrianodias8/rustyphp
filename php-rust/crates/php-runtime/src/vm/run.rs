@@ -1977,6 +1977,9 @@ impl<'m> super::Vm<'m> {
                         self.frames[top].slots[*slot as usize] = c;
                     }
                 }
+                Op::CoerceParams { n } => {
+                    self.coerce_params_prologue(top, *n as usize)?;
+                }
                 Op::CheckArity { required, exactly } => {
                     let argc = self.frames[top].argc;
                     if argc < *required {
@@ -2758,12 +2761,22 @@ impl<'m> super::Vm<'m> {
                 }
                 Op::AssignPath { base, nkeys, append } => {
                     let value = self.frames[top].stack.pop().expect("AssignPath value");
-                    let mut keys = self.pop_keys(top, *nkeys);
+                    // Fork slice 5: the single-key write (`$a[k] = v`, by far the
+                    // commonest) pops its key straight off the stack — `pop_keys`
+                    // split off a one-element Vec, one malloc+free per array
+                    // write (PROFILE.md §4). The multi-key form keeps the Vec.
+                    // (`$a[k][] = v` has one key too, but it is the PREFIX of
+                    // an append: it stays in the Vec.)
+                    let (mut keys, mut key1) = if *nkeys == 1 && !*append {
+                        (Vec::new(), Some(self.frames[top].stack.pop().expect("AssignPath key")))
+                    } else {
+                        (self.pop_keys(top, *nkeys), None)
+                    };
                     // `$o[$k] = v` / `$o[] = v` on an ArrayAccess object dispatches
                     // `offsetSet` (a single step only); the expression yields `v`.
                     if nkeys + *append as u32 == 1 {
                         if let Some(recv) = self.as_arrayaccess(self.base_cell(*base, top)) {
-                            let key = if *append { Zval::Null } else { keys.pop().expect("set key") };
+                            let key = if *append { Zval::Null } else { key1.take().expect("set key") };
                             self.frames[top].stack.push(value.clone());
                             self.enter_object_method(recv, b"offsetSet", vec![key, value], RetMode::Discard)?;
                             continue;
@@ -2788,7 +2801,7 @@ impl<'m> super::Vm<'m> {
                             matches!(cell, Zval::Array(_))
                         };
                         if is_plain_arr {
-                            let key = keys.pop().expect("AssignPath key");
+                            let key = key1.take().expect("AssignPath key");
                             let k = coerce_key_diag(&key, &mut self.diags)
                                 .ok_or_else(|| PhpError::TypeError("Illegal offset type".to_string()))?;
                             let lw = {
@@ -2833,7 +2846,8 @@ impl<'m> super::Vm<'m> {
                     let last = if *append {
                         Last::Append { value }
                     } else {
-                        Last::Set { key: keys.pop().expect("AssignPath key"), value }
+                        let key = key1.take().or_else(|| keys.pop()).expect("AssignPath key");
+                        Last::Set { key, value }
                     };
                     let result = self.path_op(*base, top, keys, last)?;
                     self.frames[top].stack.push(result);
@@ -2848,14 +2862,12 @@ impl<'m> super::Vm<'m> {
                     } else {
                         rhs
                     };
-                    let mut keys = self.pop_keys(top, *nkeys);
-                    let key = keys.pop().expect("AssignOpPath key");
+                    let (keys, key) = self.pop_prefix_and_key(top, *nkeys, "AssignOpPath key");
                     let result = self.path_op(*base, top, keys, Last::OpSet { key, op: *op, rhs })?;
                     self.frames[top].stack.push(result);
                 }
                 Op::IncDecPath { base, nkeys, inc, pre } => {
-                    let mut keys = self.pop_keys(top, *nkeys);
-                    let key = keys.pop().expect("IncDecPath key");
+                    let (keys, key) = self.pop_prefix_and_key(top, *nkeys, "IncDecPath key");
                     let result = self.path_op(*base, top, keys, Last::IncDec { key, inc: *inc, pre: *pre })?;
                     self.frames[top].stack.push(result);
                 }

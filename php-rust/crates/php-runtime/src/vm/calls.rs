@@ -1514,37 +1514,7 @@ impl<'m> Vm<'m> {
             );
         }
         if func.has_hints {
-            let strict = caller_strict;
-            for i in 0..func.n_params as usize {
-                if Some(i as Slot) == func.variadic_slot {
-                    continue;
-                }
-                if func.param_by_ref.get(i).copied().unwrap_or(false) {
-                    continue;
-                }
-                let Some(hint) = func.param_hints.get(i).cloned().flatten() else {
-                    continue;
-                };
-                if matches!(self.frames[top].slots[i], Zval::Undef) {
-                    continue;
-                }
-                let val = self.frames[top].slots[i].clone();
-                match self.coerce_or_check_hint(val, &hint, strict) {
-                    // The frame stays pushed on the error path so the unwind's trace
-                    // capture includes this call; unwind then pops it.
-                    Ok(c) => self.frames[top].slots[i] = c,
-                    Err(given) => {
-                        return Err(self.arg_type_error(
-                            func,
-                            i + 1,
-                            func.param_names.get(i).map(|n| &n[..]),
-                            &hint,
-                            &given,
-                            call_line,
-                        ))
-                    }
-                }
-            }
+            self.coerce_param_hints(top, func.n_params as usize, call_line, caller_strict)?;
         }
         // The variadic pack (`T ...$rest`): each collected element is checked /
         // coerced against the element hint at its true call-argument position — the
@@ -1602,6 +1572,67 @@ impl<'m> Vm<'m> {
             }
         }
         Ok(())
+    }
+
+    /// Coerce / check the by-value arguments in slots `0..n` of the frame at
+    /// `top` (just entered) against their declared hints (step 14 / 16): PHP
+    /// throws an argument TypeError inside the function, so its stack trace
+    /// shows this call and "thrown in" reports the definition line; the
+    /// message carries the caller's `call_line`, and `strict` is the CALLER's
+    /// strict_types. By-reference and variadic slots are left untouched; an
+    /// omitted (`Undef`) optional argument is coerced later, when the default
+    /// prologue fills it. The frame stays pushed on the error path so the
+    /// unwind's trace capture includes this call; unwind then pops it.
+    pub(super) fn coerce_param_hints(
+        &mut self,
+        top: usize,
+        n: usize,
+        call_line: Line,
+        strict: bool,
+    ) -> Result<(), PhpError> {
+        let func = self.frames[top].func;
+        for i in 0..n {
+            if Some(i as Slot) == func.variadic_slot {
+                continue;
+            }
+            if func.param_by_ref.get(i).copied().unwrap_or(false) {
+                continue;
+            }
+            let Some(hint) = func.param_hints.get(i).cloned().flatten() else {
+                continue;
+            };
+            if matches!(self.frames[top].slots[i], Zval::Undef) {
+                continue;
+            }
+            let val = self.frames[top].slots[i].clone();
+            match self.coerce_or_check_hint(val, &hint, strict) {
+                Ok(c) => self.frames[top].slots[i] = c,
+                Err(given) => {
+                    return Err(self.arg_type_error(
+                        func,
+                        i + 1,
+                        func.param_names.get(i).map(|n| &n[..]),
+                        &hint,
+                        &given,
+                        call_line,
+                    ))
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// [`Op::CoerceParams`]: the hint prologue of a simple-call body, run in
+    /// the callee frame `top` with the CALLER's line and strict_types (the
+    /// caller is the frame below; an output-buffer callback run after `main`
+    /// returned has none — line 0, the running module's mode).
+    #[inline(never)]
+    pub(super) fn coerce_params_prologue(&mut self, top: usize, n: usize) -> Result<(), PhpError> {
+        let (call_line, strict) = match top.checked_sub(1) {
+            Some(caller) => (self.cur_line(caller), self.frames[caller].module.strict),
+            None => (0, self.module.strict),
+        };
+        self.coerce_param_hints(top, n, call_line, strict)
     }
 
     /// The callee's name as PHP renders it in a type error: `Class::method` for a

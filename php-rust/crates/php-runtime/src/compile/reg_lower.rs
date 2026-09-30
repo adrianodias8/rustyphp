@@ -123,7 +123,8 @@ fn visit_addrs(op: &mut Op, f: &mut impl FnMut(&mut Addr)) {
         | Op::LoadSuperglobal { .. } | Op::StoreSuperglobal { .. }
         | Op::IncDecSuperglobal { .. } | Op::FetchDimList { .. }
         | Op::LoadGlobals { .. } | Op::GlobalsDynAssign { .. }
-        | Op::CoerceParam { .. } | Op::CheckArity { .. } | Op::IncDecSlot { .. }
+        | Op::CoerceParam { .. } | Op::CoerceParams { .. } | Op::CheckArity { .. }
+        | Op::IncDecSlot { .. }
         // S-145 FR1: salto implicito ip+3, nessun campo Addr da rimappare
         // (nasce a shrink, DOPO questo pass; classificato per il dente).
         | Op::PropDimGetConst { .. }
@@ -374,7 +375,8 @@ fn bin_op_of(op: &Op) -> Option<BinOp> {
         | Op::LoadSuperglobal { .. } | Op::StoreSuperglobal { .. }
         | Op::IncDecSuperglobal { .. } | Op::FetchDimList { .. }
         | Op::LoadGlobals { .. } | Op::GlobalsDynAssign { .. }
-        | Op::FillDefault { .. } | Op::CoerceParam { .. } | Op::CheckArity { .. }
+        | Op::FillDefault { .. } | Op::CoerceParam { .. } | Op::CoerceParams { .. }
+        | Op::CheckArity { .. }
         | Op::IncDecSlot { .. } | Op::BindRef { .. } | Op::StaticGuard { .. }
         | Op::StaticStore { .. } | Op::StaticAlias { .. } | Op::PushRef { .. }
         | Op::MakeRef { .. } | Op::PushArgPlace { .. } | Op::BindRefTo { .. }

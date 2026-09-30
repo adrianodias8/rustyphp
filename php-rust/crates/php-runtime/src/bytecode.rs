@@ -506,6 +506,14 @@ pub enum Op {
     /// stored. Best-effort — a valid constant default always coerces, so on the
     /// unreachable failure the stored value is left as-is (no TypeError here).
     CoerceParam { slot: Slot, hint: TypeHint },
+    /// Fork slice 5 — the parameter prologue of a `simple_call` function
+    /// with hints: coerce / check every passed by-value argument in slots
+    /// `0..n` against its declared hint, in the CALLEE frame (Zend's `RECV`
+    /// opcodes do the same), with the caller's line and strict_types. Emitted
+    /// right after `CheckArity`, before the default prologue, so the
+    /// allocation-free direct call paths (which only move arguments into
+    /// slots) need no per-call hint work at the call site.
+    CoerceParams { n: u32 },
     /// Arity guard (PAR), emitted at function entry when there is at least one
     /// required parameter: if fewer than `required` arguments were passed, raise
     /// an `ArgumentCountError`. `exactly` selects the wording ("exactly N" when
@@ -1626,13 +1634,16 @@ pub struct Func {
     /// overwhelmingly common hint-free function.
     pub has_hints: bool,
     /// Precomputed "nothing per-call to do beyond moving arguments" (WP-37,
-    /// call-site specialization, safe subset): no hints, no by-reference
-    /// parameter, no variadic, not a generator. `enter_callee` then just
-    /// pushes the frame (no call-line / strict-mode capture — both feed
-    /// only hint TypeErrors), and `bind_params` with EXACT arity takes the
-    /// straight decay-into-slots loop. Defaults don't matter here: the
-    /// fast paths engage only when every declared slot receives a value,
-    /// so the callee's default prologue sees no `Undef` — same as today.
+    /// call-site specialization, safe subset): no by-reference parameter,
+    /// no variadic, not a generator. `enter_callee` then just pushes the
+    /// frame, and `bind_params` with EXACT arity takes the straight
+    /// decay-into-slots loop. Defaults don't matter here: the fast paths
+    /// engage only when every declared slot receives a value, so the
+    /// callee's default prologue sees no `Undef` — same as today.
+    /// Fork slice 5: hints no longer disqualify — such a body starts with
+    /// [`Op::CoerceParams`], which does the coercion in the callee frame
+    /// (before, every call to a typed function or method took the generic
+    /// path with one argument `Vec` per call).
     pub simple_call: bool,
     /// The declared scalar return type hint (step 14), enforced on the returned
     /// value at [`Op::Ret`]. `None` for an absent / non-scalar return type, and

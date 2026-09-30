@@ -216,6 +216,11 @@ fn effect(op: &Op, park_targets: &[usize]) -> Effect {
         Op::CallHostBuiltinScanf { out_slots, .. } => {
             e.defs.extend(out_slots.iter().flatten().copied());
         }
+        // Hint prologue: reads and rewrites every parameter slot.
+        Op::CoerceParams { n } => {
+            e.uses.extend(0..*n);
+            e.defs.extend(0..*n);
+        }
 
         // ----- lettura+scrittura sullo stesso slot -----
         Op::ConcatAssignSlot(s) | Op::IncDecSlot { slot: s, .. } | Op::CoerceParam { slot: s, .. } => {
@@ -669,6 +674,7 @@ fn renounce(func: &Func) -> (bool, Bits) {
             | Op::CmpJmpConst { .. }
             | Op::CoalesceFetchDim { .. }
             | Op::CoerceParam { .. }
+            | Op::CoerceParams { .. }
             | Op::ConcatAssignSlot { .. }
             | Op::ConcatN { .. }
             | Op::ConcatNConst { .. }

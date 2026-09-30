@@ -8449,6 +8449,15 @@ impl<'m> Vm<'m> {
         stack.split_off(at)
     }
 
+    /// The `n` keys of a path op as (prefix, last key): the last key comes
+    /// off the stack directly, so the one-key form (`$a[k] op= v`, `$a[k]++`)
+    /// allocates nothing — the prefix `Vec` is empty (fork slice 5).
+    fn pop_prefix_and_key(&mut self, top: usize, n: u32, what: &str) -> (Vec<Zval>, Zval) {
+        let key = self.frames[top].stack.pop().expect(what);
+        let prefix = if n <= 1 { Vec::new() } else { self.pop_keys(top, n - 1) };
+        (prefix, key)
+    }
+
     // `dispatch_host_builtin` is generated, together with `host_builtin_canonical`,
     // from the single `host_builtins!` table defined near `host_builtin_canonical`
     // below — adding a host builtin is one edit there, not a two-list sync.

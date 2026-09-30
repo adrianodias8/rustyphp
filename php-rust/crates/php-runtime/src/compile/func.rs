@@ -70,7 +70,7 @@ pub(super) fn compile_body(
     // Default-parameter prologue (PAR): fill any omitted optional parameter with
     // its default before the body runs. Runs in the callee frame, so a default
     // may reference earlier parameters.
-    c.param_prologue(params)?;
+    c.param_prologue(params, is_generator)?;
     c.block(body)?;
     c.resolve_gotos()?;
     // A body that runs off the end returns NULL (PHP's implicit return).
@@ -117,8 +117,7 @@ pub(super) fn compile_body(
         param_by_ref: params.iter().map(|p| p.by_ref).collect(),
         param_hints: params.iter().map(|p| p.hint.clone()).collect(),
         has_hints: params.iter().any(|p| p.hint.is_some()),
-        simple_call: !params.iter().any(|p| p.hint.is_some() || p.by_ref || p.variadic)
-            && !is_generator,
+        simple_call: !params.iter().any(|p| p.by_ref || p.variadic) && !is_generator,
         // Default-value thunks for `ReflectionParameter::getDefaultValue()` (run in
         // this body's class context). A required/variadic param, or a default that
         // does not compile, has `None`.

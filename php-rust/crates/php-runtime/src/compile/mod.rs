@@ -899,9 +899,22 @@ impl<'a> FnCompiler<'a> {
     /// default, `FillDefault` skips the default when the argument was supplied,
     /// else the default expression is evaluated and stored into the slot.
     /// Variadic / required parameters have no default and emit nothing.
-    fn param_prologue(&mut self, params: &[Param]) -> R<()> {
+    fn param_prologue(&mut self, params: &[Param], is_generator: bool) -> R<()> {
         // Arity guard (PAR): a required param is a non-variadic one with no
         // default. "exactly" when there are no optional/variadic params at all.
+        // Hint coercion of the passed arguments, in the callee (fork slice 5,
+        // see `Op::CoerceParams`) — for the functions the direct call paths
+        // admit (`Func::simple_call`); the others are coerced by
+        // `enter_callee`, as before. BEFORE the arity guard: Zend's RECV
+        // checks each passed argument's type in order and only then finds
+        // the missing one, so `bat("123")` on `bat(int, string)` is a
+        // TypeError, not an ArgumentCountError.
+        if params.iter().any(|p| p.hint.is_some())
+            && !params.iter().any(|p| p.by_ref || p.variadic)
+            && !is_generator
+        {
+            self.emit(Op::CoerceParams { n: params.len() as u32 });
+        }
         let required = params.iter().filter(|p| p.default.is_none() && !p.variadic).count() as u32;
         if required > 0 {
             let exactly = !params.iter().any(|p| p.default.is_some() || p.variadic);
