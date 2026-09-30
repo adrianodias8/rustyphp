@@ -30,6 +30,7 @@ relocation (the scenario passes; `baseline/repro/static-prop-ref-across-include.
 | D-11 | `$a[[]] = 1` throws `TypeError: Illegal offset type` | `Cannot access offset of type array on array` (read: `… on array`) | `illegal-offset-message.phpt` | session 4 |
 | D-12 | `$t[null] = 4` is silent | `Deprecated: Using null as an array offset is deprecated, use an empty string instead` (PHP 8.5) | `null-array-offset-deprecation.phpt` | session 4 |
 | D-13 | `PHP_OS` is `Darwin` on every platform (compile-time constant) | the running platform (`Linux` in the container) | `php-os-constant.phpt` | session 1 |
+| D-14 | `ini_set('precision', '5')` returns `false` and has no effect (`ini_get` and float rendering keep 14; upstream's `ini.rs` marks engine-hardwired directives read-only) | takes effect: `14\|14\|5\|0.33333` | `ini-set-precision.phpt` | session 5 (worker isolation battery) |
 
 Fixed by the fork (tests in `baseline/repro/`): `count()` on a `Countable` through any dynamic
 call; `isset(Class::$static)`; `.=` quadratic for every non-local target and non-string operand;

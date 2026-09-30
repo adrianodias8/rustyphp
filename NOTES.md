@@ -5,6 +5,136 @@ this session unless it is explicitly labelled "upstream's claim".
 
 ---
 
+# Session 5 — 2026-09-30/10-01 — fork published, divergence register, worker mode, wrk
+
+## 1. Housekeeping
+
+- The fork now lives at **github.com/adrianodias8/rustyphp** (public; `origin`), branches `main`
+  (upstream's, unchanged) and `next`. Nothing is pushed to upstream, ever.
+- The case-insensitive builtin lookup (`StrToUpper`, `COUNT`) asked for in step 2 was already
+  `e48f4910` (session 4), with `builtin-names-case-insensitive{,-ns}.phpt`; it went out with the
+  first push.
+- **`KNOWN_DIVERGENCES.md`** (`609e3188`): every "found, not fixed" divergence of sessions 1–4,
+  one row each, one minimal failing `.phpt` each under `baseline/divergences/` — all PASS on the
+  oracle under php-src's `run-tests.php`, all fail or skip on phpr. `baseline/gate.sh` runs them
+  and names any that starts passing (promotion to `baseline/repro/` is then deliberate). Two
+  session-2 flags did not reproduce and are closed there. D-14 (`ini_set('precision')` has no
+  effect) was found by this session's isolation battery.
+
+## 2. Worker mode (`2bda4f2e`, DECISION_KERNEL.md §5)
+
+`phpr -S host:port --worker worker.php [--workers N]` and one host builtin:
+
+```php
+$kernel = build_kernel($dir);                        // boot once
+while (phpr_handle_request(function () use ($kernel) {
+    $response = $kernel->handle(Request::createFromGlobals());
+    $response->send();
+})) { gc_collect_cycles(); }
+```
+
+The same script runs unchanged under FrankenPHP (`frankenphp_handle_request`). N OS threads, one
+`Vm` each; one lightweight thread per connection parses HTTP and queues the request, the workers
+pull from the queue and reply through a channel — connections outnumber workers freely, keep-alive
+is served request after request, and (found on the first attempt, where a worker owned its
+connection) no connection can starve another. The engine side (`vm/worker.rs`) never sees a
+socket: the host installs two closures on the worker's thread.
+
+Per request: output, headers, diagnostics and superglobals reset and reseeded; shutdown functions
+run and cleared; session written and closed; error/exception handlers and the ini table restored
+to the post-boot snapshot; upload temp files deleted. Kept, as documented: globals, statics,
+static properties, objects, **and the object/resource id counters** — this is a subset of
+`request_end()` taken against a snapshot, as §5 requires, not `request_end()`. An uncaught
+throwable or `exit` ends the request, not the worker; the status is 500 only when
+`display_errors` is off (php_error_cb's rule — the cli-server SAPI answers 200 with the error in
+the body, like PHP's).
+
+Gate (`bench/worker/isolation.sh`): sixteen routes through one worker across the sequence, the
+same routes through the one-shot cli-server, and through the oracle's `php -S`. Worker vs
+one-shot differ in exactly: `SCRIPT_NAME` (`/index.php`, FrankenPHP's convention, vs the router
+script's request path), the extra closure frame in an uncaught-exception trace, and `/stateful`
+(statics, a boot-time object) by design. One-shot phpr vs oracle: only D-14. The Symfony worker's
+five benchmark responses are byte-identical to the oracle's.
+
+## 3. HTTP throughput under `wrk` (step 5) — `bench/worker/bench-wrk.sh`
+
+Three servers on one docker network, `wrk` in a fourth container, the same `vendor/` and the same
+front controllers (`bench/worker/`), responses checked against php-fpm's before measuring, 3 s
+warm-up, medians of 3 × 15 s. `phpr-worker` = this fork's worker mode; `fpm` = nginx 1.31 →
+php-fpm 8.5.7, opcache on (`validate_timestamps=0`, JIT off), static pool; `frankenphp` =
+FrankenPHP 1.12.7 (PHP 8.5.11) worker mode. The Symfony app is `bench/symfony-boot.php`'s
+HttpKernel app (three routes + 60 filler routes), `wrk` cycling the benchmark's five paths; hello
+is `echo "Hello, world"`. 12 vCPUs in the VM shared by everything.
+
+**4 workers each, 32 connections, 2 wrk threads** — `bench/results/2026-09-30-wrk-w4.md`:
+
+| | server | req/s | p50 | p99 | phpr ÷ this |
+|---|---|---:|---:|---:|---:|
+| hello | nginx + php-fpm | 36,007 | 0.85 ms | 1.54 ms | **4.57** |
+| hello | FrankenPHP worker | 24,446 | 1.19 ms | 4.48 ms | **6.72** |
+| hello | phpr worker | 164,383 | 0.16 ms | 1.74 ms | 1 |
+| Symfony | nginx + php-fpm | 13,580 | 2.26 ms | 3.83 ms | **1.08** |
+| Symfony | FrankenPHP worker | 23,175 | 1.26 ms | 4.22 ms | **0.63** |
+| Symfony | phpr worker | 14,634 | 2.17 ms | 2.42 ms | 1 |
+
+**8 workers each, 64 connections**, medians of 2 × 10 s — `bench/results/2026-09-30-wrk-w8.md`:
+
+| | server | req/s | phpr ÷ this |
+|---|---|---:|---:|
+| hello | nginx + php-fpm | 47,799 | 4.01 |
+| hello | FrankenPHP worker | 5,495 ¹ | — |
+| hello | phpr worker | 191,475 | 1 |
+| Symfony | nginx + php-fpm | 20,755 | **1.27** |
+| Symfony | FrankenPHP worker | 23,347 | **1.13** |
+| Symfony | phpr worker | 26,354 | 1 |
+
+¹ FrankenPHP's hello arm is bimodal in this VM: 24.4–24.8 k req/s in four isolated 15 s runs and
+in the 4-worker record, 10–17 k in three other harness runs, 5.5 k with 8 workers — while its
+Symfony arm is stable at 22–23 k. Not understood (it is Caddy/Go under Docker Desktop's network on
+macOS; the phpr and fpm arms never moved more than 4 %). Its hello ratio is quoted from the
+record run; the 8-worker hello figure is not a FrankenPHP ceiling.
+
+What the numbers say:
+
+- **Hello** is the SAPI floor: phpr's thread-per-connection front end and in-process request
+  loop answer in 6 µs of CPU per request per worker (164 k/s ÷ 4); php-fpm pays the nginx hop and
+  FastCGI, FrankenPHP the Caddy→PHP hand-off.
+- **Symfony** is where the interpreter shows. Per worker: phpr ≈ 273 µs/request, FrankenPHP
+  ≈ 173 µs, php-fpm (with nginx) ≈ 295 µs. In-process, the same request loop is 230 µs on phpr
+  against 30 µs on `php -n` (`handle_requests`, session 4 §2c) — **the 7.9× gap of the kernel path
+  shrinks to 1.6× behind HTTP**, because 140 µs of every FrankenPHP request is SAPI work
+  (superglobals, `Request::createFromGlobals`, `Response::send`) that phpr's leaner loop does in
+  ~45 µs. With 8 workers phpr scales 1.8× and passes both (FrankenPHP does not scale here with its
+  default thread configuration; its ceiling in this VM is not established).
+- PLAN §4's target for worker mode was "within 1.2× of php with opcache on `bench/symfony-boot.php`":
+  against php-fpm + opcache the worker is at **0.93× (4 workers) / 0.79× (8 workers)** of its
+  time per request, i.e. inside the target; against FrankenPHP it is at 1.58× / 0.89×.
+
+## 4. What was not done, and why
+
+- **The on-disk bytecode cache (DECISION_KERNEL.md §4 step 3).** Step 1 was slice 2; step 2 — a
+  process-wide in-memory cache — is what upstream's unit cache already is inside a worker: in
+  worker mode nothing is lexed, parsed or compiled after boot (includes hit the thread's unit
+  cache, the main unit runs once). Step 3 would serve the one-shot CLI (the 15.8 ms startup floor,
+  9.5 ms of it the prelude, plus 1.35–1.5 ms per 1,000 lines) and worker boot; it needs a
+  serialisation of `Module` (203 op variants with `Rc`-shared inline caches), `Func`, `Const`,
+  `CompiledClass` and the HIR fragments a `Module` embeds, and it must preserve the `Rc` identities
+  `run_linked` and `relocate_module_class_ids` test (`Rc::ptr_eq`, `Rc::get_mut`) or fall back
+  correctly. It does not change any step-5 number, so it was sequenced after them; it is the next
+  piece of work if the CLI floor matters.
+- Worker mode has no `max_requests` recycling and no memory ceiling yet (§5.5); the isolation
+  battery is the gate, a long-run leak test (10⁶ requests, RSS sampled) is not written.
+
+## 5. Commits
+
+| commit | content |
+|---|---|
+| `609e3188` | `KNOWN_DIVERGENCES.md`, `baseline/divergences/`, gate reporting |
+| `2bda4f2e` | worker mode, `bench/worker/`, wrk in the dev image |
+| (this one) | this section, D-14, `bench/results/2026-09-30-wrk-w{4,8}.md`, decision doc §5/§6 status |
+
+---
+
 # Session 4 — 2026-09-30 — the three namespaced-call divergences fixed; slice 4 (`foreach`)
 
 Same environment. `/target/prev` was rebuilt from the commit each change started from
