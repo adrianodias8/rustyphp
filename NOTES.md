@@ -5,6 +5,161 @@ this session unless it is explicitly labelled "upstream's claim".
 
 ---
 
+# Session 2 — 2026-09-30 — three fixes: `count()` dynamic path, quiet static-property fetch, in-place `.=`
+
+Same environment as session 1 (Docker `linux/arm64`, oracle PHP 8.5.7, rustc 1.98.1). Every
+comparison below is against the engine built from `1ddea856` (upstream `9d4ef5ba`, unmodified),
+built into `/target/base` from a git worktree so the two binaries could be run interleaved.
+
+## 1. What was fixed
+
+### 1.1 `count($countable)` through any dynamic call — one fix, wider than the bug found
+
+The session-1 repro (`count()` unqualified inside a namespace) turned out to be one entry into a
+path shared by every *dynamic* builtin call: `$f = 'count'; $f($x)`, `call_user_func('count', …)`,
+`array_map('count', …)`, `count(...)`, and the run-time namespace fallback. That path
+(`Vm::invoke_named`, `vm/calls.rs`) ran the builtin directly and skipped the pre-call handling the
+compiled `Op::CallBuiltin` performs (`Countable` dispatch, lazy-object realisation,
+`__debugInfo`, user stream wrappers). It now calls the same function (`value_builtin_call`).
+
+- Composer 2.10.1 `require monolog/monolog` under phpr: **works end to end**. Two runs: 2.06 s and
+  1.98 s wall (oracle 1.71 s / 1.40 s), user CPU 0.42 s / 0.41 s (oracle 0.43 s / 0.42 s), peak
+  RSS 140 MB (oracle 49 MB). Resolution identical; `vendor/` byte-identical (152 files).
+- Regression tests: `baseline/repro/count-countable-in-namespace.phpt`,
+  `count-countable-dynamic-call.phpt`.
+
+### 1.2 `isset()` / `empty()` / `??` on static properties — a quiet fetch, not just a parser fix
+
+`isset(Foo::$a)` was rejected at *parse* time (`unsupported construct (assignment target)`), so
+`Zend/micro_bench.php` never ran. Underneath: phpr had no `BP_VAR_IS` fetch for static
+properties, so `Foo::$nope ?? 'd'`, `empty(Foo::$nope)`, `isset(self::$nope)`, and the private /
+uninitialised-typed cases all threw where PHP silently answers unset. Upstream had restricted
+the construct to `self::`/`parent::`/`static::` for exactly that reason.
+
+Fix: a `quiet: bool` on the three static-get ops (`StaticPropGet`, `StaticPropGetDynamic`,
+`StaticPropGetDynName`) backed by `Vm::ensure_static_is`, used by `isset`, `empty` and the `??`
+left operand; the lowering accepts any class expression as a test place; bare `empty(C::$p)`
+compiles to the quiet read + `!`. Class resolution is not quietened: `isset(NoSuch::$p)` still
+throws `Class "NoSuch" not found` after an autoload attempt, as in PHP.
+
+- 31 probe scripts (`/scratch/repro/isset`, named/dynamic class, visibility from inside and from
+  a subclass, typed uninitialised, indexed and property-chained forms, `??=`, autoload, class not
+  found, integer class name) all byte-identical to the oracle.
+- `Zend/micro_bench.php` runs unmodified; corpus: **+6 passes** (3041 → 3047), and 4 tests moved from
+  *skip* to *fail* (`closures/closure_041/043/044/046`: they used to stop at the rejected
+  `isset(A::$priv)`; they now stop at a different pre-existing gap, `isset($this)` in a closure —
+  "unsupported $this property write"). New corpus totals 3047 / 1625 / 1500; `Zend/tests/` alone
+  2660 / 1414 / 1231. Passes: (`Zend/tests/isset/bug80030`,
+  `tests/classes/static_properties_undeclared_isset`, `closures/closure_060`,
+  `magic_methods/bug51822`, `class_toString_concat_with_itself`,
+  `class_toString_concat_non_interned_with_itself` — the last three from 1.3).
+- Regression tests: `isset-static-property.phpt`, `isset-static-property-class-not-found.phpt`.
+
+### 1.3 `.=` in place for every left-hand form and operand kind — and `__toString()`
+
+Measured before touching anything (`bench/concat-lhs-scaling.php`, N = 400,000 appends of an
+8-byte string, unmodified engine vs oracle):
+
+| target of `.=` | oracle | phpr before | phpr after | before ÷ after |
+|---|---:|---:|---:|---:|
+| local variable | 4.10 ms | 12.05 ms | 16.73 ms ¹ | — |
+| by-ref parameter | 3.99 ms | **12,774 ms** | 18.09 ms | 706× |
+| `global` | 4.37 ms | **12,804 ms** | 18.54 ms | 691× |
+| `static` variable | 4.13 ms | **12,736 ms** | 18.34 ms | 695× |
+| object property `$o->s` | 5.52 ms | **12,878 ms** | 30.33 ms | 425× |
+| static property `C::$s` | 4.79 ms | **12,800 ms** | 21.13 ms | 606× |
+| array element `$a['k']` | 5.43 ms | **12,854 ms** | 41.79 ms | 308× |
+| `$o->parts['a']` | 6.34 ms | **12,955 ms** | 32.35 ms | 400× |
+| closure `use (&$s)` | 8.70 ms | **12,796 ms** | 55.39 ms | 231× |
+| local, integer operand (`.= $i`) | 9.00 ms | **8,931 ms** | 15.45 ms | 578× |
+| local, float operand (`.= 1.5`) | 15.89 ms | **5,078 ms** | 101.29 ms | 50× |
+
+¹ single runs; the local case is inside noise here and is measured properly in the A/B below.
+
+Every bold cell was quadratic (×4 per doubling of N). The in-place fast path existed only for a
+plain local slot with a string operand. Now (`vm/mod.rs::concat_in_place`): a slot held directly
+or behind a reference, a static property, an array element (`AssignOpPath` leaf), a property
+(`Op::PropConcatGate`, a new op in front of the unchanged read-modify-write sequence — miss falls
+through), and `$o->prop[k]` (inside the existing `field_rmw_fast` perimeter). Operands: string,
+int (rendered into a stack buffer), float, bool, null. Refused, so the old path runs: shared
+strings (copy-on-write), arrays, objects, hooks, readonly, lazy objects, typed references.
+
+Found and fixed alongside, because it is the same operator: **`$s .= $stringable` never called
+`__toString()`** on any target form — a warning and the class name instead of the string. Plain
+`.` emits a `Stringify` step per operand; the compound forms did not. Object operands of a compound
+concat now go through `__toString()` (`concat_object_operands`, left operand first).
+
+- Semantic battery `bench/concat-semantics.php` (COW, aliases, references, foreach by-ref, typed
+  and readonly properties, magic, `__toString`, arrays as operand, expression values, string used
+  as a hash key after in-place growth, 2,000-iteration loop with snapshots): identical to the
+  oracle except two pre-existing divergences not related to `.=` (below). Also byte-identical
+  between the unmodified and the patched engine on the pre-`__toString` subset, in both
+  `PHPR_REG_LOWER` modes.
+- Regression test: `concat-assign-in-place.phpt` (validated on the oracle with php-src's own
+  `run-tests.php`, like every file in `baseline/repro/`).
+
+## 2. Gates
+
+| gate | result |
+|---|---|
+| `cargo test --release --workspace` (root) | **1749 passed / 1 failed / 2 ignored** — the failure is the root-only unwritable-path test; two new tests added (`long_digits_matches_to_zstr`, `concat_in_place_only_when_unique_and_pure`) |
+| `php-runtime` lib suite as uid 65534, fresh container | 709 / 0 / 1 |
+| differential | 37,835 cases, 0 mismatches (`php-types`); `php-builtins`, `php-runtime` differentials ok |
+| feature matrix (`cargo check` per feature) | `op-census`, `gc-census`, `mem-census`, `census-instrumentation`, `ic-stats` ok; `zval-census` fails **identically on the unmodified tree** (references `php_types::memcensus` without its feature) |
+| `baseline/gate.sh` | **PASS**: 3041 → 3047, pass→fail 0, pass→skip 0, 6 new passes; repro tests 5/5 |
+| upstream's LOC-cap test (`loc_dente`) | caps raised and declared in the allowlist, upstream's convention: `vm/mod.rs` +222, `vm/run.rs` +154, `vm/arrays.rs` +33, `bytecode.rs` +22, `compile/expr.rs` +15, `lower/expr.rs` +1 |
+| upstream's op-census table test | `PropConcatGate` appended (N_OPS 200 → 201); the distance-from-bottom assertions amended in block, as upstream did for `PropDimGetConst` |
+
+### A/B, unmodified vs patched, 7 rounds interleaved (ABBA), 123 sections — `bench/results/2026-09-30-ab-fixes.tsv`
+
+| benchmark | sections | geomean B/A | min | max |
+|---|---:|---:|---:|---:|
+| `Zend/bench.php` | 18 | 0.978 | 0.889 | 1.018 |
+| `Zend/micro_bench.php` | 35 | 0.979 | 0.842 | 1.045 |
+| arrays | 20 | 0.991 | 0.954 | 1.017 |
+| strings | 21 | **0.769** | **0.004** | 1.051 |
+| oop | 21 | 0.992 | 0.976 | 1.010 |
+| autoload | 3 | 0.959 | 0.927 | 1.002 |
+| symfony-boot | 3 | 1.002 | 0.993 | 1.015 |
+
+- `concat_append_int_200k`: 2,089.6 ms → 8.1 ms (**0.004×**).
+- `empty(self::$x)`: 273 → 230 ms (0.84); `self::$x = 0` / `Foo::$x = 0`: 0.90 (noise band ~15 %).
+- The one section above 1.05: `concat_append_1m` (local `.= 'x'`) 34.9 → 36.7 ms, **1.051**, spreads
+  3.6 % / 7.7 % — ≈1.8 ns per append, seen in five A/B runs (1.051, 1.053, 1.049, 1.039, 1.051). Declared.
+  Every other section is within its round-to-round spread. No RESULT checksum differs.
+- loadavg was 3.1 at the start of the final A/B (other host processes); spreads are wider than in
+  session 1.
+
+## 3. Found on the way, not fixed (each is a separate bug; recorded for the next session)
+
+1. **Reading an uninitialised typed static property does not throw.** `echo A::$t;` with
+   `static int $t;` prints nothing where PHP throws `Typed static property A::$t must not be
+   accessed before initialization`. (Loud path; untouched.)
+2. **`NAN` coerced to string does not warn.** PHP 8.5's `Warning: unexpected NAN value was coerced
+   to string` is missing for `.`, `.=` and `null . NAN` (upstream's comment in `convert.rs` says
+   the oracle is silent; on 8.5.7 it is not).
+3. **Diagnostics raised while evaluating call arguments report the callee's line.** A
+   `Deprecated`/`Warning` triggered inside `f($a .= …)`'s argument list is reported "on line 18"
+   (the line of `function f`), not the call site.
+4. **Redeclaring a builtin is not a fatal.** `function glob() {}` / `function stat() {}` compile
+   under phpr; PHP fatals with "Cannot redeclare".
+5. **`Op::StaticPropRef` is missing from the include-unit class-id relocation** (`vm/mod.rs`,
+   `relocate_module_class_ids`: `StaticPropGet/Set/OpSet/IncDec` are listed, `StaticPropRef` is
+   not). Not reproduced — flagged from reading the code while adding the `quiet` flag.
+6. **`.=` on a float operand is 6.6× the oracle** (linear now, 101 ms vs 15 ms at 400k): the float
+   formatting (`double_to_precision`) allocates and is slow; `bench/concat-scaling.php` row
+   `append_float_ms`.
+7. **Indexed static properties are read-modify-written through a temp copy**
+   (`static_prop_rmw`): `C::$arr['k'] .= x` separates the whole array each time. Not measured.
+
+## 4. Commits
+
+| commit | content |
+|---|---|
+| (this one) | the three fixes, their `.phpt`s and unit tests, `bench/ab.sh` + `bench/lib/ab-summary.py`, `bench/concat-lhs-scaling.php`, `bench/concat-semantics.php`, gate runs `baseline/repro/*.phpt`, baseline lists advanced (3047), results `bench/results/2026-09-30-fixes.md`, `2026-09-30-ab-fixes.tsv` |
+
+---
+
 # Session 1 — 2026-09-29/30 — Phase 0 (fork, build, baseline) and Phase 1 (profile)
 
 ## 0. Environment — read this before comparing any number with upstream's

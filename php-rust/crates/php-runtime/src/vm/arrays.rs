@@ -1634,9 +1634,23 @@ impl<'m> Vm<'m> {
         {
             return Ok(RmwFastOut::Miss(keys));
         }
+        // `$o->prop[k] .= rhs` joins the perimeter for the in-place append
+        // only (`concat_in_place`: string entry, side-effect-free operand).
+        let concat_rhs = match &rmw {
+            RmwArg::Bin(BinOp::Concat, rhs)
+                if matches!(
+                    rhs,
+                    Zval::Str(_) | Zval::Long(_) | Zval::Double(_) | Zval::Bool(_) | Zval::Null
+                ) =>
+            {
+                Some(*rhs)
+            }
+            _ => None,
+        };
         if let RmwArg::Bin(op, rhs) = &rmw {
-            if !matches!(op, BinOp::Add | BinOp::Sub | BinOp::Mul)
-                || !matches!(rhs, Zval::Long(_) | Zval::Double(_))
+            if concat_rhs.is_none()
+                && (!matches!(op, BinOp::Add | BinOp::Sub | BinOp::Mul)
+                    || !matches!(rhs, Zval::Long(_) | Zval::Double(_)))
             {
                 return Ok(RmwFastOut::Miss(keys));
             }
@@ -1675,6 +1689,25 @@ impl<'m> Vm<'m> {
         let Some(k) = coerce_key_silent(&keys[0]) else {
             return Ok(RmwFastOut::Miss(keys));
         };
+        if let Some(rhs) = concat_rhs {
+            // Same admission as the arithmetic forms (IC facts, live borrow,
+            // present entry); the entry must be a plain string. `make_mut`
+            // is the separation the write walk would perform anyway. Anything
+            // short of an in-place append is a Miss: the full path is intact.
+            let appended = match obj.props.get_slot_mut(si) {
+                Some(Zval::Array(a)) if matches!(a.get(&k), Some(Zval::Str(_))) => {
+                    Rc::make_mut(a)
+                        .get_mut(&k)
+                        .and_then(|slot| super::concat_in_place(slot, rhs, || false))
+                }
+                _ => None,
+            };
+            drop(obj);
+            return Ok(match appended {
+                Some(v) => RmwFastOut::Hit(v),
+                None => RmwFastOut::Miss(keys),
+            });
+        }
         let old = {
             let Some(child) = obj.props.get_slot_mut(si) else {
                 drop(obj);

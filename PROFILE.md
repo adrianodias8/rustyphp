@@ -180,7 +180,7 @@ iteration counts; every figure is an exact integer.
 
 These are not representation costs and not dispatch costs. Each is a specific piece of logic.
 
-### 5.1 `$s .= <non-string>` is quadratic
+### 5.1 `$s .= <non-string>` is quadratic — **fixed in session 2** (see NOTES.md §1.3: it was quadratic for every target but a plain local as well)
 
 Appending an integer or a float to a growing string copies the whole string every iteration.
 

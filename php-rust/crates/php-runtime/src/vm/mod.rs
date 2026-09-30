@@ -7661,10 +7661,35 @@ impl<'m> Vm<'m> {
 
     /// [`apply_binop`] with `BcMath\Number` / `GMP` operator overloading first.
     fn apply_binop_ovl(&mut self, op: BinOp, a: &Zval, b: &Zval) -> Result<Zval, PhpError> {
+        if matches!(op, BinOp::Concat) && (deref_object(a).is_some() || deref_object(b).is_some()) {
+            let (l, r) = self.concat_object_operands(a.clone(), b.clone())?;
+            return apply_binop(op, &l, &r, &mut self.diags);
+        }
         if let Some(r) = self.try_number_binop(op, a, b)? {
             return Ok(r);
         }
         apply_binop(op, a, b, &mut self.diags)
+    }
+
+    /// Operands of a COMPOUND concatenation (`$x .= $y`) where at least one is
+    /// an object: each object is converted through its `__toString()`, left
+    /// operand first, exactly as the plain `.` operator does via the
+    /// `Stringify` op the compiler emits for it. The compound forms never
+    /// emitted that step, so `$s .= $stringable` fell into the infallible
+    /// value funnel: a warning and the class name instead of the string.
+    /// Cold: reached only when an operand is an object.
+    #[cold]
+    #[inline(never)]
+    fn concat_object_operands(&mut self, a: Zval, b: Zval) -> Result<(Zval, Zval), PhpError> {
+        let conv = |vm: &mut Self, v: Zval| -> Result<Zval, PhpError> {
+            match deref_object(&v) {
+                Some(o) => Ok(Zval::Str(vm.vm_stringify(&Zval::Object(o))?)),
+                None => Ok(v),
+            }
+        };
+        let l = conv(self, a)?;
+        let r = conv(self, b)?;
+        Ok((l, r))
     }
 
     /// [`apply_unop`] with overloading for `BcMath\Number` / `GMP`: unary `-` is
@@ -13788,6 +13813,59 @@ impl<'m> Vm<'m> {
         }
     }
 
+    /// The `BP_VAR_IS` twin of [`Self::ensure_static`], behind the `quiet` form
+    /// of the static-property read ops (`isset(C::$p)`, `empty(C::$p)`,
+    /// `C::$p ?? d`). Outer `None` = an init thunk was scheduled, re-run the op
+    /// (same protocol as `ensure_static`). Inner `None` = the property reads as
+    /// unset: undeclared, or not visible from the running scope — the two cases
+    /// `ensure_static` throws on. Class resolution is NOT quietened: an unknown
+    /// class is an Error for `isset` as well (oracle-pinned, PHP 8.5.7).
+    ///
+    /// Kept separate so `ensure_static` — the path every ordinary static
+    /// access takes — is unchanged.
+    fn ensure_static_is(
+        &mut self,
+        target: ClassTarget,
+        name: &[u8],
+        top: usize,
+        ip: usize,
+    ) -> Result<Option<Option<Rc<RefCell<Zval>>>>, PhpError> {
+        let start = self.target_class_id(target, top)?;
+        let Some((decl, idx)) = find_static_prop(&self.classes, start, name) else {
+            return Ok(Some(None));
+        };
+        // From here on, `ensure_static`'s body with the one lookup already
+        // done (a second walk of the class chain showed as +15 % on the
+        // `isset(self::$x)` micro row).
+        let decl_cc = self.classes[decl];
+        let entry = &decl_cc.static_props[idx];
+        if !visible_from(&self.classes, self.frames[top].class, entry.visibility, decl) {
+            return Ok(Some(None));
+        }
+        let key = (decl, name.to_vec());
+        if let Some(cell) = self.static_props.get(&key) {
+            return Ok(Some(Some(Rc::clone(cell))));
+        }
+        match &entry.init {
+            StaticInit::Const(c) => {
+                let cell = php_types::zcell(c.to_zval());
+                self.static_props.insert(key, Rc::clone(&cell));
+                Ok(Some(Some(cell)))
+            }
+            StaticInit::Thunk(func) => {
+                let cell = php_types::zcell(Zval::Null);
+                self.static_props.insert(key, Rc::clone(&cell));
+                let mut frame = Frame::new(func, self.class_mod(decl));
+                frame.class = Some(decl);
+                frame.static_class = Some(decl);
+                frame.ret_cell = Some(Rc::clone(&cell));
+                self.frames[top].ip = ip;
+                self.frames.push(frame);
+                Ok(None)
+            }
+        }
+    }
+
     /// Pop the operand-stack keys for a field path's `Index` / `PropDyn` steps
     /// (one value per such step), restoring source order.
     fn pop_field_keys(&mut self, top: usize, steps: &[FieldStep]) -> Vec<Zval> {
@@ -17501,6 +17579,95 @@ fn path_walk(cell: &mut Zval, keys: &[Zval], i: usize, last: Last, diags: &mut D
     }
 }
 
+/// Decimal digits of `v` rendered into `buf`, byte-identical to
+/// `PhpStr::from_i64` (hence to `convert::to_zstr` on a `Long`) without the
+/// intermediate string allocation.
+fn long_digits(v: i64, buf: &mut [u8; 20]) -> &[u8] {
+    let mut i = buf.len();
+    let mut u = v.unsigned_abs();
+    loop {
+        i -= 1;
+        buf[i] = b'0' + (u % 10) as u8;
+        u /= 10;
+        if u == 0 {
+            break;
+        }
+    }
+    if v < 0 {
+        i -= 1;
+        buf[i] = b'-';
+    }
+    &buf[i..]
+}
+
+/// `dst .= rhs` IN PLACE, when that is indistinguishable from concatenating
+/// into a fresh string and storing it. Returns the expression's value (a
+/// handle to the extended string) on success; `None` means nothing was
+/// touched and the caller must run its ordinary read–concat–write path.
+///
+/// Conditions, all required:
+/// - `rhs` converts to a string with no side effect and no diagnostic: a
+///   string, int, float, bool or null. Arrays (warning), objects
+///   (`__toString`, user code) and everything else are refused.
+/// - `dst` holds a string, directly or — when `through_ref` — inside a
+///   reference cell that is not borrowed elsewhere.
+/// - that string is UNIQUELY owned (`ZStr::try_append` checks `rc == 1`). A
+///   shared string — another variable, the constant pool, `$s .= $s` — is
+///   refused, which is what keeps copy-on-write intact.
+///
+/// Every `.=` used to take the copy path unless its target was a plain local
+/// slot AND its operand was already a string: the accumulated string was
+/// cloned (so never unique), concatenated into a new allocation and stored —
+/// O(length) per append, O(n²) per loop. Measured on the oracle-parity
+/// binary at 400,000 appends: 12.8 s against the oracle's 4–6 ms for a
+/// property, array element, static property, reference or global target, and
+/// 8.9 s against 9 ms for an integer operand (bench/concat-*-scaling.php).
+///
+/// Callers pass `through_ref = || false` wherever a typed reference could need
+/// its write coerced; a string stays a string under append, but those paths
+/// keep their existing behaviour bit for bit. (A closure so the common
+/// direct-string case never evaluates it.)
+#[inline(always)]
+fn concat_in_place(dst: &mut Zval, rhs: &Zval, through_ref: impl FnOnce() -> bool) -> Option<Zval> {
+    let mut digits = [0u8; 20];
+    let bytes: &[u8] = match rhs {
+        Zval::Str(s) => s.as_bytes(),
+        Zval::Long(l) => long_digits(*l, &mut digits),
+        Zval::Null | Zval::Bool(false) => b"",
+        Zval::Bool(true) => b"1",
+        // Out of line: the float rendering owns a temporary string, and its
+        // drop glue must not sit on the exit path of the common cases.
+        Zval::Double(_) => return concat_in_place_double(dst, rhs, through_ref()),
+        _ => return None,
+    };
+    append_bytes_in_place(dst, bytes, through_ref)
+}
+
+#[cold]
+#[inline(never)]
+fn concat_in_place_double(dst: &mut Zval, rhs: &Zval, through_ref: bool) -> Option<Zval> {
+    // Pure for a float (no diagnostic is ever pushed): the sink is never read.
+    let formatted = convert::to_zstr(rhs, &mut Diags::new());
+    append_bytes_in_place(dst, formatted.as_bytes(), || through_ref)
+}
+
+/// The store half of [`concat_in_place`]: extend the string `dst` holds —
+/// directly, or (when `through_ref()`) inside its reference cell.
+#[inline(always)]
+fn append_bytes_in_place(dst: &mut Zval, bytes: &[u8], through_ref: impl FnOnce() -> bool) -> Option<Zval> {
+    match dst {
+        Zval::Str(l) => l.try_append(bytes).then(|| Zval::Str(l.clone())),
+        Zval::Ref(cell) if through_ref() => {
+            let mut inner = cell.try_borrow_mut().ok()?;
+            match &mut *inner {
+                Zval::Str(l) => l.try_append(bytes).then(|| Zval::Str(l.clone())),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
 /// Apply the leaf step to the parent cell (which must hold the target array).
 /// `dropped` receives the single value a displacing leaf write replaced (at
 /// most ONE per path op — the `Set`/`OpSet` arms — WP-32: was a Vec that
@@ -17585,6 +17752,17 @@ fn apply_last(parent: &mut Zval, last: Last, diags: &mut Diags, dropped: &mut Op
         Last::OpSet { key, op, rhs } => {
             let k = coerce_key_diag(&key, diags)
                 .ok_or_else(|| PhpError::TypeError("Illegal offset type".to_string()))?;
+            // `$a[k] .= rhs` on a string element: extend it in place (see
+            // `concat_in_place`). The array is already separated (`make_mut`
+            // above), so the element is reachable only through this array.
+            // Probed read-only first: `get_mut` marks the array as possibly
+            // holding containers, which a miss must not do. A reference
+            // element keeps the ordinary path.
+            if matches!(op, crate::hir::BinOp::Concat) && matches!(arr.get(&k), Some(Zval::Str(_))) {
+                if let Some(v) = arr.get_mut(&k).and_then(|slot| concat_in_place(slot, &rhs, || false)) {
+                    return Ok(v);
+                }
+            }
             // A ref element whose cell is mid-write on this very statement
             // (cycle, H-70.1) has an unreadable old value — park the whole
             // compound for `path_op`'s drain, which supplies the expression
@@ -18748,6 +18926,50 @@ fn match_case_repr(v: &Zval) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn long_digits_matches_to_zstr() {
+        // `concat_in_place` renders an integer operand itself (no temporary
+        // string); the bytes must be exactly what the concat operator produces.
+        for v in [0i64, 1, -1, 7, 10, -10, 42, 999, -308641975, i64::MAX, i64::MIN, i64::MAX - 1, i64::MIN + 1] {
+            let mut buf = [0u8; 20];
+            let got = super::long_digits(v, &mut buf).to_vec();
+            let want = php_types::convert::to_zstr(&Zval::Long(v), &mut php_types::Diags::new()).as_bytes().to_vec();
+            assert_eq!(got, want, "v={v}");
+        }
+    }
+
+    #[test]
+    fn concat_in_place_only_when_unique_and_pure() {
+        let mut dst = Zval::Str(php_types::PhpStr::from_str("ab"));
+        // unique string + pure operands: in place, value is the extended string
+        for (rhs, want) in [
+            (Zval::Str(php_types::PhpStr::from_str("c")), "abc"),
+            (Zval::Long(-5), "abc-5"),
+            (Zval::Bool(true), "abc-51"),
+            (Zval::Bool(false), "abc-51"),
+            (Zval::Null, "abc-51"),
+            (Zval::Double(1.5), "abc-511.5"),
+        ] {
+            let v = super::concat_in_place(&mut dst, &rhs, || true).expect("in place");
+            assert_eq!(matches!(&v, Zval::Str(s) if s.as_bytes() == want.as_bytes()), true, "{want}");
+            drop(v);
+        }
+        // a shared string is refused (copy-on-write)
+        let alias = dst.clone();
+        assert!(super::concat_in_place(&mut dst, &Zval::Long(1), || true).is_none());
+        drop(alias);
+        // an array operand is refused (it would warn)
+        assert!(super::concat_in_place(&mut dst, &Zval::Array(std::rc::Rc::new(php_types::PhpArray::new())), || true).is_none());
+        // a non-string target is refused
+        let mut n = Zval::Long(5);
+        assert!(super::concat_in_place(&mut n, &Zval::Long(1), || true).is_none());
+        // through a reference only when allowed
+        let mut r = Zval::Ref(php_types::zcell(Zval::Str(php_types::PhpStr::from_str("x"))));
+        assert!(super::concat_in_place(&mut r, &Zval::Long(1), || false).is_none());
+        assert!(super::concat_in_place(&mut r, &Zval::Long(1), || true).is_some());
+        assert!(matches!(r.deref_clone(), Zval::Str(s) if s.as_bytes() == b"x1"));
+    }
     use crate::builtin::{Builtin, Ctx, Registry};
     use crate::compile::compile_program;
     use crate::lower::lower_source;

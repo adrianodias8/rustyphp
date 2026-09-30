@@ -46,5 +46,17 @@ if [[ "$n_skip" != 0 ]]; then
   [[ "${ALLOW_PASS_TO_SKIP:-0}" == 1 ]] || rc=1
 fi
 if [[ "$n_new" != 0 ]]; then echo "--- new passes (advance the baseline with run-baseline.sh)"; sed 's/^/  /' "$RAW/new-pass"; fi
+# The fork's own regression tests: every .phpt under baseline/repro/ (each one
+# verified to PASS on the oracle with php-src's run-tests.php before it was
+# committed) must pass; a failure here is a regression of a fixed bug.
+if compgen -G "$HERE/repro/*.phpt" >/dev/null; then
+  rm -rf "$RAW/repro"; mkdir -p "$RAW/repro"; cp "$HERE"/repro/*.phpt "$RAW/repro/"
+  "$RUNNER" --isolate --list-fails "$RAW/repro" >"$RAW/repro.log" 2>&1 || true
+  rp=$(awk '/^pass: /{print $2}' "$RAW/repro.log" | tail -1); rf=$(awk '/^fail: /{print $2}' "$RAW/repro.log" | tail -1); rs=$(awk '/^skip: /{print $2}' "$RAW/repro.log" | tail -1)
+  echo "repro tests: pass=$rp fail=$rf skip=$rs"
+  if [[ "${rf:-1}" != 0 || "${rs:-1}" != 0 ]]; then
+    tr -d '\0' <"$RAW/repro.log" | grep -aE '^--- .*\.phpt ---$' | sed 's/^/  /'; rc=1
+  fi
+fi
 [[ $rc == 0 ]] && echo "GATE: PASS" || echo "GATE: FAIL"
 exit $rc

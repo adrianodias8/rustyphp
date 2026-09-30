@@ -1174,17 +1174,17 @@ impl<'m> Vm<'m> {
         match self.registry.get(name) {
             Some(Builtin::Value(f)) => {
                 let f = *f;
-                // Same __toString precompute as the compiled Op::CallBuiltin
-                // path: a string-coercing builtin invoked as a CALLBACK
-                // (`array_map('strval', $cookies)`) must still honor
-                // Stringable objects.
-                if value_builtin_string_coerces(name) {
-                    self.stringify_args = self.compute_stringify(&args, false)?;
-                } else if value_builtin_string_coerces_deep(name, &args) {
-                    self.stringify_args = self.compute_stringify(&args, true)?;
-                }
-                let line = self.cur_line(self.frames.len() - 1);
-                let result = self.run_value_builtin(f, &args, line)?;
+                // The SAME pre-call body as the compiled Op::CallBuiltin path
+                // (`value_builtin_call`): Countable dispatch for
+                // `count`/`sizeof`, lazy-object realisation, `__debugInfo`,
+                // user stream wrappers, and the __toString precompute for a
+                // string-coercing builtin invoked as a CALLBACK
+                // (`array_map('strval', $cookies)`). This arm used to repeat
+                // only the last of those, so a builtin reached dynamically —
+                // or through the namespace fallback — diverged from the same
+                // builtin called directly.
+                let top = self.frames.len() - 1;
+                let result = self.value_builtin_call(top, f, name, &mut args)?;
                 let top = self.frames.len() - 1;
                 self.frames[top].stack.push(result);
                 Ok(())

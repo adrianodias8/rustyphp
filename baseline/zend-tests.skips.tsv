@@ -190,11 +190,6 @@ Zend/tests/clone/clone_with_007.phpt	builtin	Call to undefined function clone()
 Zend/tests/clone/clone_with_008.phpt	builtin	Call to undefined function clone()
 Zend/tests/clone/clone_with_009.phpt	builtin	Call to undefined function clone()
 Zend/tests/clone/clone_with_012.phpt	builtin	Call to undefined function clone()
-Zend/tests/closures/closure_041.phpt	unsupported	assignment target (line 21)
-Zend/tests/closures/closure_043.phpt	unsupported	assignment target (line 11)
-Zend/tests/closures/closure_044.phpt	unsupported	assignment target (line 10)
-Zend/tests/closures/closure_046.phpt	unsupported	assignment target (line 12)
-Zend/tests/closures/closure_060.phpt	unsupported	assignment target (line 8)
 Zend/tests/closures/closure_const_expr/attributes.phpt	extension	requires unsupported extension 'reflection'
 Zend/tests/closures/closure_const_expr/attributes_autoload.phpt	extension	requires unsupported extension 'reflection'
 Zend/tests/closures/closure_const_expr/attributes_scope_001.phpt	extension	requires unsupported extension 'reflection'
@@ -555,7 +550,6 @@ Zend/tests/inter_007.phpt	compile-error	compile-time diagnostic not modelled
 Zend/tests/inter_05.phpt	compile-error	compile-time diagnostic not modelled
 Zend/tests/internal_class_variance.phpt	extension	requires unsupported extension 'zend_test'
 Zend/tests/isset/bug68162.phpt	unsupported	assignment target (line 4)
-Zend/tests/isset/bug80030.phpt	unsupported	assignment target (line 4)
 Zend/tests/isset/isset_001.phpt	unsupported	assignment target (line 7)
 Zend/tests/isset/isset_002.phpt	unsupported	assignment target (line 3)
 Zend/tests/isset/isset_expr_error.phpt	unsupported	assignment target (line 2)
@@ -588,7 +582,6 @@ Zend/tests/lsb/lsb_009.phpt	compile-error	compile-time diagnostic not modelled
 Zend/tests/magic_methods/bug36268.phpt	builtin	Call to undefined function bar()
 Zend/tests/magic_methods/bug43201.phpt	builtin	Call to undefined function chop()
 Zend/tests/magic_methods/bug51421.phpt	compile-error	compile-time diagnostic not modelled
-Zend/tests/magic_methods/bug51822.phpt	unsupported	assignment target (line 30)
 Zend/tests/magic_methods/bug61970_1.phpt	compile-error	compile-time diagnostic not modelled
 Zend/tests/magic_methods/bug61970_2.phpt	compile-error	compile-time diagnostic not modelled
 Zend/tests/magic_methods/bug68412.phpt	section	--SKIPIF-- section not modelled
@@ -1373,7 +1366,6 @@ tests/classes/static_mix_1.phpt	compile-error	compile-time diagnostic not modell
 tests/classes/static_mix_2.phpt	compile-error	compile-time diagnostic not modelled
 tests/classes/static_properties_004.phpt	unsupported	assignment target (line 15)
 tests/classes/static_properties_undeclared_assignRef.phpt	unsupported	assignment target (line 4)
-tests/classes/static_properties_undeclared_isset.phpt	unsupported	assignment target (line 3)
 tests/classes/static_this.phpt	compile-error	compile-time diagnostic not modelled
 tests/classes/this.phpt	compile-error	compile-time diagnostic not modelled
 tests/classes/type_hinting_005a.phpt	compile-error	compile-time diagnostic not modelled

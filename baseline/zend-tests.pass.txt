@@ -520,6 +520,7 @@ Zend/tests/closures/closure_054.phpt
 Zend/tests/closures/closure_055.phpt
 Zend/tests/closures/closure_056.phpt
 Zend/tests/closures/closure_057.phpt
+Zend/tests/closures/closure_060.phpt
 Zend/tests/closures/closure_063.phpt
 Zend/tests/closures/closure_065.phpt
 Zend/tests/closures/closure_066.phpt
@@ -1306,6 +1307,7 @@ Zend/tests/isset/bug29883.phpt
 Zend/tests/isset/bug62680.phpt
 Zend/tests/isset/bug63982.phpt
 Zend/tests/isset/bug74836.phpt
+Zend/tests/isset/bug80030.phpt
 Zend/tests/isset_non_object.phpt
 Zend/tests/iterator_key_by_ref.phpt
 Zend/tests/jmpznz_relative_offsets.phpt
@@ -1605,6 +1607,7 @@ Zend/tests/magic_methods/bug44899_2.phpt
 Zend/tests/magic_methods/bug46409.phpt
 Zend/tests/magic_methods/bug47353.phpt
 Zend/tests/magic_methods/bug47801.phpt
+Zend/tests/magic_methods/bug51822.phpt
 Zend/tests/magic_methods/bug52879.phpt
 Zend/tests/magic_methods/bug53826.phpt
 Zend/tests/magic_methods/bug54372.phpt
@@ -1651,6 +1654,8 @@ Zend/tests/magic_methods/call_static_002.phpt
 Zend/tests/magic_methods/call_static_003.phpt
 Zend/tests/magic_methods/call_static_004.phpt
 Zend/tests/magic_methods/call_static_007.phpt
+Zend/tests/magic_methods/class_toString_concat_non_interned_with_itself.phpt
+Zend/tests/magic_methods/class_toString_concat_with_itself.phpt
 Zend/tests/magic_methods/constructor_args.phpt
 Zend/tests/magic_methods/dtor_scope.phpt
 Zend/tests/magic_methods/magic_get_destroy_object.phpt
@@ -2788,6 +2793,7 @@ tests/classes/static_properties_001.phpt
 tests/classes/static_properties_undeclared_assign.phpt
 tests/classes/static_properties_undeclared_assignInc.phpt
 tests/classes/static_properties_undeclared_inc.phpt
+tests/classes/static_properties_undeclared_isset.phpt
 tests/classes/static_properties_undeclared_read.phpt
 tests/classes/tostring_002.phpt
 tests/classes/tostring_003.phpt

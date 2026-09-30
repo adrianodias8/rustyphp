@@ -555,7 +555,7 @@ impl<'a> super::FnCompiler<'a> {
         };
         let name_slot = self.sp_name_slot(name)?;
         let t = self.alloc_temp();
-        self.sp_get(class, target, name, name_slot)?;
+        self.sp_get(class, target, name, name_slot, false)?;
         self.emit(Op::StoreSlot(t));
         let local = Place {
             base: PlaceBase::Local(t),
@@ -627,26 +627,30 @@ impl<'a> super::FnCompiler<'a> {
     }
 
     /// Emit the read of `class::$name` for the rmw/read wrappers, dispatching
-    /// on literal vs dynamic name and compile-time vs runtime class.
+    /// on literal vs dynamic name and compile-time vs runtime class. `quiet`
+    /// selects the BP_VAR_IS form (see [`Op::StaticPropGet`]): true for the
+    /// read-only `isset`/`empty` tests, false for a read-modify-write, which
+    /// must keep throwing on an undeclared or inaccessible property.
     fn sp_get(
         &mut self,
         class: &ClassRef,
         target: Option<ClassTarget>,
         name: &SpName,
         name_slot: Option<u32>,
+        quiet: bool,
     ) -> R<()> {
         match (name, target) {
             (SpName::Lit(nm), Some(t)) => {
-                self.emit(Op::StaticPropGet { target: t, name: nm.clone().into() });
+                self.emit(Op::StaticPropGet { target: t, name: nm.clone().into(), quiet });
             }
             (SpName::Lit(nm), None) => {
                 self.push_class_value(class)?;
-                self.emit(Op::StaticPropGetDynamic { name: nm.clone().into() });
+                self.emit(Op::StaticPropGetDynamic { name: nm.clone().into(), quiet });
             }
             (SpName::Dyn(_), _) => {
                 self.push_class_value(class)?;
                 self.emit(Op::LoadSlot(name_slot.expect("dynamic name slot")));
-                self.emit(Op::StaticPropGetDynName);
+                self.emit(Op::StaticPropGetDynName { quiet });
             }
         }
         Ok(())
@@ -682,7 +686,9 @@ impl<'a> super::FnCompiler<'a> {
     /// operation (`isset`/`empty`): load the value, run `core` over a
     /// `Local`-rooted place on the temp, then free the temp. No write-back — the
     /// property is not modified, so this also avoids a visibility-checked
-    /// `StaticPropSet` on an out-of-scope read.
+    /// `StaticPropSet` on an out-of-scope read. The load is the QUIET form:
+    /// `isset`/`empty` never throw on an undeclared, inaccessible or
+    /// uninitialized static property — they read it as unset.
     pub(super) fn static_prop_read(
         &mut self,
         class: &ClassRef,
@@ -697,7 +703,7 @@ impl<'a> super::FnCompiler<'a> {
         };
         let name_slot = self.sp_name_slot(name)?;
         let t = self.alloc_temp();
-        self.sp_get(class, target, name, name_slot)?;
+        self.sp_get(class, target, name, name_slot, true)?;
         self.emit(Op::StoreSlot(t));
         let local = Place {
             base: PlaceBase::Local(t),
@@ -956,11 +962,20 @@ impl<'a> super::FnCompiler<'a> {
             // [obj] → Dup → rhs → Swap → PropGet → Swap → Binary → PropSet.
             self.emit(Op::Dup); // [obj, obj]
             self.expr(rhs)?; // [obj, obj, rhs]
+            // `.=` first tries the in-place append; a miss falls through
+            // into the ordinary sequence with the stack as it was.
+            let gate = (op == crate::hir::BinOp::Concat).then(|| {
+                self.emit(Op::PropConcatGate { name: name.clone().into(), done: Addr::MAX })
+            });
             self.emit(Op::Swap); // [obj, rhs, obj]
             self.emit(Op::PropGet { name: name.clone().into(), ic: PropIc::default() }); // [obj, rhs, val]
             self.emit(Op::Swap); // [obj, val, rhs]
             self.emit_binary(op);
-            self.emit(Op::PropSet { name: name.into(), ic: PropIc::default() });
+            self.emit(Op::PropSet { name: name.clone().into(), ic: PropIc::default() });
+            if let Some(at) = gate {
+                let done = self.here();
+                self.patch(at, Op::PropConcatGate { name: name.into(), done });
+            }
             return Ok(());
         }
         if place_has_prop(place) {
@@ -1117,6 +1132,17 @@ impl<'a> super::FnCompiler<'a> {
             return self.class_const_read(&class, &name, &place.steps, |s, p| s.empty(p));
         }
         if let Some((class, name)) = static_place_parts(&place.base) {
+            // Bare `empty(C::$p)`: the quiet read's value negated — no temp
+            // round-trip (`empty(x)` ≡ `!x` once a missing property reads as
+            // NULL, which the quiet form guarantees).
+            if place.steps.is_empty() {
+                match &name {
+                    SpName::Lit(n) => self.static_prop_load(&class, n, true)?,
+                    SpName::Dyn(e) => self.static_prop_load_dyn(&class, e, true)?,
+                }
+                self.emit(Op::Unary(crate::hir::UnOp::Not));
+                return Ok(());
+            }
             return self.static_prop_read(&class, &name, &place.steps, |s, p| s.empty(p));
         }
         if let Some(name) = self.prop_place(place)? {

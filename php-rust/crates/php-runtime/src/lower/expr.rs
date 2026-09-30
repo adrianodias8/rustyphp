@@ -1448,23 +1448,24 @@ impl<'f> Lowerer<'f> {
         line: Line,
     ) -> Result<Place, LowerError> {
         if let Expression::Access(Access::StaticProperty(sp)) = e {
-            // Only the same-hierarchy keywords guarantee a fatal-free read.
-            if matches!(
-                sp.class,
-                Expression::Self_(_) | Expression::Parent(_) | Expression::Static(_)
-            ) {
-                let class = self.class_ref_of(sp.class, line)?;
-                // `isset(self::${$p})` — dynamic property name reads through
-                // the same materialise-into-temp path as the literal form.
-                let base = if matches!(&sp.property, Variable::Direct(_)) {
-                    let name = static_prop_name(&sp.property, line)?.into();
-                    PlaceBase::StaticProp { class, name }
-                } else {
-                    let name = Box::new(self.lower_variable_name(&sp.property, line)?);
-                    PlaceBase::StaticPropDyn { class, name }
-                };
-                return Ok(Place { base, steps: Vec::new() });
-            }
+            // Any class expression: `self::`/`parent::`/`static::`, a NAMED
+            // class (`Foo::$p`) and a dynamic one (`$cls::$p`). The compiler
+            // reads a test place through the QUIET static fetch
+            // (`static_prop_read`), so an undeclared or inaccessible property
+            // answers "unset" instead of throwing — which is what made the
+            // named/dynamic forms unsafe here before, and left `isset(Foo::$p)`
+            // rejected as an unsupported construct (Zend/micro_bench.php).
+            let class = self.class_ref_of(sp.class, line)?;
+            // `isset(self::${$p})` — dynamic property name reads through
+            // the same materialise-into-temp path as the literal form.
+            let base = if matches!(&sp.property, Variable::Direct(_)) {
+                let name = static_prop_name(&sp.property, line)?.into();
+                PlaceBase::StaticProp { class, name }
+            } else {
+                let name = Box::new(self.lower_variable_name(&sp.property, line)?);
+                PlaceBase::StaticPropDyn { class, name }
+            };
+            return Ok(Place { base, steps: Vec::new() });
         }
         // `isset(self::TABLE[$k])` / `empty(Foo::MAP[$k])` — an index into a class
         // constant array. A class constant is a read-only container, so it is a

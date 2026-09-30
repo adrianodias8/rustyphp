@@ -58,6 +58,17 @@ pub extern "C" fn phpr_null_lever_pad() -> u64 {
     std::hint::black_box(0xC0FF_EEu64)
 }
 
+/// The value a `quiet` (BP_VAR_IS) static-property read pushes: the cell's
+/// value, or NULL when the property reads as unset — no cell (undeclared /
+/// not visible from here) or a typed property still uninitialized (`Undef`).
+#[inline]
+fn static_is_value(cell: Option<Rc<RefCell<Zval>>>) -> Zval {
+    match cell.map(|c| c.borrow().deref_clone()) {
+        None | Some(Zval::Undef) => Zval::Null,
+        Some(v) => v,
+    }
+}
+
 /// A file op that a userland stream wrapper (`stream_wrapper_register`) can
 /// service via its `stream_*` methods, if its first argument is a `UserStream`.
 fn is_user_stream_op(name: &[u8]) -> bool {
@@ -670,24 +681,30 @@ impl<'m> super::Vm<'m> {
     }
 
     /// Fused `$slot .= rhs` (WP-55, [`Op::ConcatAssignSlot`]): in-place
-    /// append when the slot holds a directly-owned UNIQUE Str and the rhs is
-    /// a Str (`Rc::get_mut` — an alias, the const pool, or a Ref slot makes
-    /// it fail and the copy path runs: COW by construction). The fallback
+    /// append when the slot's Str is UNIQUE — an alias or the const pool
+    /// makes it fail and the copy path runs: COW by construction. The fallback
     /// reproduces the old `LoadSlot; Swap; Binary; Dup; StoreSlot` sequence
     /// exactly: silent slot read (`read_slot`), shared `binary_value_ab`
-    /// (same diags/`__toString`-less funnel), typed-ref coercion on the
+    /// (same diags; an object operand goes through `__toString()` there,
+    /// as the plain `.` operator's Stringify does), typed-ref coercion on the
     /// STORED copy only, write-through `store_slot`, `gc_note` on the
     /// displaced value (dtor timing). The in-place arm skips `gc_note`
     /// legitimately: the displaced value is the very Str being extended.
     #[inline(never)]
     fn concat_assign_slot(&mut self, top: usize, s: crate::hir::Slot) -> Result<Zval, PhpError> {
         let rhs = self.frames[top].stack.pop().expect("ConcatAssignSlot rhs");
-        if let Zval::Str(rv) = &rhs {
-            if let Zval::Str(l) = &mut self.frames[top].slots[s as usize] {
-                if l.try_append(rv.as_bytes()) {
-                    return Ok(Zval::Str(l.clone()));
-                }
-            }
+        // In place when the slot's string — held directly, or behind the
+        // reference a by-ref parameter / `global` / `static` / by-ref capture
+        // binds — is unique and the operand converts without side effects
+        // (`concat_in_place`). With typed references alive the Ref form
+        // keeps the ordinary path, whose store coerces through them.
+        let typed_refs_empty = self.typed_refs.is_empty();
+        if let Some(v) = super::concat_in_place(
+            &mut self.frames[top].slots[s as usize],
+            &rhs,
+            || typed_refs_empty,
+        ) {
+            return Ok(v);
         }
         let lhs = read_slot(&self.frames[top].slots[s as usize]);
         let v = self.binary_value_ab(BinOp::Concat, lhs, rhs)?;
@@ -702,6 +719,59 @@ impl<'m> super::Vm<'m> {
         let old = store_slot(&mut self.frames[top].slots[s as usize], stored);
         self.gc_note(&old);
         Ok(v)
+    }
+
+    /// Body of [`Op::PropConcatGate`]: `[.., obj, obj, rhs]` is only PEEKED.
+    /// `Some(result)` = the property's string was extended in place;
+    /// `None` = nothing was touched. Every condition below is one the
+    /// ordinary `PropGet … PropSet` sequence would have had to handle
+    /// specially; when any fails, that sequence runs instead.
+    #[inline(never)]
+    fn prop_concat_in_place(&mut self, top: usize, name: &[u8]) -> Option<Zval> {
+        let n = self.frames[top].stack.len();
+        if !matches!(
+            self.frames[top].stack[n - 1],
+            Zval::Str(_) | Zval::Long(_) | Zval::Double(_) | Zval::Bool(_) | Zval::Null
+        ) {
+            return None;
+        }
+        let Zval::Object(o) = self.frames[top].stack[n - 2].deref_clone() else {
+            return None;
+        };
+        let cur = self.frames[top].class;
+        let cid = {
+            let b = o.try_borrow().ok()?;
+            if b.lazy.is_some() || b.proxy_instance.is_some() || b.info.is_enum_case {
+                return None;
+            }
+            b.class_id as usize
+        };
+        if self.prop_hook(cid, name, false).is_some() || self.prop_hook(cid, name, true).is_some() {
+            return None;
+        }
+        let mut slot_idx: Option<u32> = None;
+        let key: Cow<[u8]> = match resolve_prop_access(&self.classes, cid, name, cur) {
+            PropAccess::Slot { key: k, slot } => {
+                slot_idx = slot;
+                Cow::Borrowed(k)
+            }
+            PropAccess::Dynamic => Cow::Borrowed(name),
+            PropAccess::Denied { .. } => return None,
+        };
+        let objz = Zval::Object(Rc::clone(&o));
+        if self.readonly_rmw_error(&objz, &key, name).is_some()
+            || asym_write_error(&self.classes, cur, cid, name, "modify").is_some()
+        {
+            return None;
+        }
+        let typed_refs_empty = self.typed_refs.is_empty();
+        let rhs = &self.frames[top].stack[n - 1];
+        let mut b = o.try_borrow_mut().ok()?;
+        let slot = match slot_idx {
+            Some(i) => b.props.get_slot_mut(i),
+            None => b.props.get_mut(&key),
+        }?;
+        super::concat_in_place(slot, rhs, || typed_refs_empty)
     }
 
     /// Corpo di `ConcatN`, condiviso con `ConcatNConst` (S-109 F2, criterio
@@ -741,6 +811,16 @@ impl<'m> super::Vm<'m> {
         if let Some(r) = binary_fast(b, &lhs, &rhs) {
             return Ok(r);
         }
+        // `Binary(Concat)` is emitted only for compound assignment (plain `.`
+        // compiles to Stringify + ConcatN): an object operand converts
+        // through `__toString()` here (see `concat_object_operands`).
+        let (lhs, rhs) = if matches!(b, BinOp::Concat)
+            && (deref_object(&lhs).is_some() || deref_object(&rhs).is_some())
+        {
+            self.concat_object_operands(lhs, rhs)?
+        } else {
+            (lhs, rhs)
+        };
         // A *loose* comparison reads the whole property table, so it
         // initializes a lazy operand (PHP 8.4, init_trigger_compare)
         // and compares a proxy's real instance; `===`/`!==` compare
@@ -1399,11 +1479,18 @@ impl<'m> super::Vm<'m> {
     /// argomenti già sfilati dalla pila (array esatto per arità <=4, Vec oltre)
     /// e restituisce il valore da pushare. Fuori da `run_loop` di proposito:
     /// i rami freddi non pesano sul layout del dispatcher.
-    fn value_builtin_call(
+    ///
+    /// Shared with the DYNAMIC call path (`Vm::invoke_named`: string
+    /// callables, `call_user_func`, first-class callables, and the run-time
+    /// namespace fallback of an unqualified call), so the pre-call semantics
+    /// below hold however the builtin was reached — `count($countable)`
+    /// written unqualified inside a namespace used to skip them and raise a
+    /// TypeError (Composer's `Installer::doUpdate`).
+    pub(super) fn value_builtin_call(
         &mut self,
         top: usize,
         f: crate::builtin::BuiltinFn,
-        name: &std::rc::Rc<[u8]>,
+        name: &[u8],
         args: &mut [Zval],
     ) -> Result<Zval, PhpError> {
         // A whole-object exporter initializes a lazy argument first
@@ -2753,6 +2840,14 @@ impl<'m> super::Vm<'m> {
                 }
                 Op::AssignOpPath { base, nkeys, op } => {
                     let rhs = self.frames[top].stack.pop().expect("AssignOpPath rhs");
+                    // The leaf applies the operator without VM access: an
+                    // object operand of `.=` is converted through
+                    // `__toString()` here, before the walk.
+                    let rhs = if matches!(*op, BinOp::Concat) && deref_object(&rhs).is_some() {
+                        self.concat_object_operands(Zval::Null, rhs)?.1
+                    } else {
+                        rhs
+                    };
                     let mut keys = self.pop_keys(top, *nkeys);
                     let key = keys.pop().expect("AssignOpPath key");
                     let result = self.path_op(*base, top, keys, Last::OpSet { key, op: *op, rhs })?;
@@ -5269,6 +5364,14 @@ impl<'m> super::Vm<'m> {
                     let obj = self.frames[top].stack.pop().expect("BinaryTCPropSetPop object");
                     self.prop_set_entry::<true>(top, obj, value, name, ic)?;
                 }
+                Op::PropConcatGate { name, done } => {
+                    if let Some(v) = self.prop_concat_in_place(top, &name) {
+                        let st = &mut self.frames[top].stack;
+                        st.truncate(st.len() - 3); // rhs, obj, obj
+                        st.push(v);
+                        self.frames[top].ip = *done as usize;
+                    }
+                }
                 Op::PropOpSet { name, op } => {
                     let rhs = self.frames[top].stack.pop().expect("PropOpSet rhs");
                     let obj = self.frames[top].stack.pop().expect("PropOpSet object");
@@ -6393,13 +6496,20 @@ impl<'m> super::Vm<'m> {
                         None => self.frames[top].stack.push(Zval::Null),
                     }
                 }
-                Op::StaticPropGet { target, name } => {
-                    let cell = match self.ensure_static(*target, &name, top, ip)? {
-                        Some(c) => c,
-                        None => continue, // init thunk scheduled; re-run after it
-                    };
-                    let v = cell.borrow().deref_clone();
-                    self.frames[top].stack.push(v);
+                Op::StaticPropGet { target, name, quiet } => {
+                    if *quiet {
+                        let Some(cell) = self.ensure_static_is(*target, &name, top, ip)? else {
+                            continue; // init thunk scheduled; re-run after it
+                        };
+                        self.frames[top].stack.push(static_is_value(cell));
+                    } else {
+                        let cell = match self.ensure_static(*target, &name, top, ip)? {
+                            Some(c) => c,
+                            None => continue, // init thunk scheduled; re-run after it
+                        };
+                        let v = cell.borrow().deref_clone();
+                        self.frames[top].stack.push(v);
+                    }
                 }
                 Op::StaticPropSet { target, name } => {
                     let cell = match self.ensure_static(*target, &name, top, ip)? {
@@ -6425,6 +6535,17 @@ impl<'m> super::Vm<'m> {
                         None => continue,
                     };
                     let rhs = self.frames[top].stack.pop().expect("StaticPropOpSet rhs");
+                    if matches!(*op, BinOp::Concat) {
+                        // `C::$p .= rhs` in place (see `concat_in_place`).
+                        let done = match cell.try_borrow_mut() {
+                            Ok(mut b) => super::concat_in_place(&mut b, &rhs, || false),
+                            Err(_) => None,
+                        };
+                        if let Some(v) = done {
+                            self.frames[top].stack.push(v);
+                            continue;
+                        }
+                    }
                     let old = cell.borrow().deref_clone();
                     #[cfg(feature = "op-census")]
                     if matches!(*op, crate::hir::BinOp::Concat) {
@@ -6449,7 +6570,7 @@ impl<'m> super::Vm<'m> {
                     *cell.borrow_mut() = newv.clone();
                     self.frames[top].stack.push(if *pre { newv } else { old });
                 }
-                Op::StaticPropGetDynName => {
+                Op::StaticPropGetDynName { quiet } => {
                     // [classRef, name]: peek both so a scheduled init thunk can
                     // re-run this op with its operands intact (PAR).
                     let n = self.frames[top].stack.len();
@@ -6458,13 +6579,24 @@ impl<'m> super::Vm<'m> {
                         convert::to_zstr_cast(&nameval, &mut self.diags).as_bytes().to_vec().into();
                     let classval = self.frames[top].stack[n - 2].clone();
                     let cid = self.resolve_dynamic_class(&classval)?;
-                    let cell = match self.ensure_static(ClassTarget::Class(cid), &name, top, ip)? {
-                        Some(c) => c,
-                        None => continue,
+                    let v = if *quiet {
+                        let Some(cell) =
+                            self.ensure_static_is(ClassTarget::Class(cid), &name, top, ip)?
+                        else {
+                            continue;
+                        };
+                        static_is_value(cell)
+                    } else {
+                        let cell =
+                            match self.ensure_static(ClassTarget::Class(cid), &name, top, ip)? {
+                                Some(c) => c,
+                                None => continue,
+                            };
+                        let v = cell.borrow().deref_clone();
+                        v
                     };
                     self.frames[top].stack.pop(); // name
                     self.frames[top].stack.pop(); // class
-                    let v = cell.borrow().deref_clone();
                     self.frames[top].stack.push(v);
                 }
                 Op::StaticPropSetDynName => {
@@ -6484,17 +6616,28 @@ impl<'m> super::Vm<'m> {
                     *cell.borrow_mut() = value.clone();
                     self.frames[top].stack.push(value);
                 }
-                Op::StaticPropGetDynamic { name } => {
+                Op::StaticPropGetDynamic { name, quiet } => {
                     // The class reference is on top; peek it so a scheduled init
                     // thunk can re-run this op without losing it (PAR).
                     let classval = self.frames[top].stack.last().expect("class ref").clone();
                     let cid = self.resolve_dynamic_class(&classval)?;
-                    let cell = match self.ensure_static(ClassTarget::Class(cid), &name, top, ip)? {
-                        Some(c) => c,
-                        None => continue,
+                    let v = if *quiet {
+                        let Some(cell) =
+                            self.ensure_static_is(ClassTarget::Class(cid), &name, top, ip)?
+                        else {
+                            continue;
+                        };
+                        static_is_value(cell)
+                    } else {
+                        let cell =
+                            match self.ensure_static(ClassTarget::Class(cid), &name, top, ip)? {
+                                Some(c) => c,
+                                None => continue,
+                            };
+                        let v = cell.borrow().deref_clone();
+                        v
                     };
                     self.frames[top].stack.pop(); // remove the class reference
-                    let v = cell.borrow().deref_clone();
                     self.frames[top].stack.push(v);
                 }
                 Op::StaticPropSetDynamic { name } => {
@@ -6518,6 +6661,17 @@ impl<'m> super::Vm<'m> {
                     };
                     self.frames[top].stack.pop(); // class
                     let rhs = self.frames[top].stack.pop().expect("StaticPropOpSetDynamic rhs");
+                    if matches!(*op, BinOp::Concat) {
+                        // `$cls::$p .= rhs` in place (see `concat_in_place`).
+                        let done = match cell.try_borrow_mut() {
+                            Ok(mut b) => super::concat_in_place(&mut b, &rhs, || false),
+                            Err(_) => None,
+                        };
+                        if let Some(v) = done {
+                            self.frames[top].stack.push(v);
+                            continue;
+                        }
+                    }
                     let old = cell.borrow().deref_clone();
                     #[cfg(feature = "op-census")]
                     if matches!(*op, crate::hir::BinOp::Concat) {

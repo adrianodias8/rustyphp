@@ -281,7 +281,7 @@ Ordered by measured size ÷ estimated risk. None touches `php-types`' public API
 
 | # | slice | measured ceiling | touches |
 |---:|---|---|---|
-| 1 | `.=` with int/float operand: convert, then take the in-place path | 992× → ~2× on that pattern | one op handler |
+| 1 | ~~`.=` with int/float operand: convert, then take the in-place path~~ **done, session 2** — and for every target form (property, array element, static, reference), which were all quadratic too | 992× → 1.7× on that pattern; 231–706× on the others | five handlers + one gate op |
 | 2 | Symbol maps under FxHash; incremental `unit_fp` | up to 28.7 % of autoload | lowering, unit linking |
 | 3 | Resolve builtins and `host_builtin_canonical` at compile/link time | 6.1 % + ~2 % of a request | compiler, call ops |
 | 4 | `foreach` by position over a held `Rc` clone instead of a snapshot | 1 alloc + 5 clones/element; `foreach` 8–10× → ? | iterator state |
@@ -291,9 +291,10 @@ Ordered by measured size ÷ estimated risk. None touches `php-types`' public API
 | 8 | Worker mode | removes boot per request | `php-server` |
 | 9 | **Re-profile.** Only then ask whether arrays need a new representation (C-lite) | — | — |
 
-Two correctness bugs found on the way block the target frameworks and should be fixed alongside
-slice 1, each with its `.phpt`: `count()` on a `Countable` called unqualified inside a namespace
-(breaks Composer 2.10.1), and `isset(Class::$static)` rejected at parse time.
+Two correctness bugs found on the way blocked the target frameworks; **both fixed in session 2**
+with their `.phpt`s: `count()` on a `Countable` through any dynamic call (it broke Composer
+2.10.1, which now runs end to end), and the missing quiet static-property fetch behind
+`isset(Class::$static)`.
 
 Item 6 is the largest and the riskiest: upstream records that `run_loop` is layout-sensitive
 ("icache-bound"), with null-lever noise bands of several ns/iter, and its conventions allow no new

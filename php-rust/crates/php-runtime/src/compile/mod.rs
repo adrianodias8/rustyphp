@@ -1582,6 +1582,10 @@ impl<'a> FnCompiler<'a> {
                 self.expr(name)?;
                 self.emit(Op::PropGetDynamicSilent);
             }
+            // `C::$p ?? d`, `C::$arr[k] ?? d`, `C::$o->p ?? d`: the static
+            // property at the root of the chain is read quietly (BP_VAR_IS).
+            ExprKind::StaticProp { class, name } => self.static_prop_load(class, name, true)?,
+            ExprKind::StaticPropDyn { class, name } => self.static_prop_load_dyn(class, name, true)?,
             ExprKind::PropGet { object, name, nullsafe } if !nullsafe => {
                 // `$o->p[k] ?? d`: an unset `$o->p` must yield null silently (no
                 // "Undefined property" warning, and `__get` runs only when

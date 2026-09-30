@@ -310,6 +310,10 @@ fn effect(op: &Op, park_targets: &[usize]) -> Effect {
             e.uses.push(*slot);
             e.edges.push((*skip as usize, Vec::new()));
         }
+        // Stack-only conditional jump (hit → `done`, miss → fall through).
+        Op::PropConcatGate { done, .. } => {
+            e.edges.push((*done as usize, Vec::new()));
+        }
         Op::StaticGuard { skip, .. } => e.edges.push((*skip as usize, Vec::new())),
         Op::CatchMatch { var, body, .. } => {
             // `var` è definita solo sull'arco preso verso il corpo del catch.
@@ -629,6 +633,7 @@ fn renounce(func: &Func) -> (bool, Bits) {
             | Op::IncDecSlotJmp { .. }
             | Op::PropGetSlot { .. }
             | Op::PropDimGetConst { .. }
+            | Op::PropConcatGate { .. }
             | Op::PropSetPop { .. }
             | Op::StringifySlot { .. }
             | Op::PropGetSlotRecv { .. }

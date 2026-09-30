@@ -222,6 +222,10 @@ fn thread_jumps(ops: &mut [Op], lines: &[Line]) {
                 let t = final_target(ops, *a);
                 (t != *a).then_some(Op::JumpIfNotNull(t))
             }
+            Op::PropConcatGate { name, done } => {
+                let t = final_target(ops, *done);
+                (t != *done).then_some(Op::PropConcatGate { name: name.clone(), done: t })
+            }
             Op::CmpJmp { op, addr, when } => {
                 let t = final_target(ops, *addr);
                 (t != *addr).then_some(Op::CmpJmp { op: *op, addr: t, when: *when })

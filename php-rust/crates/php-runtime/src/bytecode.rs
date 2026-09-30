@@ -1225,8 +1225,9 @@ pub enum Op {
     /// `[classRef, name] -> [value]` — `C::$$x` / `C::${expr}` read: both the
     /// class reference and the property NAME are runtime values. Operands are
     /// peeked (popped only on success) so a scheduled static-init thunk can
-    /// re-run the op, like [`Op::StaticPropGetDynamic`].
-    StaticPropGetDynName,
+    /// re-run the op, like [`Op::StaticPropGetDynamic`]. `quiet`: see
+    /// [`Op::StaticPropGet`].
+    StaticPropGetDynName { quiet: bool },
     /// `[rhs, classRef, name] -> [rhs]` — `C::$$x = rhs` with a runtime name.
     StaticPropSetDynName,
     /// `[classRef, argsArray, method] -> [ret]` — `$cls::$m(...)` with named or
@@ -1309,7 +1310,14 @@ pub enum Op {
     /// declaring class is resolved by walking the parent chain; the cell is
     /// lazily initialised (const default inline, non-const via its init thunk) and
     /// shared for the run. Visibility is enforced against the running frame's class.
-    StaticPropGet { target: ClassTarget, name: Rc<[u8]> },
+    ///
+    /// `quiet` is Zend's `BP_VAR_IS` fetch (ZEND_FETCH_STATIC_PROP_IS), emitted
+    /// for `isset()`, `empty()` and the left operand of `??`: an undeclared
+    /// property, one not visible from the running scope, and a typed property
+    /// that is still uninitialized all yield NULL silently instead of throwing.
+    /// A class that cannot be resolved still throws — `isset(NoSuch::$p)` is
+    /// "Class "NoSuch" not found" in PHP too.
+    StaticPropGet { target: ClassTarget, name: Rc<[u8]>, quiet: bool },
     /// `[value] -> [value]` — write `value` into `target::$name` (through the
     /// shared cell); leaves the assigned value.
     StaticPropSet { target: ClassTarget, name: Rc<[u8]> },
@@ -1323,8 +1331,8 @@ pub enum Op {
     StaticPropIncDec { target: ClassTarget, name: Rc<[u8]>, inc: bool, pre: bool },
     /// `[classRef] -> [value]` — `$cls::$name` read (PAR, dynamic class): the
     /// class reference sits on top; it is resolved at run time, then the static
-    /// property is read like [`Op::StaticPropGet`].
-    StaticPropGetDynamic { name: Rc<[u8]> },
+    /// property is read like [`Op::StaticPropGet`] (`quiet` included).
+    StaticPropGetDynamic { name: Rc<[u8]>, quiet: bool },
     /// `[value, classRef] -> [value]` — `$cls::$name = value` (PAR): the class
     /// reference is on top, the value beneath. Resolved at run time, then written.
     StaticPropSetDynamic { name: Rc<[u8]> },
@@ -1399,6 +1407,20 @@ pub enum Op {
         /// closing the window for temp deaths the drop sites don't gc_note.
         main: bool,
     },
+
+    /// `[obj, obj, rhs] -> [result]` **and jump to `done`**, or — a miss —
+    /// leave the stack untouched and fall through. The gate in front of the
+    /// compound `$obj->name .= rhs`, which otherwise runs as the read-modify-
+    /// write sequence `Swap, PropGet, Swap, Binary(Concat), PropSet` (kept
+    /// that way so a magic property routes through `__get` then `__set`).
+    /// That sequence copies the whole accumulated string on every append.
+    /// The gate extends the property's string in place when nothing
+    /// observable distinguishes the two: a present, accessible, plain
+    /// (no hook, not readonly, not lazy) property holding a uniquely owned
+    /// string, and an operand whose string conversion has no side effect.
+    /// Every other case — magic, hooks, objects as operands, non-string
+    /// values, shared strings — is a miss and takes the unchanged sequence.
+    PropConcatGate { name: Rc<[u8]>, done: Addr },
 
     /// No-op. Kept so a [`crate::hir::StmtKind::Nop`] / `Label` has a stable
     /// address to compile pass-throughs against without special-casing empty

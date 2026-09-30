@@ -424,6 +424,10 @@ impl<'a> super::FnCompiler<'a> {
                 // warning, so a plain `$x` uses the silent LoadSlot, not LoadVar.
                 if let ExprKind::Var(slot) = &a.kind {
                     self.emit(Op::LoadSlot(*slot));
+                } else if matches!(a.kind, ExprKind::StaticProp { .. } | ExprKind::StaticPropDyn { .. }) {
+                    // `C::$p ?? d`: the quiet static read — an undeclared,
+                    // inaccessible or uninitialized property takes the default.
+                    self.coalesce_load(a)?;
                 } else {
                     self.expr(a)?;
                 }
@@ -768,11 +772,7 @@ impl<'a> super::FnCompiler<'a> {
                 self.expr(name)?;
                 self.emit(Op::ClassConstDynamic);
             }
-            ExprKind::StaticPropDyn { class, name } => {
-                self.push_class_value(class)?;
-                self.expr(name)?;
-                self.emit(Op::StaticPropGetDynName);
-            }
+            ExprKind::StaticPropDyn { class, name } => self.static_prop_load_dyn(class, name, false)?,
             ExprKind::StaticPropDynAssign { class, name, rhs } => {
                 // rhs first, so the class+name pair sits on top for the
                 // init-thunk re-run (mirrors StaticPropSetDynamic).
@@ -781,15 +781,7 @@ impl<'a> super::FnCompiler<'a> {
                 self.expr(name)?;
                 self.emit(Op::StaticPropSetDynName);
             }
-            ExprKind::StaticProp { class, name } => {
-                if self.is_runtime_class(class) {
-                    self.push_class_value(class)?;
-                    self.emit(Op::StaticPropGetDynamic { name: name.clone().into() });
-                } else {
-                    let (target, _) = self.resolve_target(class)?;
-                    self.emit(Op::StaticPropGet { target, name: name.clone().into() });
-                }
-            }
+            ExprKind::StaticProp { class, name } => self.static_prop_load(class, name, false)?,
             ExprKind::StaticPropAssign { class, name, op, rhs } => {
                 // `$cls::$p` (PAR): resolve the class at run time; the rhs is
                 // pushed first so the class reference ends up on top.
@@ -814,7 +806,7 @@ impl<'a> super::FnCompiler<'a> {
                             self.push_class_value(class)?;
                             self.emit(Op::StoreSlot(t));
                             self.emit(Op::LoadSlot(t));
-                            self.emit(Op::StaticPropGetDynamic { name: name.clone().into() });
+                            self.emit(Op::StaticPropGetDynamic { name: name.clone().into(), quiet: false });
                             let to_end = self.emit(Op::JumpIfNotNull(Addr::MAX));
                             self.expr(rhs)?;
                             self.emit(Op::LoadSlot(t)); // class ref on top for the set
@@ -838,7 +830,7 @@ impl<'a> super::FnCompiler<'a> {
                     }
                     StaticAssignOp::Coalesce => {
                         // `C::$p ??= rhs`: read, keep if non-null, else assign.
-                        self.emit(Op::StaticPropGet { target, name: name.clone().into() });
+                        self.emit(Op::StaticPropGet { target, name: name.clone().into(), quiet: false });
                         let to_end = self.emit(Op::JumpIfNotNull(Addr::MAX));
                         self.expr(rhs)?;
                         self.emit(Op::StaticPropSet { target, name: name.clone().into() });
@@ -2047,6 +2039,29 @@ impl<'a> super::FnCompiler<'a> {
                 ))
             }
         }
+    }
+
+    /// Push `class::$name`. `quiet` selects the BP_VAR_IS form used by `??`
+    /// (and, through `static_prop_read`, by `isset`/`empty`); see
+    /// [`Op::StaticPropGet`].
+    pub(super) fn static_prop_load(&mut self, class: &ClassRef, name: &[u8], quiet: bool) -> R<()> {
+        if self.is_runtime_class(class) {
+            self.push_class_value(class)?;
+            self.emit(Op::StaticPropGetDynamic { name: name.into(), quiet });
+        } else {
+            let (target, _) = self.resolve_target(class)?;
+            self.emit(Op::StaticPropGet { target, name: name.into(), quiet });
+        }
+        Ok(())
+    }
+
+    /// Push `class::${name}` (runtime property name); `quiet` as in
+    /// [`Self::static_prop_load`].
+    pub(super) fn static_prop_load_dyn(&mut self, class: &ClassRef, name: &Expr, quiet: bool) -> R<()> {
+        self.push_class_value(class)?;
+        self.expr(name)?;
+        self.emit(Op::StaticPropGetDynName { quiet });
+        Ok(())
     }
 
     /// Emit the run-time constructor invocation for `new static` / `new $cls` (the
