@@ -57,6 +57,53 @@ thread_local! {
     static UPLOADED_FILES: RefCell<Vec<Vec<u8>>> = const { RefCell::new(Vec::new()) };
 }
 
+/// Worker mode (fork, DECISION_KERNEL.md §5): what `phpr_handle_request()`
+/// hands back to the host for one request.
+pub struct WorkerResponse {
+    pub status: i64,
+    pub reason: Option<Vec<u8>>,
+    /// Full `Name: value` lines, in order (`X-Powered-By` first).
+    pub headers: Vec<Vec<u8>>,
+    pub body: Vec<u8>,
+    /// `log_errors` lines for the host's stderr.
+    pub error_log: Vec<Vec<u8>>,
+}
+
+/// The host side of worker mode, installed on the worker's thread before its
+/// script runs: `next_request` blocks until a request arrives (`None` = the
+/// worker should exit), `send_response` writes one response.
+pub struct WorkerHooks {
+    pub next_request: Box<dyn FnMut() -> Option<WebRequest>>,
+    pub send_response: Box<dyn FnMut(WorkerResponse)>,
+}
+
+thread_local! {
+    static WORKER_HOOKS: RefCell<Option<WorkerHooks>> = const { RefCell::new(None) };
+}
+
+pub fn set_worker_hooks(hooks: WorkerHooks) {
+    WORKER_HOOKS.with(|h| *h.borrow_mut() = Some(hooks));
+}
+
+/// Whether this thread runs under a worker SAPI.
+pub fn worker_hooks_installed() -> bool {
+    WORKER_HOOKS.with(|h| h.borrow().is_some())
+}
+
+/// Block for the next request. `None` = no hooks on this thread (not a
+/// worker); `Some(None)` = shutdown.
+pub fn worker_next_request() -> Option<Option<WebRequest>> {
+    WORKER_HOOKS.with(|h| h.borrow_mut().as_mut().map(|h| (h.next_request)()))
+}
+
+pub fn worker_send_response(resp: WorkerResponse) {
+    WORKER_HOOKS.with(|h| {
+        if let Some(h) = h.borrow_mut().as_mut() {
+            (h.send_response)(resp);
+        }
+    });
+}
+
 pub fn set_web_request(req: Rc<WebRequest>) {
     WEB_REQUEST.with(|r| *r.borrow_mut() = Some(req));
 }

@@ -37,3 +37,7 @@ RUN cargo install --locked rustfilt \
 ENV CARGO_TARGET_DIR=/target \
     PHP_ORACLE=/usr/local/bin/php
 WORKDIR /work/php-rust/php-rust
+
+# Session 5: wrk for the worker-mode benchmarks (bench/worker/bench-wrk.sh).
+RUN apt-get update && apt-get install -y --no-install-recommends wrk \
+    && rm -rf /var/lib/apt/lists/*

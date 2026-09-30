@@ -51,6 +51,7 @@ const INI_ALL: i64 = 7;
 
 /// One registered directive: its startup default (`global` — what
 /// `ini_restore` reverts to), current value (`local`), and set-behaviour.
+#[derive(Clone)]
 pub(super) struct IniEntry {
     pub global: Vec<u8>,
     pub local: Vec<u8>,
@@ -78,6 +79,7 @@ impl IniEntry {
 }
 
 /// The table, ordered by directive name (`ini_get_all` lists alphabetically).
+#[derive(Clone)]
 pub(super) struct IniTable(pub BTreeMap<Vec<u8>, IniEntry>);
 
 impl IniTable {

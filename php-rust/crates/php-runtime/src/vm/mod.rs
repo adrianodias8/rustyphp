@@ -90,6 +90,7 @@ mod tidy;
 mod xslt;
 mod tokenizer;
 mod websapi;
+mod worker;
 use arrays::*;
 use calls::*;
 use oop::*;
@@ -812,6 +813,7 @@ pub fn vm_new<'m>(
         output_start: None,
         ini: ini::IniTable::new(),
         session: session::SessionState::default(),
+        worker: None,
         response_code: None,
         web: false,
         response_headers: Vec::new(),
@@ -3514,6 +3516,9 @@ pub struct Vm<'m> {
     ini: ini::IniTable,
     /// ext/session runtime state (`session_start` → `$_SESSION` → commit).
     session: session::SessionState,
+    /// Worker mode (fork): the post-boot snapshot `phpr_handle_request()`
+    /// restores after every request. `None` until the first request.
+    worker: Option<Box<worker::WorkerState>>,
     /// `http_response_code()` — `None` until explicitly set (CLI reports `false`
     /// for an unset code).
     response_code: Option<i64>,
@@ -15584,6 +15589,7 @@ host_builtins! {
     b"set_include_path" => vm.ho_set_include_path(args),
     b"restore_include_path" => vm.ho_restore_include_path(),
     b"session_status" => vm.ho_session_status(),
+    b"phpr_handle_request" => vm.ho_phpr_handle_request(args),
     b"session_id" => vm.ho_session_id(args),
     b"session_name" => vm.ho_session_name(args),
     b"session_save_path" => vm.ho_session_save_path(args),

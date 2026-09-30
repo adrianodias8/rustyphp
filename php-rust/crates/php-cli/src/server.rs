@@ -785,10 +785,19 @@ pub fn serve(addr: &str, mut rest: std::iter::Peekable<impl Iterator<Item = std:
     };
     let mut docroot: Option<PathBuf> = None;
     let mut router: Option<PathBuf> = None;
+    let mut worker: Option<PathBuf> = None;
+    let mut workers: usize = 0;
     while let Some(arg) = rest.next() {
         let bytes = arg.as_os_str().as_bytes();
         if bytes == b"-t" {
             docroot = rest.next().map(PathBuf::from);
+        } else if bytes == b"--worker" {
+            worker = rest.next().map(PathBuf::from);
+        } else if bytes == b"--workers" {
+            workers = rest
+                .next()
+                .and_then(|n| n.to_string_lossy().parse().ok())
+                .unwrap_or(0);
         } else if router.is_none() {
             router = Some(PathBuf::from(arg));
         }
@@ -817,6 +826,15 @@ pub fn serve(addr: &str, mut rest: std::iter::Peekable<impl Iterator<Item = std:
             return 1;
         }
     };
+    if let Some(script) = worker {
+        let script = std::fs::canonicalize(&script).unwrap_or(script);
+        let n = if workers == 0 {
+            std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1)
+        } else {
+            workers
+        };
+        return serve_workers(listener, cfg, script, n);
+    }
     log_line(&format!(
         "PHP 8.5.7 Development Server (http://{host}:{port}) started"
     ));
@@ -833,4 +851,247 @@ pub fn serve(addr: &str, mut rest: std::iter::Peekable<impl Iterator<Item = std:
         log_line(&format!("{}:{} Closing", peer.0, peer.1));
     }
     0
+}
+
+// ---------------------------------------------------------------------------
+// Worker mode (fork, DECISION_KERNEL.md §5): `phpr -S host:port --worker
+// worker.php [--workers N]`. N OS threads, one `Vm` each, each running
+// `worker.php` once; the script boots the application and then loops on
+// `phpr_handle_request(callable)`, which takes the next request off a shared
+// queue, runs the callable and sends the response back. Connections are
+// handled by one lightweight thread each (accept → parse → queue → write,
+// keep-alive served request after request), so connections outnumber
+// workers freely and no connection can starve another — the shape of
+// php-fpm behind nginx or of FrankenPHP's Go front end, without the extra
+// process. Every request goes to the worker script — no static files, no
+// router (PHP only). A worker whose script returns (or dies) is restarted.
+// ---------------------------------------------------------------------------
+
+/// One request queued for a worker, with the channel its response goes to.
+struct WorkerJob {
+    web: WebRequest,
+    reply: std::sync::mpsc::SyncSender<php_types::sapi::WorkerResponse>,
+}
+
+/// What the connection thread needs to write the response.
+#[derive(Clone)]
+struct PendingRequest {
+    protocol: (u8, u8),
+    head: bool,
+    keep_alive: bool,
+    host: Option<Vec<u8>>,
+}
+
+type JobQueue = std::sync::Arc<std::sync::Mutex<std::sync::mpsc::Receiver<WorkerJob>>>;
+
+fn serve_workers(listener: TcpListener, cfg: ServerConfig, script: PathBuf, n: usize) -> u8 {
+    let source = match std::fs::read(&script) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Could not open worker script {}: {e}", script.display());
+            return 1;
+        }
+    };
+    let cfg = std::sync::Arc::new(cfg);
+    let script = std::sync::Arc::new(script);
+    let source = std::sync::Arc::new(source);
+    log_line(&format!(
+        "phpr worker server (http://{}:{}) started: {n} workers running {}",
+        cfg.host,
+        cfg.port,
+        script.display()
+    ));
+    let (tx, rx) = std::sync::mpsc::sync_channel::<WorkerJob>(1024);
+    let rx: JobQueue = std::sync::Arc::new(std::sync::Mutex::new(rx));
+    for i in 0..n {
+        let (rx, script, source) = (rx.clone(), script.clone(), source.clone());
+        std::thread::spawn(move || worker_thread(i, rx, script, source));
+    }
+    for stream in listener.incoming() {
+        let Ok(stream) = stream else { continue };
+        let (tx, cfg, script) = (tx.clone(), cfg.clone(), script.clone());
+        std::thread::spawn(move || connection_thread(stream, tx, cfg, script));
+    }
+    0
+}
+
+/// One client connection: parse each request, queue it, write the response;
+/// keep-alive until the peer closes or asks to.
+fn connection_thread(
+    mut stream: TcpStream,
+    tx: std::sync::mpsc::SyncSender<WorkerJob>,
+    cfg: std::sync::Arc<ServerConfig>,
+    script: std::sync::Arc<PathBuf>,
+) {
+    let peer = stream
+        .peer_addr()
+        .map(|a| (a.ip().to_string(), a.port()))
+        .unwrap_or_else(|_| ("127.0.0.1".to_string(), 0));
+    let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(60)));
+    let _ = stream.set_nodelay(true);
+    while let Some(req) = read_request(&mut stream) {
+        let head = req.method == b"HEAD";
+        let host = header_value(&req.headers, b"host").map(|v| v.to_vec());
+        let conn_hdr = header_value(&req.headers, b"connection").map(|v| v.to_ascii_lowercase());
+        let keep_alive = match conn_hdr.as_deref() {
+            Some(b"close") => false,
+            Some(b"keep-alive") => true,
+            _ => req.protocol >= (1, 1),
+        };
+        let meta = PendingRequest { protocol: req.protocol, head, keep_alive, host };
+        let query = match req.target.iter().position(|&b| b == b'?') {
+            Some(p) if p + 1 < req.target.len() => Some(req.target[p + 1..].to_vec()),
+            _ => None,
+        };
+        let request_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs_f64())
+            .unwrap_or(0.0);
+        // The worker script stands in for /index.php (FrankenPHP's
+        // convention): SCRIPT_NAME is the front controller, the request
+        // path travels in REQUEST_URI.
+        let web = WebRequest {
+            method: req.method,
+            protocol: req.protocol,
+            request_uri: req.target,
+            vpath: b"/index.php".to_vec(),
+            path_info: None,
+            query_string: query,
+            headers: req.headers,
+            body: req.body,
+            remote_addr: peer.0.clone(),
+            remote_port: peer.1,
+            server_host: cfg.host.clone(),
+            server_port: cfg.port,
+            doc_root: cfg.docroot.as_os_str().as_bytes().to_vec(),
+            script_filename: script.as_os_str().as_bytes().to_vec(),
+            request_time,
+        };
+        let (reply_tx, reply_rx) = std::sync::mpsc::sync_channel(1);
+        if tx.send(WorkerJob { web, reply: reply_tx }).is_err() {
+            return;
+        }
+        let Ok(resp) = reply_rx.recv() else { return };
+        let out = worker_response_bytes(&meta, &resp);
+        if stream.write_all(&out).is_err() || stream.flush().is_err() || !keep_alive {
+            return;
+        }
+    }
+}
+
+/// Serialise a worker response: status line, `Date`, keep-alive, the
+/// script's headers, `Content-Length`, body (omitted for HEAD).
+fn worker_response_bytes(p: &PendingRequest, resp: &php_types::sapi::WorkerResponse) -> Vec<u8> {
+    let reason_owned;
+    let reason = match &resp.reason {
+        Some(r) => {
+            reason_owned = String::from_utf8_lossy(r).into_owned();
+            reason_owned.as_str()
+        }
+        None => status_reason(resp.status),
+    };
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    let mut out = Vec::with_capacity(256 + resp.body.len());
+    out.extend_from_slice(
+        format!("HTTP/{}.{} {} {}\r\n", p.protocol.0, p.protocol.1, resp.status, reason).as_bytes(),
+    );
+    if let Some(h) = &p.host {
+        out.extend_from_slice(b"Host: ");
+        out.extend_from_slice(h);
+        out.extend_from_slice(b"\r\n");
+    }
+    out.extend_from_slice(format!("Date: {}\r\n", php_types::sapi::http_date(now)).as_bytes());
+    out.extend_from_slice(if p.keep_alive {
+        b"Connection: keep-alive\r\n"
+    } else {
+        b"Connection: close\r\n"
+    });
+    let mut have_ctype = false;
+    for line in &resp.headers {
+        if let Some(c) = line.iter().position(|&b| b == b':') {
+            if line[..c].eq_ignore_ascii_case(b"content-type") {
+                have_ctype = true;
+            }
+        }
+        out.extend_from_slice(line);
+        out.extend_from_slice(b"\r\n");
+    }
+    if !have_ctype {
+        out.extend_from_slice(b"Content-type: text/html; charset=UTF-8\r\n");
+    }
+    out.extend_from_slice(format!("Content-Length: {}\r\n\r\n", resp.body.len()).as_bytes());
+    if !p.head {
+        out.extend_from_slice(&resp.body);
+    }
+    out
+}
+
+fn worker_thread(
+    index: usize,
+    rx: JobQueue,
+    script: std::sync::Arc<PathBuf>,
+    source: std::sync::Arc<Vec<u8>>,
+) {
+    php_types::sapi::set_sapi_name("cli-server");
+    let registry = php_builtins::registry();
+    let name = script.as_os_str().as_bytes().to_vec();
+    loop {
+        // The reply channel of the request in hand, shared by the two hooks.
+        let reply: Rc<std::cell::RefCell<Option<std::sync::mpsc::SyncSender<php_types::sapi::WorkerResponse>>>> =
+            Rc::new(std::cell::RefCell::new(None));
+        let next_request = {
+            let (rx, reply) = (rx.clone(), reply.clone());
+            Box::new(move || -> Option<WebRequest> {
+                let job = rx.lock().ok()?.recv().ok()?;
+                *reply.borrow_mut() = Some(job.reply);
+                Some(job.web)
+            }) as Box<dyn FnMut() -> Option<WebRequest>>
+        };
+        let send_response = {
+            let reply = reply.clone();
+            Box::new(move |resp: php_types::sapi::WorkerResponse| {
+                for entry in &resp.error_log {
+                    log_line(&String::from_utf8_lossy(entry));
+                }
+                if let Some(r) = reply.borrow_mut().take() {
+                    let _ = r.send(resp);
+                }
+            }) as Box<dyn FnMut(php_types::sapi::WorkerResponse)>
+        };
+        php_types::sapi::set_worker_hooks(php_types::sapi::WorkerHooks { next_request, send_response });
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            php_runtime::run_source_with_ini(&name, &source, &registry, &[])
+        }));
+        match result {
+            Ok(Ok(outcome)) => {
+                if let Some(f) = &outcome.fatal {
+                    log_line(&format!("[worker {index}] script ended with a fatal: {}", f.message()));
+                    let _ = std::io::stderr().write_all(&outcome.rendered);
+                } else {
+                    log_line(&format!("[worker {index}] script returned; restarting"));
+                }
+            }
+            Ok(Err(e)) => {
+                log_line(&format!("[worker {index}] PHP Parse error: {e}"));
+                std::thread::sleep(std::time::Duration::from_secs(1));
+            }
+            Err(_) => {
+                log_line(&format!("[worker {index}] the runtime panicked; restarting"));
+            }
+        }
+        // A request in hand dies with the script run: answer it with a 500.
+        let orphan = reply.borrow_mut().take();
+        if let Some(r) = orphan {
+            let _ = r.send(php_types::sapi::WorkerResponse {
+                status: 500,
+                reason: None,
+                headers: Vec::new(),
+                body: Vec::new(),
+                error_log: Vec::new(),
+            });
+        }
+    }
 }

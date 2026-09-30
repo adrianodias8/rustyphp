@@ -55,7 +55,7 @@ fn nessun_sorgente_rs_oltre_cap() {
         // p.1) — mod.rs +62 (push_method_frame_one +28, ammissione
         // array-callable in try_autoload +34); calls.rs (+31,
         // call_method_one) resta fuori allowlist sotto il cap 2000.
-        ("php-runtime/src/vm/mod.rs", 26385, "monolite VM — bersaglio A2; +62 L-AU1 S-163 PRE-dichiarato; +59 flag gc-idle S-176 DICHIARATO S-180 (tree tenuto, keep-partial-wins); +417 fork 2026-09-30 (count()/Countable dynamic path, quiet static-property fetch, in-place `.=`, seed class index cache, hashed host_builtin_canonical, NsIc fn_gen, units_run / registry case folding, pop_prefix_and_key, their tests): DECLARED"),
+        ("php-runtime/src/vm/mod.rs", 26391, "monolite VM — bersaglio A2; +62 L-AU1 S-163 PRE-dichiarato; +59 flag gc-idle S-176 DICHIARATO S-180 (tree tenuto, keep-partial-wins); +423 fork 2026-09-30 (count()/Countable dynamic path, quiet static-property fetch, in-place `.=`, seed class index cache, hashed host_builtin_canonical, NsIc fn_gen, units_run / registry case folding, pop_prefix_and_key, worker mode field + builtin, their tests): DECLARED"),
         ("php-runtime/src/vm/host.rs", 7727, "hostcall — backlog A2; +18 L-AM2 S-162 PRE-dichiarato; +1 flag gc-idle S-176 DICHIARATO S-180"),
         // S-156: salita DICHIARATA +29 (leva HD2-hostcall: braccio
         // CallHostBuiltin, pop diretti ≤4) — verbale wp156-harness/s156-promo.
