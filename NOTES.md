@@ -65,8 +65,9 @@ unit function keeps its bindings, a binding made inside a unit holds when called
 Committed as four `.phpt`s: `ns-shadow-builtins`, `ns-reinclude-binding`,
 `builtin-names-case-insensitive`, `builtin-names-case-insensitive-ns`.
 
-One divergence seen and left: a builtin called with the wrong number of arguments throws `Error`
-where PHP throws `ArgumentCountError` (`strlen()` with no argument). Unrelated to names.
+One divergence seen and left, now `KNOWN_DIVERGENCES.md` D-04: a builtin called with the wrong
+number of arguments throws `Error` where PHP throws `ArgumentCountError`. `assert` being
+declarable in a namespace is D-05.
 
 Gates: `cargo test` 1749 / 1 (root-only) / 2; LOC caps declared; phpt gate **3047 → 3048**
 (`Zend/tests/frameless_jmp_004`: a case-folded call to a namespaced shadow), 0 pass→fail, repro
@@ -168,11 +169,8 @@ array element write, the call to a function with a typed parameter.
 | concat | 2 | 2 (the result string) |
 
 Regression test `typed-call-direct-path.phpt` (`EXPECTF`). The wider probe is byte-identical
-between `a08311f0` and this commit; the diffs it shows against the oracle are pre-existing
-(deprecation-line attribution for implicit float→int conversion, `object given` for a class
-name in a TypeError, the `called in` file of an included strict unit, `.=` on a null-vivified
-nested key warning, `Indirect modification` on ArrayAccess `.=`/`++`, `Cannot access offset of
-type array` wording, the null-offset deprecation).
+between `a08311f0` and this commit; the diffs it shows against the oracle are pre-existing and
+are `KNOWN_DIVERGENCES.md` D-06 … D-12.
 
 A/B `a08311f0` → `25a5e4a3`, 7 rounds — `bench/results/2026-09-30-ab-direct-calls.tsv`:
 
@@ -255,8 +253,7 @@ Nothing was pushed.
    stack), on bare metal with counters if the VM cannot tell; it is worth up to 17 % on property
    access and it confounds every `oop.php` A/B.
 2. Slice 6, the dispatch loop — now the whole of the `foreach` gap and most of the request path.
-3. `ArgumentCountError` for builtin arity (§1); `assert` declarable in a namespace (§1); the
-   pre-existing diagnostics divergences listed in §2b.
+3. The entries of `KNOWN_DIVERGENCES.md`, each with its failing test.
 4. Still the owner's: fork location, license/name, the verdict on the DRAFT decision.
 
 ---
@@ -597,26 +594,19 @@ concat now go through `__toString()` (`concat_object_operands`, left operand fir
 - loadavg was 3.1 at the start of the final A/B (other host processes); spreads are wider than in
   session 1.
 
-## 3. Found on the way, not fixed (each is a separate bug; recorded for the next session)
+## 3. Found on the way, not fixed
 
-1. **Reading an uninitialised typed static property does not throw.** `echo A::$t;` with
-   `static int $t;` prints nothing where PHP throws `Typed static property A::$t must not be
-   accessed before initialization`. (Loud path; untouched.)
-2. **`NAN` coerced to string does not warn.** PHP 8.5's `Warning: unexpected NAN value was coerced
-   to string` is missing for `.`, `.=` and `null . NAN` (upstream's comment in `convert.rs` says
-   the oracle is silent; on 8.5.7 it is not).
-3. **Diagnostics raised while evaluating call arguments report the callee's line.** A
-   `Deprecated`/`Warning` triggered inside `f($a .= …)`'s argument list is reported "on line 18"
-   (the line of `function f`), not the call site.
-4. **Redeclaring a builtin is not a fatal.** `function glob() {}` / `function stat() {}` compile
-   under phpr; PHP fatals with "Cannot redeclare".
-5. **`Op::StaticPropRef` is missing from the include-unit class-id relocation** (`vm/mod.rs`,
-   `relocate_module_class_ids`: `StaticPropGet/Set/OpSet/IncDec` are listed, `StaticPropRef` is
-   not). Not reproduced — flagged from reading the code while adding the `quiet` flag.
-6. **`.=` on a float operand is 6.6× the oracle** (linear now, 101 ms vs 15 ms at 400k): the float
+Moved to [`KNOWN_DIVERGENCES.md`](KNOWN_DIVERGENCES.md) (session 5), one failing `.phpt` each:
+D-01 (uninitialised typed static read), D-02 (`NAN` to string), D-03 (redeclaring a builtin).
+Two flags of this session did not reproduce and are closed there (the diagnostic line inside call
+arguments; `Op::StaticPropRef` relocation — now guarded by
+`baseline/repro/static-prop-ref-across-include.phpt`). Two were performance, not behaviour, and
+stay here:
+
+1. **`.=` on a float operand is 6.6× the oracle** (linear now, 101 ms vs 15 ms at 400k): the float
    formatting (`double_to_precision`) allocates and is slow; `bench/concat-scaling.php` row
    `append_float_ms`.
-7. **Indexed static properties are read-modify-written through a temp copy**
+2. **Indexed static properties are read-modify-written through a temp copy**
    (`static_prop_rmw`): `C::$arr['k'] .= x` separates the whole array each time. Not measured.
 
 ## 4. Commits

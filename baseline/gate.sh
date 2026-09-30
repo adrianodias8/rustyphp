@@ -58,5 +58,23 @@ if compgen -G "$HERE/repro/*.phpt" >/dev/null; then
     tr -d '\0' <"$RAW/repro.log" | grep -aE '^--- .*\.phpt ---$' | sed 's/^/  /'; rc=1
   fi
 fi
+# Known divergences (KNOWN_DIVERGENCES.md): every .phpt under baseline/divergences/
+# PASSES on the oracle and is EXPECTED to fail (or skip) here. One that passes
+# has been fixed: move it to baseline/repro/ and drop its row. Informational —
+# never fatal.
+if compgen -G "$HERE/divergences/*.phpt" >/dev/null; then
+  rm -rf "$RAW/div"; mkdir -p "$RAW/div"; cp "$HERE"/divergences/*.phpt "$RAW/div/"
+  "$RUNNER" --isolate --list-fails --list-skips "$RAW/div" >"$RAW/div.log" 2>&1 || true
+  dp=$(awk '/^pass: /{print $2}' "$RAW/div.log" | tail -1); df=$(awk '/^fail: /{print $2}' "$RAW/div.log" | tail -1); ds=$(awk '/^skip: /{print $2}' "$RAW/div.log" | tail -1)
+  echo "known divergences: still failing=$df skipped=$ds now PASSING=$dp"
+  if [[ "${dp:-0}" != 0 ]]; then
+    echo "--- fixed (promote to baseline/repro/, drop the KNOWN_DIVERGENCES.md row):"
+    # passing = every test minus the failing and skipped ones
+    ls "$RAW"/div/*.phpt | LC_ALL=C sort >"$RAW/div.all"
+    tr -d '\0' <"$RAW/div.log" | awk '/^failures: [0-9]+$/{f=1;next} f && /^--- .*\.phpt ---$/{sub(/^--- /,"");sub(/ ---$/,"");print}' | LC_ALL=C sort -u >"$RAW/div.fails"
+    tr -d '\0' <"$RAW/div.log" | awk '/^=== skips: [0-9]+ ===$/{s=1;next} /^=== phpt-runner ===$/{s=0} s && /\.phpt\t/{print}' | cut -f1 | LC_ALL=C sort -u >"$RAW/div.skips"
+    LC_ALL=C comm -23 "$RAW/div.all" <(LC_ALL=C sort -u "$RAW/div.fails" "$RAW/div.skips") | sed 's/^/  /'
+  fi
+fi
 [[ $rc == 0 ]] && echo "GATE: PASS" || echo "GATE: FAIL"
 exit $rc
