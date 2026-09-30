@@ -722,7 +722,7 @@ pub fn vm_new<'m>(
         seed_static: main_hir.map_or(0, |p| p.static_count),
         seed_globals: main_hir.map(|p| p.slots.clone()).unwrap_or_default(),
         linked_functions: HashMap::default(),
-        fn_gen: 1,
+        units_run: HashSet::default(),
         included_files: HashSet::default(),
         #[cfg(feature = "relbase-probe")]
         relbase_remap: (0..module.classes.len().max(65536)).collect(),
@@ -3132,6 +3132,10 @@ pub struct Vm<'m> {
     /// they are callable by name after the unit returns. The defining module is
     /// kept so the function's frame resolves its own bytecode indices.
     linked_functions: HashMap<Vec<u8>, (&'m Module, usize)>,
+    /// Identity of every unit module whose body `run_linked` has started in
+    /// this request; a second run of the same module resets its top-level
+    /// namespaced-call sites ([`Module::reset_ns_sites`]).
+    units_run: HashSet<usize>,
     /// Resolved (canonical) paths already loaded by `include_once`/`require_once`
     /// (step 57, Phase 2), so a repeat `_once` of the same file no-ops and returns
     /// `true` without re-running it.
@@ -3141,10 +3145,6 @@ pub struct Vm<'m> {
     /// fingerprint ([`Vm::unit_fp`]) — two VMs with equal chains loaded the same
     /// code in the same order, so seeded lowering of the next unit is replayable.
     unit_chain_fp: u64,
-
-    /// Generation of `linked_functions`: bumped on every insert, so a
-    /// [`NsIc`] filled under an older generation misses (fork slice 3).
-    fn_gen: u64,
 
     /// WP-62 M2.3 DIAGNOSTIC (form-B pre-quote, K-M1): identity class-id
     /// table simulating the per-execution remap indirection cost in the hot
@@ -6516,6 +6516,12 @@ impl<'m> Vm<'m> {
             }
         }
 
+        // A unit run AGAIN in this request (repeated `include`, unit-cache
+        // hit on the same module): PHP would execute a fresh op array, so its
+        // top-level namespaced-call sites start unbound (see `NsIc`).
+        if !self.units_run.insert(leaked as *const Module as usize) {
+            leaked.reset_ns_sites();
+        }
         let saved = self.module;
         self.module = leaked;
         // Register the unit's user functions (those not already provided by the
@@ -6587,7 +6593,6 @@ impl<'m> Vm<'m> {
                 continue; // prelude-named user fn: historical silent skip
             }
             self.linked_functions.insert(lower, (leaked, idx));
-            self.fn_gen += 1;
         }
         let baseline = self.frames.len();
         let mut frame = Frame::new(&leaked.main, leaked);
@@ -11600,11 +11605,12 @@ impl<'m> Vm<'m> {
         // Conditional declarations are callable only once registered in
         // `linked_functions` by their `Op::DeclareFn`. (WP-29 B2: ci-table
         // binary search instead of the whole-table scan.)
+        let lc = LcKey::new(name);
         self.module.find_fn_ci(name).is_some()
-            || self
-                .linked_functions
-                .contains_key(LcKey::new(name).as_slice())
-            || self.registry.get(name).is_some()
+            || self.linked_functions.contains_key(lc.as_slice())
+            // The registry is keyed lowercase; PHP function names are
+            // case-insensitive (`function_exists('StrToUpper')`).
+            || self.registry.get(lc.as_slice()).is_some()
             || host_builtin_canonical(name).is_some()
             || host_builtin_ref_first(name).is_some()
             // Builtins with by-ref *output* parameters (preg_match's &$matches,

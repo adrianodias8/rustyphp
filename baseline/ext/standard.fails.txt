@@ -507,6 +507,7 @@ ext/standard/tests/http/http_build_query/http_build_query_with_resource.phpt
 ext/standard/tests/http/http_response_header_deprecated_multiple_op_arrays.phpt
 ext/standard/tests/http/http_response_header_deprecated_nested_op_arrays.phpt
 ext/standard/tests/http/request_parse_body/options_array_references.phpt
+ext/standard/tests/image/bug13213.phpt
 ext/standard/tests/image/bug70052.phpt
 ext/standard/tests/image/bug72278.phpt
 ext/standard/tests/image/bug79877.phpt

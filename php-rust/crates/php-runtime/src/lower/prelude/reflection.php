@@ -865,6 +865,9 @@ class ReflectionFunction extends ReflectionFunctionAbstract {
             // throw, WP-17).
             if ($this->__info === false && function_exists($this->name)) {
                 $this->__info = array('params' => array(), 'returnType' => false);
+                // Reported under its declared name, which for an internal
+                // function is lowercase (`new ReflectionFunction('StrLen')`).
+                $this->name = strtolower($this->name);
             }
         }
         if ($this->__info === false) {

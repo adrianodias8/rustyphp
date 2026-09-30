@@ -114,6 +114,7 @@ fn visit_addrs(op: &mut Op, f: &mut impl FnMut(&mut Addr)) {
         | Op::IncDecSlotJmp { addr, .. } => f(addr),
         Op::IterNext { end, .. } | Op::IterNextRef { end, .. } => f(end),
         Op::PropConcatGate { done, .. } => f(done),
+        Op::NsShadowGuard { user, .. } => f(user),
         // ---- lista chiusa: varianti SENZA Addr (niente da visitare) ----
         Op::PushConst { .. } | Op::Pop { .. } | Op::Dup { .. }
         | Op::LoadSlot { .. } | Op::LoadVar { .. } | Op::PushUndef { .. }
@@ -365,7 +366,7 @@ fn bin_op_of(op: &Op) -> Option<BinOp> {
         // ---- lista chiusa: varianti che le finestre NON fondono ----
         // (le forme registro già abbassate — BinarySS/SC/Dst/CmpJmpSS/SC —
         // restano fuori PER SCELTA: il pass non ri-fonde il proprio output.)
-        Op::PropConcatGate { .. }
+        Op::PropConcatGate { .. } | Op::NsShadowGuard { .. }
         | Op::PushConst { .. } | Op::Pop { .. } | Op::Dup { .. }
         | Op::LoadSlot { .. } | Op::LoadVar { .. } | Op::PushUndef { .. }
         | Op::StoreSlot { .. } | Op::ConcatAssignSlot { .. } | Op::Swap { .. }

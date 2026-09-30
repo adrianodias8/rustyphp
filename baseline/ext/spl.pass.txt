@@ -62,10 +62,12 @@ ext/spl/tests/SplObjectStorage/observer_009.phpt
 ext/spl/tests/SplObjectStorage/observer_010.phpt
 ext/spl/tests/SplPriorityQueue_setExtractFlags_zero.phpt
 ext/spl/tests/bug28822.phpt
+ext/spl/tests/bug31185.phpt
 ext/spl/tests/bug31926.phpt
 ext/spl/tests/bug32134.phpt
 ext/spl/tests/bug32394.phpt
 ext/spl/tests/bug34548.phpt
+ext/spl/tests/bug36287.phpt
 ext/spl/tests/bug36825.phpt
 ext/spl/tests/bug38325.phpt
 ext/spl/tests/bug40091.phpt

@@ -302,59 +302,71 @@ impl Clone for MethodIc {
     }
 }
 
-/// What a [`NsIc`] site resolved to last time.
+/// What a [`NsIc`] site bound to.
 #[derive(Debug, Clone, Copy)]
 pub enum NsTarget {
-    /// Never filled. An undefined function is NOT cached: the error path
-    /// re-resolves every time (rare, and a later declaration must bind).
+    /// Never bound. An undefined function is NOT cached: the error path
+    /// re-resolves every time, so a later declaration still binds.
     Empty,
     /// The namespaced `name` binds (user function in some unit).
     Primary,
-    /// The global `fallback` binds, to something other than a registry
-    /// value builtin (host builtin, user function): re-enter `invoke_named`.
+    /// The global `fallback` binds, to a user function: re-enter
+    /// `invoke_named`.
     Fallback,
     /// The global `fallback` is a registry value builtin (`count`, `strlen`,
     /// `is_array`, …): call its entry point directly, no lookup at all.
     FallbackValue(crate::builtin::BuiltinFn),
+    /// The global `fallback` is a VM host builtin (`sprintf`, `is_callable`,
+    /// `array_map`, …), by its canonical name.
+    FallbackHost(&'static [u8]),
 }
 
-/// Per-site cache for the namespaced two-step function lookup
-/// ([`Op::CallNsFallback`]) — the analogue of Zend's `INIT_NS_FCALL_BY_NAME`
-/// runtime-cache slot. Without it EVERY unqualified builtin call in
-/// namespaced code (`count($a)` inside `namespace App`) ran two
-/// `is_name_callable` probes (up to eight table lookups, the namespaced
-/// one always missing) plus a full `invoke_named` re-resolution: ~10% of a
-/// Symfony request (fork slice 3, see PROFILE.md).
+/// Per-site binding of PHP's namespaced two-step function lookup — the
+/// analogue of Zend's `INIT_NS_FCALL_BY_NAME` runtime-cache slot, carried by
+/// [`Op::CallNsFallback`], [`Op::CallNsFallbackArgs`] and
+/// [`Op::NsShadowGuard`]. An unqualified call inside a namespace
+/// (`count($a)` in `namespace App`) tries `App\count`, then global `count`.
 ///
-/// Key: `(run epoch, Vm::fn_gen, running-module identity)`. `fn_gen` is
-/// bumped on every `linked_functions` insert (`Op::DeclareFn`, include /
-/// eval registration), so a function declared later invalidates every
-/// site; the module identity covers `find_fn_ci`, which is per module.
-/// The registry and the host tables are immutable for the life of the
-/// VM. Same contract as [`PropIc`]: `Rc`-shared between op clones,
-/// invisible to structural equality.
+/// **Sticky, as in PHP**: the first execution of a site decides, and the
+/// site keeps that binding for the rest of the run, even if the namespaced
+/// function is declared later (oracle-verified; phpunit-bridge's ClockMock
+/// relies on registering its shadows BEFORE the code under test runs).
+/// Key: the run epoch alone — function names resolve against one
+/// request-wide table, whichever unit is running. A re-run of the same
+/// compiled unit (repeated `include` served by the unit cache) resets the
+/// cells of its top-level code ([`Module::reset_ns_sites`]): PHP compiles a
+/// fresh op array, hence a fresh cache, per include.
+///
+/// Without the cache EVERY such call re-resolved from scratch: two
+/// `is_name_callable` probes (the namespaced one always missing) plus a full
+/// `invoke_named` — ~10% of a Symfony request (fork slice 3, PROFILE.md).
+/// Same contract as [`PropIc`]: `Rc`-shared between op clones, invisible to
+/// structural equality.
 #[derive(Debug)]
-pub struct NsIc(Rc<std::cell::Cell<(u64, u64, usize, NsTarget)>>);
+pub struct NsIc(Rc<std::cell::Cell<(u64, NsTarget)>>);
 
 impl NsIc {
-    /// The cached target when filled IN THIS RUN under the same function
-    /// generation and running module.
+    /// The binding made IN THIS RUN, if any.
     #[inline]
-    pub fn get(&self, fn_gen: u64, module_key: usize) -> Option<NsTarget> {
-        let (epoch, gen, m, t) = self.0.get();
-        (!matches!(t, NsTarget::Empty) && gen == fn_gen && m == module_key && epoch == ic_epoch())
-            .then_some(t)
+    pub fn get(&self) -> Option<NsTarget> {
+        let (epoch, t) = self.0.get();
+        (!matches!(t, NsTarget::Empty) && epoch == ic_epoch()).then_some(t)
     }
 
     #[inline]
-    pub fn fill(&self, fn_gen: u64, module_key: usize, target: NsTarget) {
-        self.0.set((ic_epoch(), fn_gen, module_key, target));
+    pub fn fill(&self, target: NsTarget) {
+        self.0.set((ic_epoch(), target));
+    }
+
+    /// Forget the binding (the unit's top-level code is being re-run).
+    pub fn reset(&self) {
+        self.0.set((0, NsTarget::Empty));
     }
 }
 
 impl Default for NsIc {
     fn default() -> Self {
-        NsIc(Rc::new(std::cell::Cell::new((0, 0, 0, NsTarget::Empty))))
+        NsIc(Rc::new(std::cell::Cell::new((0, NsTarget::Empty))))
     }
 }
 
@@ -605,7 +617,16 @@ pub enum Op {
     /// `[argsArray] -> [ret]` — like [`Op::CallNsFallback`] but the arguments
     /// are the values of a runtime array (spread on a not-yet-loaded function
     /// inside a namespace: ParameterBag's `trigger_deprecation(...$dep)`).
-    CallNsFallbackArgs { name: Rc<[u8]>, fallback: Rc<[u8]> },
+    CallNsFallbackArgs { name: Rc<[u8]>, fallback: Rc<[u8]>, ic: NsIc },
+    /// `[] -> []` — in front of an unqualified call inside a namespace that
+    /// the compiler bound STATICALLY to the global function (a by-reference
+    /// builtin such as `preg_match`/`sort`/`array_push`, a spread on a host
+    /// builtin, a global user or prelude function): if the namespaced `name`
+    /// is a declared function, jump to `user` (the dynamic call by name);
+    /// otherwise fall through into the static sequence. Runs BEFORE the
+    /// arguments are evaluated, like Zend's `INIT_NS_FCALL_BY_NAME`, and the
+    /// first execution binds the site for the run (see [`NsIc`]).
+    NsShadowGuard { name: Rc<[u8]>, ic: NsIc, user: Addr },
 
     // ----- exceptions (EXC) -----
     /// `[exc] -> ` (diverges) — pop the operand and unwind with
@@ -2365,6 +2386,24 @@ pub struct Module {
 }
 
 impl Module {
+    /// Unbind the namespaced-call sites ([`NsIc`]) of this unit's top-level
+    /// code and closures: the unit is being run AGAIN in the same request (a
+    /// repeated `include` served by the unit cache), where PHP executes a
+    /// freshly compiled op array with an empty runtime cache. Functions and
+    /// methods keep their bindings — they are declared once.
+    pub fn reset_ns_sites(&self) {
+        for f in std::iter::once(&self.main).chain(&self.closures) {
+            for op in &f.ops {
+                match op {
+                    Op::CallNsFallback { ic, .. }
+                    | Op::CallNsFallbackArgs { ic, .. }
+                    | Op::NsShadowGuard { ic, .. } => ic.reset(),
+                    _ => {}
+                }
+            }
+        }
+    }
+
     /// Resolve `name` (ASCII-case-insensitive) to an unconditionally-callable
     /// function index (WP-29 B2): binary search on the sorted `fn_ci` table +
     /// name verify, skipping conditional declarations exactly like the legacy

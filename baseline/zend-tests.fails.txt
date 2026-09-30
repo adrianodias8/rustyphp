@@ -600,6 +600,7 @@ Zend/tests/first_class_callable/constexpr/attributes_ast_printing.phpt
 Zend/tests/first_class_callable/constexpr/attributes_ast_printing_runtime.phpt
 Zend/tests/first_class_callable/constexpr/autoload.phpt
 Zend/tests/first_class_callable/constexpr/basic.phpt
+Zend/tests/first_class_callable/constexpr/case_insensitive.phpt
 Zend/tests/first_class_callable/constexpr/class_const.phpt
 Zend/tests/first_class_callable/constexpr/complex_array.phpt
 Zend/tests/first_class_callable/constexpr/error_abstract.phpt
@@ -644,7 +645,6 @@ Zend/tests/foreach/this_in_foreach_001.phpt
 Zend/tests/foreach/this_in_foreach_002.phpt
 Zend/tests/foreach/this_in_foreach_003.phpt
 Zend/tests/frameless_bug_001.phpt
-Zend/tests/frameless_jmp_004.phpt
 Zend/tests/func_arg_fetch_optimization.phpt
 Zend/tests/func_get_arg_basic.phpt
 Zend/tests/func_get_arg_invalid.phpt

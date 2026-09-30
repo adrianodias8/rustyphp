@@ -386,7 +386,6 @@ Zend/tests/fibers/ticks.phpt	builtin	Call to undefined function register_tick_fu
 Zend/tests/first_class_callable/constexpr/attributes.phpt	extension	requires unsupported extension 'reflection'
 Zend/tests/first_class_callable/constexpr/attributes_scope_001.phpt	extension	requires unsupported extension 'reflection'
 Zend/tests/first_class_callable/constexpr/attributes_scope_002.phpt	extension	requires unsupported extension 'reflection'
-Zend/tests/first_class_callable/constexpr/case_insensitive.phpt	builtin	Call to undefined function StrRev()
 Zend/tests/first_class_callable/constexpr/error_dynamic_001.phpt	compile-error	compile-time diagnostic not modelled
 Zend/tests/first_class_callable/constexpr/error_dynamic_002.phpt	compile-error	compile-time diagnostic not modelled
 Zend/tests/first_class_callable/constexpr/error_dynamic_003.phpt	compile-error	compile-time diagnostic not modelled

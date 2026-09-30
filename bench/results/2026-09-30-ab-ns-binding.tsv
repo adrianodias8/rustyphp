@@ -1,0 +1,124 @@
+bench	section	A_ms	B_ms	B/A	spread_A%	spread_B%	note
+zend_bench	simple	18.000	18.000	1.000	5.6	5.6	
+zend_bench	simplecall	60.000	60.000	1.000	13.3	36.7	
+zend_bench	simpleucall	74.000	74.000	1.000	4.1	40.5	
+zend_bench	simpleudcall	74.000	75.000	1.014	4.1	76.0	
+zend_bench	mandel	311.000	312.000	1.003	1.6	5.8	
+zend_bench	mandel2	400.000	399.000	0.998	2.2	3.8	
+zend_bench	ackermann(7)	54.000	54.000	1.000	7.4	50.0	
+zend_bench	ary(50000)	8.000	8.000	1.000	25.0	12.5	
+zend_bench	ary2(50000)	7.000	8.000	1.143	28.6	12.5	
+zend_bench	ary3(2000)	261.000	254.000	0.973	1.9	7.9	
+zend_bench	fibo(30)	182.000	178.000	0.978	5.5	41.6	
+zend_bench	hash1(50000)	15.000	15.000	1.000	6.7	6.7	
+zend_bench	hash2(500)	38.000	37.000	0.974	7.9	13.5	
+zend_bench	heapsort(20000)	98.000	97.000	0.990	4.1	8.2	
+zend_bench	matrix(20)	66.000	67.000	1.015	6.1	4.5	
+zend_bench	nestedloop(12)	52.000	51.000	0.981	3.8	5.9	
+zend_bench	sieve(30)	45.000	45.000	1.000	20.0	4.4	
+zend_bench	strcat(200000)	8.000	8.000	1.000	50.0	12.5	
+zend_bench	Total	1782.000	1758.000	0.987	1.6	10.8	
+zend_micro_bench	empty_loop	47.000	45.000	0.957	6.4	4.4	
+zend_micro_bench	func()	311.000	308.000	0.990	8.4	1.9	
+zend_micro_bench	undef_func()	311.000	309.000	0.994	9.0	1.0	
+zend_micro_bench	int_func()	173.000	183.000	1.058	11.0	0.5	
+zend_micro_bench	$x = self::$x	213.000	211.000	0.991	10.3	44.1	
+zend_micro_bench	self::$x = 0	218.000	210.000	0.963	22.9	38.6	
+zend_micro_bench	isset(self::$x)	284.000	288.000	1.014	8.5	10.8	
+zend_micro_bench	empty(self::$x)	242.000	243.000	1.004	21.1	3.7	
+zend_micro_bench	$x = Foo::$x	199.000	198.000	0.995	18.1	39.4	
+zend_micro_bench	Foo::$x = 0	217.000	209.000	0.963	11.1	37.3	
+zend_micro_bench	isset(Foo::$x)	102.000	102.000	1.000	5.9	6.9	
+zend_micro_bench	empty(Foo::$x)	242.000	244.000	1.008	22.7	4.9	
+zend_micro_bench	self::f()	337.000	337.000	1.000	18.1	2.1	
+zend_micro_bench	Foo::f()	335.000	334.000	0.997	19.4	2.1	
+zend_micro_bench	$x = $this->x	116.000	115.000	0.991	21.6	3.5	
+zend_micro_bench	$this->x = 0	275.000	274.000	0.996	4.7	5.1	
+zend_micro_bench	$this->x += 2	444.000	441.000	0.993	6.1	4.5	
+zend_micro_bench	++$this->x	242.000	237.000	0.979	9.1	1.7	
+zend_micro_bench	--$this->x	240.000	236.000	0.983	8.8	2.5	
+zend_micro_bench	$this->x++	240.000	236.000	0.983	8.3	2.1	
+zend_micro_bench	$this->x--	239.000	236.000	0.987	8.4	2.1	
+zend_micro_bench	isset($this->x)	159.000	158.000	0.994	18.2	11.4	
+zend_micro_bench	empty($this->x)	557.000	565.000	1.014	11.3	3.5	
+zend_micro_bench	$this->f()	408.000	409.000	1.002	11.8	39.4	
+zend_micro_bench	$x = Foo::TEST	389.000	385.000	0.990	19.8	5.2	
+zend_micro_bench	new Foo()	1185.000	1230.000	1.038	1.0	22.5	
+zend_micro_bench	$x = TEST	171.000	168.000	0.982	3.5	5.4	
+zend_micro_bench	$x = $_GET	115.000	119.000	1.035	2.6	5.9	
+zend_micro_bench	$x = $GLOBALS['v']	104.000	104.000	1.000	3.8	5.8	
+zend_micro_bench	$x = $hash['v']	194.000	200.000	1.031	1.5	5.5	
+zend_micro_bench	$x = $str[0]	237.000	263.000	1.110	2.5	4.2	
+zend_micro_bench	$x = $a ?: null	177.000	185.000	1.045	2.3	1.6	
+zend_micro_bench	$x = $f ?: tmp	197.000	202.000	1.025	3.6	2.0	
+zend_micro_bench	$x = $f ? $f : $a	174.000	182.000	1.046	6.3	3.8	
+zend_micro_bench	$x = $f ? $f : tmp	161.000	164.000	1.019	6.8	0.6	
+zend_micro_bench	Total	9253.000	9366.000	1.012	7.5	8.1	
+arrays	packed_build_1m	116.984	115.720	0.989	21.6	4.7	
+arrays	packed_foreach_sum_1m	36.061	34.895	0.968	8.9	4.5	
+arrays	packed_foreach_kv_1m	37.077	36.611	0.987	1.0	3.4	
+arrays	packed_index_read_1m	58.534	59.151	1.011	6.3	4.4	
+arrays	packed_index_write_1m	122.226	120.146	0.983	12.9	1.9	
+arrays	packed_foreach_byref_1m	64.169	64.064	0.998	1.9	2.7	
+arrays	assoc_build_200k	39.092	39.005	0.998	11.5	7.3	
+arrays	assoc_lookup_200k_x5	133.011	133.291	1.002	15.6	9.6	
+arrays	assoc_isset_miss_200k_x5	156.135	156.555	1.003	10.8	9.9	
+arrays	assoc_foreach_200k_x5	100.011	100.728	1.007	10.8	30.7	
+arrays	assoc_unset_reinsert_200k	43.359	43.054	0.993	10.8	7.3	
+arrays	nested_build_rows_100k	79.734	79.428	0.996	4.2	4.4	
+arrays	nested_cow_copy_modify_100k	81.055	80.538	0.994	6.6	6.0	
+arrays	nested_pass_by_value_100k	66.821	65.247	0.976	6.6	10.0	
+arrays	array_map_closure_1m	99.346	97.924	0.986	15.9	9.5	
+arrays	array_filter_closure_1m	134.989	140.215	1.039	8.2	28.1	
+arrays	usort_closure_200k	432.346	430.439	0.996	3.0	10.5	
+arrays	sort_builtin_1m	387.245	387.134	1.000	6.8	5.6	
+arrays	array_merge_slice_keys_x50	522.504	523.762	1.002	3.1	6.2	
+arrays	in_array_array_search_2k_x2k	10.008	10.125	1.012	9.4	7.9	
+strings	concat_append_1m	38.107	37.555	0.986	3.8	4.5	
+strings	concat_append_int_200k	8.453	8.307	0.983	11.0	12.1	
+strings	concat_binary_temp_1m	131.725	132.715	1.008	2.4	19.6	
+strings	interpolation_1m	158.445	159.757	1.008	0.5	13.8	
+strings	sprintf_500k	250.965	251.164	1.001	2.3	7.7	
+strings	strlen_substr_strpos_1m	354.815	355.015	1.001	2.1	16.8	
+strings	str_replace_1_3mb_x20	17.923	18.128	1.011	6.2	4.2	
+strings	strtr_array_1_3mb_x10	108.452	109.008	1.005	0.8	2.1	
+strings	preg_replace_1_3mb_x10	62.701	62.854	1.002	5.4	31.3	
+strings	preg_match_small_500k	323.195	313.719	0.971	0.8	2.9	
+strings	preg_replace_callback_1_3mb_x3	21.984	22.049	1.003	3.1	11.4	
+strings	preg_split_1_3mb_x5	114.467	114.462	1.000	1.3	16.5	
+strings	explode_implode_1_3mb_x20	215.963	215.162	0.996	2.3	2.5	
+strings	case_trim_ucwords_500k	240.542	241.248	1.003	8.8	20.9	
+strings	htmlspecialchars_md5_200k	142.968	145.656	1.019	4.7	20.5	
+strings	json_encode_5mb_x5	382.989	383.321	1.001	2.1	5.2	
+strings	json_decode_assoc_5mb_x5	326.889	326.171	0.998	2.0	8.5	
+strings	json_decode_object_5mb_x5	438.294	435.357	0.993	3.9	5.4	
+strings	serialize_x5	198.037	195.168	0.986	5.5	14.2	
+strings	unserialize_x5	287.777	285.926	0.994	5.0	12.1	
+strings	var_export_x2	95.669	96.174	1.005	2.5	4.6	
+oop	function_call_1m	178.299	178.757	1.003	3.6	4.7	
+oop	method_call_1m	256.232	255.854	0.999	6.5	3.4	
+oop	method_call_args_ret_1m	252.250	253.356	1.004	1.2	5.1	
+oop	parent_call_1m	399.087	400.126	1.003	7.1	7.5	
+oop	static_method_call_1m	142.408	141.024	0.990	3.5	26.0	
+oop	prop_read_1m	45.338	45.226	0.998	2.3	10.2	
+oop	prop_write_1m	147.589	148.962	1.009	4.6	7.5	
+oop	prop_rmw_1m	176.930	177.868	1.005	5.8	8.6	
+oop	getter_setter_fluent_1m	390.427	388.874	0.996	6.6	9.1	
+oop	magic_get_1m	756.842	729.558	0.964	1.9	4.6	
+oop	magic_set_500k	189.541	188.127	0.993	5.8	9.1	
+oop	magic_call_500k	114.381	111.312	0.973	5.4	8.4	
+oop	interface_dispatch_3way_1m	244.845	245.404	1.002	4.7	16.6	
+oop	instanceof_1m	182.093	183.480	1.008	6.6	11.0	
+oop	new_object_1m	784.244	771.096	0.983	4.9	6.4	
+oop	closure_bound_this_1m	220.551	217.322	0.985	1.8	9.1	
+oop	closure_use_1m	179.155	171.164	0.955	1.5	5.6	
+oop	arrow_fn_1m	179.242	171.207	0.955	1.2	5.9	
+oop	first_class_callable_1m	254.581	248.529	0.976	1.4	7.0	
+oop	exception_throw_catch_100k	176.409	177.995	1.009	7.2	3.4	
+oop	exception_unwind_depth8_finally_100k	643.700	642.242	0.998	11.1	2.2	
+autoload	require_composer_autoloader	0.587	0.567	0.966	57.8	23.8	
+autoload	autoload_instantiate_cold	223.197	224.036	1.004	10.4	2.7	
+autoload	instantiate_warm	7.138	7.404	1.037	5.5	8.3	
+symfony-boot	boot_autoload_and_kernel	8.719	8.308	0.953	23.8	12.2	
+symfony-boot	first_request	6.061	6.334	1.045	15.7	47.7	
+symfony-boot	handle_requests	46.161	45.917	0.995	7.4	7.3	

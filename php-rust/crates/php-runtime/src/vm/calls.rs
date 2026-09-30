@@ -1171,6 +1171,16 @@ impl<'m> Vm<'m> {
             let top = self.frames.len() - 1;
             self.materialize_arg_places(top, &mut args, None)?;
         }
+        // Builtin names are case-insensitive (`$f = 'StrToUpper'`); the
+        // registry is keyed lowercase, and the pre-call body matches on the
+        // canonical name.
+        let lc;
+        let name = if name.iter().any(u8::is_ascii_uppercase) {
+            lc = LcKey::new(name);
+            lc.as_slice()
+        } else {
+            name
+        };
         match self.registry.get(name) {
             Some(Builtin::Value(f)) => {
                 let f = *f;
@@ -1271,90 +1281,187 @@ impl<'m> Vm<'m> {
         }
     }
 
-    /// Dispatch an unqualified namespaced call by name, performing PHP's two-step
-    /// lookup: try the namespaced `name` first, then the global `fallback`. A
-    /// namespaced function defined in another compilation unit (autoloaded /
-    /// included) is registered in `linked_functions`, so it binds here even though
-    /// the compiler could not resolve it statically. When neither is callable the
-    /// catchable "Call to undefined function" reports the namespaced `name`, exactly
-    /// as PHP does (`N\foo()` rather than the bare `foo()`).
+    /// PHP's two-step lookup for an unqualified call inside a namespace: the
+    /// namespaced `name` first, then the global `fallback`. A namespaced
+    /// function defined in another compilation unit (autoloaded / included) is
+    /// registered in `linked_functions`, so it binds here even though the
+    /// compiler could not resolve it statically. `NsTarget::Empty` = neither is
+    /// callable. No side effects.
     ///
-    /// With a site cache (`ic`, from [`Op::CallNsFallback`]) the outcome is
-    /// recorded for the next execution of the same site (see [`NsIc`]); an
-    /// undefined function is never cached.
-    pub(super) fn invoke_named_fallback(
-        &mut self,
-        name: &[u8],
-        fallback: &[u8],
-        args: Vec<Zval>,
-        ic: Option<&NsIc>,
-    ) -> Result<(), PhpError> {
+    /// A builtin `fallback` resolves in the compiler's own order — host table
+    /// before value registry (`sprintf` lives in both; `compile::call` binds
+    /// the host one) — so a site behaves the same on its first execution, on
+    /// every later one, and in the global namespace.
+    fn resolve_ns_site(&self, name: &[u8], fallback: &[u8]) -> NsTarget {
         if self.is_name_callable(name) {
-            if let Some(ic) = ic {
-                ic.fill(self.fn_gen, self.module_key(), NsTarget::Primary);
-            }
-            self.invoke_named(name, args)
-        } else if self.is_name_callable(fallback) {
-            if let Some(ic) = ic {
-                // `FallbackValue` only when `invoke_named` would reach the
-                // registry arm: no hoisted or linked user function of that
-                // name (both covered by the cache key).
-                let fb = fallback.strip_prefix(b"\\").unwrap_or(fallback);
-                let target = if self.module.find_fn_ci(fb).is_none()
-                    && !self.linked_functions.contains_key(LcKey::new(fb).as_slice())
-                {
-                    match self.registry.get(fb) {
-                        Some(Builtin::Value(f)) => NsTarget::FallbackValue(*f),
-                        _ => NsTarget::Fallback,
-                    }
-                } else {
-                    NsTarget::Fallback
-                };
-                ic.fill(self.fn_gen, self.module_key(), target);
-            }
-            self.invoke_named(fallback, args)
+            return NsTarget::Primary;
+        }
+        let fb = fallback.strip_prefix(b"\\").unwrap_or(fallback);
+        let lc = LcKey::new(fb);
+        if self.module.find_fn_ci(fb).is_some() || self.linked_functions.contains_key(lc.as_slice())
+        {
+            return NsTarget::Fallback;
+        }
+        if let Some(canon) = host_builtin_canonical(fb) {
+            return NsTarget::FallbackHost(canon);
+        }
+        if let Some(Builtin::Value(f)) = self.registry.get(lc.as_slice()) {
+            return NsTarget::FallbackValue(*f);
+        }
+        if self.is_name_callable(fb) {
+            NsTarget::Fallback
         } else {
-            Err(undefined_builtin(name))
+            NsTarget::Empty
         }
     }
 
-    /// [`Op::CallNsFallback`] through its site cache (fork slice 3, see
-    /// [`NsIc`]): a hit skips both `is_name_callable` probes, and for a
-    /// registry value builtin the whole `invoke_named` lookup.
-    /// `#[inline(never)]`: the body stays OUT of `run_loop`, whose layout is
-    /// measured-sensitive (the arm is the same size as before the cache).
-    #[inline(never)]
-    pub(super) fn call_ns_fallback_site(
+    /// The binding of a namespaced-call site: the one it made earlier in this
+    /// run, else a fresh resolution, recorded unless undefined (see [`NsIc`]).
+    #[inline]
+    fn ns_site_target(&mut self, name: &[u8], fallback: &[u8], ic: &NsIc) -> NsTarget {
+        if let Some(t) = ic.get() {
+            return t;
+        }
+        let t = self.resolve_ns_site(name, fallback);
+        if !matches!(t, NsTarget::Empty) {
+            ic.fill(t);
+        }
+        t
+    }
+
+    /// Call a namespaced-call site's `target` with an owned argument vector.
+    /// When neither name is callable the catchable "Call to undefined
+    /// function" reports the namespaced `name`, exactly as PHP does
+    /// (`N\foo()` rather than the bare `foo()`).
+    fn ns_site_call(
         &mut self,
         top: usize,
+        target: NsTarget,
         name: &[u8],
         fallback: &[u8],
         mut args: Vec<Zval>,
-        ic: &NsIc,
     ) -> Result<(), PhpError> {
-        match ic.get(self.fn_gen, self.module_key()) {
-            Some(NsTarget::FallbackValue(f)) => {
+        match target {
+            NsTarget::Primary => self.invoke_named(name, args),
+            NsTarget::Fallback => self.invoke_named(fallback, args),
+            NsTarget::FallbackValue(f) => {
                 if args.iter().any(|a| matches!(a, Zval::ArgPlace(_))) {
                     self.materialize_arg_places(top, &mut args, None)?;
                 }
-                // The name `invoke_named` would hand to the pre-call body.
                 let fb = fallback.strip_prefix(b"\\").unwrap_or(fallback);
                 let result = self.value_builtin_call(top, f, fb, &mut args)?;
                 let top = self.frames.len() - 1;
                 self.frames[top].stack.push(result);
                 Ok(())
             }
-            Some(NsTarget::Fallback) => self.invoke_named(fallback, args),
-            Some(NsTarget::Primary) => self.invoke_named(name, args),
-            _ => self.invoke_named_fallback(name, fallback, args, Some(ic)),
+            NsTarget::FallbackHost(canon) => {
+                if args.iter().any(|a| matches!(a, Zval::ArgPlace(_))) {
+                    self.materialize_arg_places(top, &mut args, None)?;
+                }
+                let line = self.cur_line(top);
+                self.flush_diags(line)?;
+                let result = self.dispatch_host_builtin(canon, args)?;
+                self.host_call_epilogue(line, result)
+            }
+            NsTarget::Empty => Err(undefined_builtin(name)),
         }
     }
 
-    /// Identity of the running module for the [`NsIc`] key (`find_fn_ci`
-    /// is per module; `self.module` switches across include/eval).
-    #[inline]
-    pub(super) fn module_key(&self) -> usize {
-        self.module as *const Module as usize
+    /// What follows a host builtin's body, as in [`Op::CallHostBuiltin`]: its
+    /// own diagnostics flushed at the call line, the async-signal delivery
+    /// point, the result pushed.
+    fn host_call_epilogue(&mut self, line: Line, result: Zval) -> Result<(), PhpError> {
+        self.flush_diags(line)?;
+        if self.async_signals && PENDING_SIGNALS.load(std::sync::atomic::Ordering::Relaxed) != 0 {
+            self.dispatch_pending_signals()?;
+        }
+        let top = self.frames.len() - 1;
+        self.frames[top].stack.push(result);
+        Ok(())
+    }
+
+    /// [`Op::CallNsFallback`]: `[args…] -> [ret]` through the site's binding
+    /// (fork slice 3, see [`NsIc`]). A bound site skips both
+    /// `is_name_callable` probes; a builtin target also skips `invoke_named`
+    /// and, for up to four arguments, the argument `Vec` — the same direct
+    /// pops as `Op::CallBuiltin` / `Op::CallHostBuiltin`.
+    /// `#[inline(never)]`: the body stays OUT of `run_loop`, whose layout is
+    /// measured-sensitive.
+    #[inline(never)]
+    pub(super) fn call_ns_fallback_site(
+        &mut self,
+        top: usize,
+        name: &[u8],
+        fallback: &[u8],
+        argc: u32,
+        ic: &NsIc,
+    ) -> Result<(), PhpError> {
+        let target = self.ns_site_target(name, fallback, ic);
+        let n = argc as usize;
+        if n > 4 || !matches!(target, NsTarget::FallbackValue(_) | NsTarget::FallbackHost(_)) {
+            let args = self.pop_keys(top, argc);
+            return self.ns_site_call(top, target, name, fallback, args);
+        }
+        let mut buf = [Zval::Null, Zval::Null, Zval::Null, Zval::Null];
+        for slot in buf[..n].iter_mut().rev() {
+            *slot = self.frames[top].stack.pop().expect("CallNsFallback argument");
+        }
+        let args = &mut buf[..n];
+        if args.iter().any(|a| matches!(a, Zval::ArgPlace(_))) {
+            self.materialize_arg_places(top, args, None)?;
+        }
+        match target {
+            NsTarget::FallbackValue(f) => {
+                let fb = fallback.strip_prefix(b"\\").unwrap_or(fallback);
+                let result = self.value_builtin_call(top, f, fb, args)?;
+                let top = self.frames.len() - 1;
+                self.frames[top].stack.push(result);
+                Ok(())
+            }
+            NsTarget::FallbackHost(canon) => {
+                let line = self.cur_line(top);
+                self.flush_diags(line)?;
+                let result = match self.dispatch_host_builtin_slice(canon, args) {
+                    Some(result) => result?,
+                    None => {
+                        let args =
+                            args.iter_mut().map(|a| std::mem::replace(a, Zval::Null)).collect();
+                        self.dispatch_host_builtin(canon, args)?
+                    }
+                };
+                self.host_call_epilogue(line, result)
+            }
+            _ => unreachable!("filtered above"),
+        }
+    }
+
+    /// [`Op::CallNsFallbackArgs`]: the spread form, arguments already in a
+    /// vector.
+    #[inline(never)]
+    pub(super) fn call_ns_fallback_args(
+        &mut self,
+        top: usize,
+        name: &[u8],
+        fallback: &[u8],
+        args: Vec<Zval>,
+        ic: &NsIc,
+    ) -> Result<(), PhpError> {
+        let target = self.ns_site_target(name, fallback, ic);
+        self.ns_site_call(top, target, name, fallback, args)
+    }
+
+    /// [`Op::NsShadowGuard`]: is the namespaced `name` a declared function?
+    /// Decided on the site's first execution and kept for the run.
+    #[inline(never)]
+    pub(super) fn ns_shadow_guard(&mut self, name: &[u8], ic: &NsIc) -> bool {
+        match ic.get() {
+            Some(t) => matches!(t, NsTarget::Primary),
+            None => {
+                let user = self.is_name_callable(name);
+                ic.fill(if user { NsTarget::Primary } else { NsTarget::Fallback });
+                user
+            }
+        }
     }
 
     /// Enter a freshly-built callee `frame`: if its body is a generator,

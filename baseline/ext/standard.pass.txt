@@ -1123,6 +1123,7 @@ ext/standard/tests/serialize/serialization_objects_011.phpt
 ext/standard/tests/serialize/serialization_objects_012.phpt
 ext/standard/tests/serialize/serialization_objects_013.phpt
 ext/standard/tests/serialize/serialization_objects_014.phpt
+ext/standard/tests/serialize/serialization_objects_016.phpt
 ext/standard/tests/serialize/serialization_objects_019.phpt
 ext/standard/tests/serialize/serialization_objects_incomplete.phpt
 ext/standard/tests/serialize/serialization_precision_001.phpt

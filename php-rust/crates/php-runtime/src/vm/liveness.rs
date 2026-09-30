@@ -314,6 +314,10 @@ fn effect(op: &Op, park_targets: &[usize]) -> Effect {
         Op::PropConcatGate { done, .. } => {
             e.edges.push((*done as usize, Vec::new()));
         }
+        // Stack-neutral conditional jump (shadow declared → `user`).
+        Op::NsShadowGuard { user, .. } => {
+            e.edges.push((*user as usize, Vec::new()));
+        }
         Op::StaticGuard { skip, .. } => e.edges.push((*skip as usize, Vec::new())),
         Op::CatchMatch { var, body, .. } => {
             // `var` è definita solo sull'arco preso verso il corpo del catch.
@@ -634,6 +638,7 @@ fn renounce(func: &Func) -> (bool, Bits) {
             | Op::PropGetSlot { .. }
             | Op::PropDimGetConst { .. }
             | Op::PropConcatGate { .. }
+            | Op::NsShadowGuard { .. }
             | Op::PropSetPop { .. }
             | Op::StringifySlot { .. }
             | Op::PropGetSlotRecv { .. }

@@ -916,6 +916,7 @@ Zend/tests/fr47160.phpt
 Zend/tests/frameless_jmp_001.phpt
 Zend/tests/frameless_jmp_002.phpt
 Zend/tests/frameless_jmp_003.phpt
+Zend/tests/frameless_jmp_004.phpt
 Zend/tests/frameless_jmp_005.phpt
 Zend/tests/frameless_throwing_destructor.phpt
 Zend/tests/frameless_undefined_var.phpt

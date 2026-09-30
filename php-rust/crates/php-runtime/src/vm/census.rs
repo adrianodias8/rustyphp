@@ -13,7 +13,7 @@ use crate::bytecode::Op;
 use crate::hir::BinOp;
 use php_types::Zval;
 
-pub const N_OPS: usize = 201;
+pub const N_OPS: usize = 202;
 
 pub const OP_NAMES: [&str; N_OPS] = [
     "PushConst", "Pop", "Dup", "LoadSlot", "LoadVar", "PushUndef", "StoreSlot", "Swap",
@@ -47,6 +47,7 @@ pub const OP_NAMES: [&str; N_OPS] = [
     "BinaryAdd",
     "PropDimGetConst",
     "PropConcatGate",
+    "NsShadowGuard",
 ];
 
 pub fn op_index(op: &Op) -> usize {
@@ -274,6 +275,9 @@ pub fn op_index(op: &Op) -> usize {
         Op::PropDimGetConst { .. } => 199,
         // Fork: gate of the in-place `$o->p .= rhs` (appended; N_OPS 200→201).
         Op::PropConcatGate { .. } => 200,
+        // Fork: guard of a statically bound call inside a namespace
+        // (appended; N_OPS 201→202).
+        Op::NsShadowGuard { .. } => 201,
     }
 }
 
@@ -765,7 +769,7 @@ mod tests {
         // S-145 FR1: PropDimGetConst chiude ora la tabella (append in coda,
         // nessun indice esistente rinumerato) — ogni distanza dal fondo
         // cresce di 1, emendata QUI in blocco.
-        assert_eq!(op_index(&Op::ConcatAssignSlot(0)), N_OPS - 24);
+        assert_eq!(op_index(&Op::ConcatAssignSlot(0)), N_OPS - 25);
         assert_eq!(
             op_index(&Op::CmpJmpSC {
                 op: crate::hir::BinOp::Lt,
@@ -774,37 +778,44 @@ mod tests {
                 addr: 0,
                 when: true
             }),
-            N_OPS - 17
+            N_OPS - 18
         );
-        assert_eq!(OP_NAMES[N_OPS - 17], "CmpJmpSC");
+        assert_eq!(OP_NAMES[N_OPS - 18], "CmpJmpSC");
         assert_eq!(
             op_index(&Op::BinarySTDst { op: crate::hir::BinOp::Add, l: 0, dst: 0 }),
-            N_OPS - 16
+            N_OPS - 17
         );
-        assert_eq!(OP_NAMES[N_OPS - 16], "BinarySTDst");
+        assert_eq!(OP_NAMES[N_OPS - 17], "BinarySTDst");
         assert_eq!(
             op_index(&Op::BinaryTC { op: crate::hir::BinOp::Add, cidx: 0 }),
-            N_OPS - 15
+            N_OPS - 16
         );
-        assert_eq!(OP_NAMES[N_OPS - 15], "BinaryTC");
+        assert_eq!(OP_NAMES[N_OPS - 16], "BinaryTC");
         assert_eq!(
             op_index(&Op::IncDecSlotJmp { slot: 0, inc: true, addr: 0 }),
-            N_OPS - 12
+            N_OPS - 13
         );
-        assert_eq!(OP_NAMES[N_OPS - 12], "IncDecSlotJmp");
-        assert_eq!(op_index(&Op::StringifySlot { slot: 0 }), N_OPS - 9);
-        assert_eq!(OP_NAMES[N_OPS - 9], "StringifySlot");
-        assert_eq!(op_index(&Op::LoadVarPushConst { slot: 0, cidx: 0 }), N_OPS - 5);
-        assert_eq!(OP_NAMES[N_OPS - 5], "LoadVarPushConst");
-        assert_eq!(op_index(&Op::ConcatNConst { n: 0, cidx: 0 }), N_OPS - 4);
-        assert_eq!(OP_NAMES[N_OPS - 4], "ConcatNConst");
-        assert_eq!(op_index(&Op::BinaryAdd), N_OPS - 3);
-        assert_eq!(OP_NAMES[N_OPS - 3], "BinaryAdd");
-        assert_eq!(OP_NAMES[N_OPS - 2], "PropDimGetConst");
+        assert_eq!(OP_NAMES[N_OPS - 13], "IncDecSlotJmp");
+        assert_eq!(op_index(&Op::StringifySlot { slot: 0 }), N_OPS - 10);
+        assert_eq!(OP_NAMES[N_OPS - 10], "StringifySlot");
+        assert_eq!(op_index(&Op::LoadVarPushConst { slot: 0, cidx: 0 }), N_OPS - 6);
+        assert_eq!(OP_NAMES[N_OPS - 6], "LoadVarPushConst");
+        assert_eq!(op_index(&Op::ConcatNConst { n: 0, cidx: 0 }), N_OPS - 5);
+        assert_eq!(OP_NAMES[N_OPS - 5], "ConcatNConst");
+        assert_eq!(op_index(&Op::BinaryAdd), N_OPS - 4);
+        assert_eq!(OP_NAMES[N_OPS - 4], "BinaryAdd");
+        assert_eq!(OP_NAMES[N_OPS - 3], "PropDimGetConst");
         // Fork: PropConcatGate appended (in-place `$o->p .= rhs` gate) —
         // every distance from the bottom grows by 1, amended here in block.
-        assert_eq!(op_index(&Op::PropConcatGate { name: [].into(), done: 0 }), N_OPS - 1);
-        assert_eq!(OP_NAMES[N_OPS - 1], "PropConcatGate");
+        assert_eq!(op_index(&Op::PropConcatGate { name: [].into(), done: 0 }), N_OPS - 2);
+        assert_eq!(OP_NAMES[N_OPS - 2], "PropConcatGate");
+        // Fork: NsShadowGuard appended — every distance from the bottom
+        // grows by 1 again, amended here in block.
+        assert_eq!(
+            op_index(&Op::NsShadowGuard { name: [].into(), ic: Default::default(), user: 0 }),
+            N_OPS - 1
+        );
+        assert_eq!(OP_NAMES[N_OPS - 1], "NsShadowGuard");
     }
 
     #[test]

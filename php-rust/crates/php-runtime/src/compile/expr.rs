@@ -927,6 +927,52 @@ impl<'a> super::FnCompiler<'a> {
         }
     }
 
+    /// Would [`Self::call`] bind the GLOBAL builtin `bname` statically with a
+    /// sequence that depends on the callee's by-reference shape (or on a
+    /// spread)? Mirrors the order of the checks in `call`. By-value builtins
+    /// are not listed: inside a namespace they compile to the single
+    /// [`Op::CallNsFallback`].
+    fn ns_static_builtin(&self, bname: &[u8], args: &[Expr]) -> bool {
+        if host_out_param_call(bname, args.len()).is_some() {
+            return true;
+        }
+        if crate::vm::host_builtin_canonical(bname).is_some() {
+            return args.iter().any(|a| matches!(a.kind, ExprKind::Spread(_)));
+        }
+        bname.eq_ignore_ascii_case(b"array_multisort")
+            || crate::vm::host_builtin_scanf(bname).is_some()
+            || crate::vm::host_builtin_ref_first(bname).is_some()
+            || matches!(self.ctx.registry.get(bname), Some(Builtin::RefFirst(_)))
+    }
+
+    /// An unqualified call inside a namespace whose global target `global` is
+    /// bound statically: `[NsShadowGuard → user] <static call> Jump end;
+    /// user: <dynamic call by the namespaced name>; end:`. The arguments are
+    /// compiled once per branch and evaluated on one. The dynamic branch is
+    /// the same sequence a call to an unknown function takes (SEND_VAR_EX
+    /// arguments, so the shadow may take parameters by reference).
+    fn call_ns_guarded(&mut self, name: &[u8], global: &[u8], args: &[Expr]) -> R<()> {
+        let ic = crate::bytecode::NsIc::default();
+        let guard =
+            self.emit(Op::NsShadowGuard { name: name.into(), ic: ic.clone(), user: Addr::MAX });
+        self.call(global, None, args, &[])?;
+        let done = self.emit(Op::Jump(Addr::MAX));
+        let user = self.here();
+        self.patch(guard, Op::NsShadowGuard { name: name.into(), ic, user });
+        let k = self.konst(Const::Str(php_types::PhpStr::new(name)));
+        self.emit(Op::PushConst(k));
+        if args.iter().any(|a| matches!(a.kind, ExprKind::Spread(_))) {
+            self.build_args_array(args)?;
+            self.emit(Op::CallValueArgs);
+        } else {
+            self.push_dyn_args(args)?;
+            self.emit(Op::CallValue { argc: args.len() as u32 });
+        }
+        let end = self.here();
+        self.patch_target(done, end);
+        Ok(())
+    }
+
     /// Compile a named function call `name(args...)`.
     ///
     /// Resolution mirrors the evaluator: a *user* function (matched
@@ -959,10 +1005,36 @@ impl<'a> super::FnCompiler<'a> {
                 })
                 .map(|(i, _)| i)
         };
-        let user_idx = hoisted(name).or_else(|| fallback.and_then(hoisted));
+        let ns_idx = hoisted(name);
+        let user_idx = ns_idx.or_else(|| fallback.and_then(hoisted));
         // Builtins are always global, so resolve them — and the run-time dynamic
         // dispatch below — against the global-fallback name when present.
+        // Function names are case-insensitive and every builtin table is
+        // lowercase (`StrToUpper($s)`, `COUNT($a)`); the name as written is
+        // kept for user functions and the undefined-function error.
         let bname: &[u8] = fallback.unwrap_or(name);
+        let bname_lc;
+        let bname = if bname.iter().any(u8::is_ascii_uppercase) {
+            bname_lc = bname.to_ascii_lowercase();
+            &bname_lc[..]
+        } else {
+            bname
+        };
+        // An unqualified call inside a namespace binds the NAMESPACED function
+        // when one is declared at run time (another unit, an eval, a test
+        // double such as `App\time()`), else the global one. Where the global
+        // one is bound statically below — a global user or prelude function, a
+        // by-reference builtin, a spread on a host builtin — the static
+        // sequence goes behind a guard (`Op::NsShadowGuard`). By-value
+        // builtins take the single-op route instead (`Op::CallNsFallback`).
+        if let Some(fb) = fallback {
+            if named.is_empty()
+                && ns_idx.is_none()
+                && (user_idx.is_some() || self.ns_static_builtin(bname, args))
+            {
+                return self.call_ns_guarded(name, fb, args);
+            }
+        }
         if let Some(idx) = user_idx {
             // Named arguments are resolved to parameter slots at compile time
             // (the callee is known), PAR.
@@ -1032,16 +1104,7 @@ impl<'a> super::FnCompiler<'a> {
         // str_replace/str_ireplace also live in the value-builtin registry;
         // their out-param wrapper only matters when `&$count` is actually
         // passed — the common 3-arg call keeps the (hot) registry path.
-        let count_only_out = |n: &[u8]| {
-            n.eq_ignore_ascii_case(b"str_replace")
-                || n.eq_ignore_ascii_case(b"str_ireplace")
-                || n.eq_ignore_ascii_case(b"getimagesize")
-                || n.eq_ignore_ascii_case(b"getimagesizefromstring")
-                || n.eq_ignore_ascii_case(b"getopt")
-        };
-        if let Some((canon, out_idx)) = crate::vm::host_builtin_out_param(bname)
-            .filter(|&(_, out_idx)| args.len() > out_idx || !count_only_out(bname))
-        {
+        if let Some((canon, out_idx)) = host_out_param_call(bname, args.len()) {
             // A builtin may have a *second* out-param (`exec`'s `&$result_code`).
             let out_idx2 = crate::vm::host_builtin_out_param_second(bname);
             // A property/index out-param (`proc_open(..., $this->pipes)`) is
@@ -1102,6 +1165,19 @@ impl<'a> super::FnCompiler<'a> {
             // op as registry builtins; its VM handler routes host names too.
             if args.iter().any(|a| matches!(a.kind, ExprKind::Spread(_))) {
                 return self.emit_builtin_spread(canon, args);
+            }
+            // Inside a namespace the namespaced function is tried first at run
+            // time, as for registry builtins below (`App\sprintf()`,
+            // ClockMock's `time()`/`sleep()`); the site binds once.
+            if fallback.is_some() {
+                self.push_value_args(args)?;
+                self.emit(Op::CallNsFallback {
+                    name: name.into(),
+                    fallback: canon.into(),
+                    argc: args.len() as u32,
+                    ic: crate::bytecode::NsIc::default(),
+                });
+                return Ok(());
             }
             self.push_value_args(args)?; // rejects spread (out of slice here)
             self.emit(Op::CallHostBuiltin { name: canon.into(), argc: args.len() as u32 });
@@ -1290,12 +1366,13 @@ impl<'a> super::FnCompiler<'a> {
                 // ones. Only the global-namespace call (no fallback) may bind
                 // the builtin op directly (a global redeclaration is a PHP
                 // fatal, so that binding can never be shadowed).
-                if let Some(fb) = fallback {
+                if fallback.is_some() {
                     if args.iter().any(|a| matches!(a.kind, ExprKind::Spread(_))) {
                         self.build_args_array(args)?;
                         self.emit(Op::CallNsFallbackArgs {
                             name: name.into(),
-                            fallback: fb.into(),
+                            fallback: bname.into(),
+                            ic: crate::bytecode::NsIc::default(),
                         });
                         return Ok(());
                     }
@@ -1304,7 +1381,7 @@ impl<'a> super::FnCompiler<'a> {
                     }
                     self.emit(Op::CallNsFallback {
                         name: name.into(),
-                        fallback: fb.into(),
+                        fallback: bname.into(),
                         argc: args.len() as u32,
                         ic: crate::bytecode::NsIc::default(),
                     });
@@ -1335,6 +1412,7 @@ impl<'a> super::FnCompiler<'a> {
                         self.emit(Op::CallNsFallbackArgs {
                             name: name.into(),
                             fallback: fb.into(),
+                            ic: crate::bytecode::NsIc::default(),
                         });
                     } else {
                         let k = self.konst(Const::Str(php_types::PhpStr::new(name)));
@@ -2604,4 +2682,19 @@ impl<'a> super::FnCompiler<'a> {
         self.expr(&name)?;
         Ok(true)
     }
+}
+
+/// The host builtin with a by-reference *output* parameter that a call to
+/// `bname` with `argc` arguments compiles to (`Op::CallHostBuiltinOut`), if
+/// any. `str_replace`/`str_ireplace` and a few others also have a plain
+/// by-value entry; their out-param wrapper only matters when the out argument
+/// is actually passed — the common call keeps the (hot) by-value path.
+fn host_out_param_call(bname: &[u8], argc: usize) -> Option<(&'static [u8], usize)> {
+    let count_only_out = bname.eq_ignore_ascii_case(b"str_replace")
+        || bname.eq_ignore_ascii_case(b"str_ireplace")
+        || bname.eq_ignore_ascii_case(b"getimagesize")
+        || bname.eq_ignore_ascii_case(b"getimagesizefromstring")
+        || bname.eq_ignore_ascii_case(b"getopt");
+    crate::vm::host_builtin_out_param(bname)
+        .filter(|&(_, out_idx)| argc > out_idx || !count_only_out)
 }

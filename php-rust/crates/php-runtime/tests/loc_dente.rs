@@ -55,7 +55,7 @@ fn nessun_sorgente_rs_oltre_cap() {
         // p.1) — mod.rs +62 (push_method_frame_one +28, ammissione
         // array-callable in try_autoload +34); calls.rs (+31,
         // call_method_one) resta fuori allowlist sotto il cap 2000.
-        ("php-runtime/src/vm/mod.rs", 26370, "monolite VM — bersaglio A2; +62 L-AU1 S-163 PRE-dichiarato; +59 flag gc-idle S-176 DICHIARATO S-180 (tree tenuto, keep-partial-wins); +402 fork 2026-09-30 (count()/Countable dynamic path, quiet static-property fetch, in-place `.=`, seed class index cache, hashed host_builtin_canonical, NsIc fn_gen, their tests): DECLARED"),
+        ("php-runtime/src/vm/mod.rs", 26376, "monolite VM — bersaglio A2; +62 L-AU1 S-163 PRE-dichiarato; +59 flag gc-idle S-176 DICHIARATO S-180 (tree tenuto, keep-partial-wins); +408 fork 2026-09-30 (count()/Countable dynamic path, quiet static-property fetch, in-place `.=`, seed class index cache, hashed host_builtin_canonical, NsIc fn_gen, units_run / registry case folding, their tests): DECLARED"),
         ("php-runtime/src/vm/host.rs", 7727, "hostcall — backlog A2; +18 L-AM2 S-162 PRE-dichiarato; +1 flag gc-idle S-176 DICHIARATO S-180"),
         // S-156: salita DICHIARATA +29 (leva HD2-hostcall: braccio
         // CallHostBuiltin, pop diretti ≤4) — verbale wp156-harness/s156-promo.
@@ -89,7 +89,7 @@ fn nessun_sorgente_rs_oltre_cap() {
         // S-174 «Sweep-in-op» (criterio wp174-harness/s174-criterio.md p.5): +87 netti
         // (sweep_idle/sweep_skip_next + 5 siti in place + back-edge fuso, commenti
         // inclusi), cap alzato DICHIARANDO prima della promozione (differita: Data).
-        ("php-runtime/src/vm/run.rs", 7588, "run_loop — +29 L-RT1 (upstream S-183, Ret in place) · ULTIMO o mai (A2); +102 L-MCk S-166 + 174 L-SL1 S-171 + 109 L-SL2 S-172 + 74 fetta 3 S-173 + 87 Sweep-in-op S-174 + 11 flag gc-idle S-176 (DICHIARATO S-180) + 32 L-CR1 S-181 (DICHIARATO) dichiarati; +155 fork 2026-09-30 (count()/Countable dynamic path, quiet static-property fetch, in-place `.=`, seed class index cache, CallNsFallback site cache (body in calls.rs), their tests): DECLARED"),
+        ("php-runtime/src/vm/run.rs", 7586, "run_loop — +29 L-RT1 (upstream S-183, Ret in place) · ULTIMO o mai (A2); +102 L-MCk S-166 + 174 L-SL1 S-171 + 109 L-SL2 S-172 + 74 fetta 3 S-173 + 87 Sweep-in-op S-174 + 11 flag gc-idle S-176 (DICHIARATO S-180) + 32 L-CR1 S-181 (DICHIARATO) dichiarati; +153 fork 2026-09-30 (count()/Countable dynamic path, quiet static-property fetch, in-place `.=`, seed class index cache, CallNsFallback site cache (body in calls.rs), NsShadowGuard arm, their tests): DECLARED"),
         ("php-runtime/tests/eval.rs", 4773, "batteria eval"),
         ("php-builtins/tests/builtins.rs", 4772, "batteria builtins"),
         ("php-runtime/src/lower/mod.rs", 3940, "lowering; +102 fork 2026-09-30 (count()/Countable dynamic path, quiet static-property fetch, in-place `.=`, seed class index cache, their tests): DECLARED"),
@@ -97,9 +97,9 @@ fn nessun_sorgente_rs_oltre_cap() {
         ("php-types/src/big5.rs", 3372, "GENERATO, cap fisso"),
         ("php-builtins/src/string.rs", 2865, "builtins stringhe"),
         ("php-builtins/src/file.rs", 2758, "builtins file"),
-        ("php-runtime/src/compile/expr.rs", 2607, "compile expr; +17 fork 2026-09-30 (count()/Countable dynamic path, quiet static-property fetch, in-place `.=`, seed class index cache, their tests): DECLARED"),
+        ("php-runtime/src/compile/expr.rs", 2700, "compile expr; +110 fork 2026-09-30 (count()/Countable dynamic path, quiet static-property fetch, in-place `.=`, seed class index cache, namespace shadow guard and case folding in call(), their tests): DECLARED"),
         ("php-builtins/src/date.rs", 2458, "builtins date"),
-        ("php-runtime/src/bytecode.rs", 2397, "bytecode; +91 fork 2026-09-30 (count()/Countable dynamic path, quiet static-property fetch, in-place `.=`, seed class index cache, NsIc site cache, their tests): DECLARED"),
+        ("php-runtime/src/bytecode.rs", 2436, "bytecode; +130 fork 2026-09-30 (count()/Countable dynamic path, quiet static-property fetch, in-place `.=`, seed class index cache, NsIc site cache, sticky NsIc and NsShadowGuard, their tests): DECLARED"),
         ("php-runtime/src/preg.rs", 2290, "preg"),
         ("php-types/src/memcensus.rs", 2268, "strumentazione census"),
         ("php-runtime/src/lower/class.rs", 2173, "lowering classi; +5 fork 2026-09-30 (FxHash alias comment): DECLARED"),

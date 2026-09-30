@@ -2,16 +2,13 @@
 Namespaced two-step function lookup: per-site cache invalidation (fork slice 3)
 --DESCRIPTION--
 An unqualified call inside a namespace (`count($a)` in `namespace App`) is
-resolved at run time: `App\count` first, then global `count`. The fork caches
-that resolution per call site (Op::CallNsFallback, NsIc). A cached site must
+resolved at run time: `App\count` first, then global `count`. The fork binds
+that resolution per call site (Op::CallNsFallback, NsIc). A bound site must
 keep the pre-call semantics of the builtin (Countable dispatch), an undefined
-function must never be cached (a later declaration binds), and a function
+function must never be bound (a later declaration binds), and a function
 registered by a conditional declaration, eval or include must bind at sites
-that have not bound yet. Every expected line is oracle output (PHP 8.5.7).
-NOT covered, deliberately: a site that has already run and bound to the
-global function, followed by a declaration of the namespaced one. PHP keeps
-the first binding (its runtime-cache slot); phpr rebinds, before and after
-the cache. Recorded in NOTES.md (session 3, found on the way).
+that have not run yet. Every expected line is oracle output (PHP 8.5.7).
+Sites that HAVE run keep their binding: see ns-shadow-builtins.phpt.
 --FILE--
 <?php
 namespace App;

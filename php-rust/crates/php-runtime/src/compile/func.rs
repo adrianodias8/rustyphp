@@ -226,6 +226,14 @@ fn thread_jumps(ops: &mut [Op], lines: &[Line]) {
                 let t = final_target(ops, *done);
                 (t != *done).then_some(Op::PropConcatGate { name: name.clone(), done: t })
             }
+            Op::NsShadowGuard { name, ic, user } => {
+                let t = final_target(ops, *user);
+                (t != *user).then_some(Op::NsShadowGuard {
+                    name: name.clone(),
+                    ic: ic.clone(),
+                    user: t,
+                })
+            }
             Op::CmpJmp { op, addr, when } => {
                 let t = final_target(ops, *addr);
                 (t != *addr).then_some(Op::CmpJmp { op: *op, addr: t, when: *when })
