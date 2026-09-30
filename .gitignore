@@ -1,19 +1,14 @@
+# Build artefacts live on a Docker volume (docker/run.sh), never in the repo.
 target/
-# Cargo.lock e' TRACCIATO (workspace con binari: build riproducibile,
-# audit Sol 2026-07-30 P0.1). Ignorato resta solo il target/.
+php-rust/.cargo/config.toml
+
 .DS_Store
 **/._*
 ._*
-/oracle-build/
-.serena/
-.vexp/
-# file temporanei hash-named creati da run di test con cwd nel repo
-php-rust/[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]
-# config Cargo LOCALE (target-dir personale fuori dal volume esterno):
-# tracciato solo l'esempio .cargo/config.toml.example
-php-rust/.cargo/config.toml
 
-# ---- fork additions (rustyphp) ----
+# Hash-named temp files some test runs create with the workspace as cwd.
+php-rust/[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]
+
 # Benchmark raw outputs and generated inputs live in the scratch volume; only
 # the dated summaries in bench/results/*.md and the flamegraphs are committed.
 bench/symfony-app/vendor/

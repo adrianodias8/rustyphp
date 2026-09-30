@@ -1,8 +1,0 @@
-pre-collect
-~a
-~b
-collected>0:yes
-post-collect
-c-alive:c
-~c
-end

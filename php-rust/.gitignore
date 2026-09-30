@@ -1,49 +1,16 @@
-# macOS AppleDouble / metadata sidecars. On the external work volume these are
-# created next to every file; they confuse Serena's indexer and can be staged by
-# accident. (The copies git itself writes under .git/objects are git-internal and
-# not covered by .gitignore — `scripts/clean-appledouble.sh` clears those.)
+# macOS metadata sidecars.
 ._*
 **/._*
 .DS_Store
 
-# phpt-run scratch artifacts: tests executed with a cwd of the repo ROOT write
-# their temp fixtures next to it. Anchored to the root (leading /) ON PURPOSE —
-# a bare *.gz would silently mask legitimate committed test fixtures anywhere in
-# the tree (bz2/zip/finfo assets, gz oracle fixtures), which is exactly the
-# class of file this project must never lose.
+# Scratch files some .phpt tests write when run with this directory as cwd.
+# Anchored to the root on purpose: a bare *.gz would hide committed test
+# fixtures elsewhere in the tree.
 /*.tmp
 /*.gz
 /readgzfile_temp/
 /1x1.jpg
 /DataFile*.txt
 /EmptyFile*.txt
-php-8.5.7.code-workspace
-
-# phpt scratch: nested workdirs some file/zlib variation tests create when run
-# with the repo root as cwd (dir1/dir2/dir3/workdir shape), plus bug fixtures.
 /*.dir/
 /bug*_x/
-wp103-harness/collaudo-out-off/
-wp103-harness/collaudo-out-on/
-wp103-harness/corpus-gate/
-wp103-harness/bin/
-wp103-harness/leva-nulla-out/*.time
-wp103-harness/stack-census-out/
-wp103-harness/peak-ab-out/
-wp103-harness/hd-census-out/
-wp176-harness/micro-out/
-wp176-harness/ab-out/
-wp176-harness/orm-out/
-wp176-harness/census-out/
-wp176-harness/census-typed-out/
-wp177-harness/ab-out/
-wp177-harness/census-miss-out/
-wp177-harness/promo-out/
-wp177-harness/pair-out/
-wp177-harness/orm-out/
-wp177-harness/micro-out/
-wp180-harness/promo-out/
-wp180-harness/pair-out/
-wp180-harness/orm-out/
-wp180-harness/micro-out/
-wp180-harness/census-out/
