@@ -134,23 +134,24 @@ PY
 }
 
 ARMS="Z P MA MB MC M2"
-declare -A HH
+# hash per braccio in FILE (bash 3.2 di macOS non ha gli array associativi: incidente S-183 #3)
+hh(){ cat "$OUT/hash-$1"; }
 if [ "${SKIP_BUILD:-0}" = 1 ]; then
-  for a in $ARMS; do [ -s "$OUT/phpr-$a" ] || { note "rc=7 SKIP_BUILD: manca phpr-$a"; fin 7; }; HH[$a]=$(shasum -a 256 "$OUT/phpr-$a" | cut -c1-16); done
-  note "SKIP_BUILD=1: riuso dei binari già costruiti — $(for a in $ARMS; do printf '%s %s · ' "$a" "${HH[$a]}"; done)"
+  for a in $ARMS; do [ -s "$OUT/phpr-$a" ] || { note "rc=7 SKIP_BUILD: manca phpr-$a"; fin 7; }; shasum -a 256 "$OUT/phpr-$a" | cut -c1-16 > "$OUT/hash-$a"; done
+  note "SKIP_BUILD=1: riuso dei binari già costruiti — $(for a in $ARMS; do printf '%s %s · ' "$a" "$(hh $a)"; done)"
 else
   for a in $ARMS; do
     archivio "$SHA0" || { note "rc=7 archivio $a fallito"; fin 7; }
     pe=$(patch_arm "$a" 2>&1) || { note "rc=7 patch $a NON applicata: $pe"; fin 7; }
     note "PATCH $a: $pe"
     diff -ru "$REPO/php-rust/crates/php-runtime/src/vm" "$SRC/php-rust/crates/php-runtime/src/vm" > "$OUT/patch-$a.diff" 2>/dev/null || true
-    HH[$a]=$(build "$a") || { note "rc=4 $a: build FALLITA (ab-out/s182-scomp/build-$a.log)"; fin 4; }
-    note "$a: binario ${HH[$a]} ($(grep -c '^[-+][^-+]' "$OUT/patch-$a.diff") righe di patch vs tree)"
+    h=$(build "$a") || { note "rc=4 $a: build FALLITA (ab-out/s182-scomp/build-$a.log)"; fin 4; }; echo "$h" > "$OUT/hash-$a"
+    note "$a: binario $(hh $a) ($(grep -c '^[-+][^-+]' "$OUT/patch-$a.diff") righe di patch vs tree)"
   done
 fi
-if [ "${HH[Z]}" = "$PH" ]; then note "Z: base == pin BYTE-ID (la target separata riproduce il pin: i bracci sono confrontabili al byte)"; else note "Z: base ${HH[Z]} ≠ pin $PH (gemello a CONTENUTO — dichiarato: LC_UUID/firma; A resta il pin canonico, il placebo P copre la banda-layout)"; fi
-[ "${HH[P]}" != "$PH" ] && [ "${HH[P]}" != "${HH[Z]}" ] || { note "rc=5 P: binario == pin/base (placebo NULLO: l'edit non entra nel codegen — cambiare placebo)"; fin 5; }
-for a in MA MB MC M2; do [ "${HH[$a]}" != "${HH[Z]}" ] || { note "rc=7 $a: binario == base (patch NON entrata)"; fin 7; }; done
+if [ "$(hh Z)" = "$PH" ]; then note "Z: base == pin BYTE-ID (la target separata riproduce il pin: i bracci sono confrontabili al byte)"; else note "Z: base $(hh Z) ≠ pin $PH (gemello a CONTENUTO — dichiarato: LC_UUID/firma; A resta il pin canonico, il placebo P copre la banda-layout)"; fi
+[ "$(hh P)" != "$PH" ] && [ "$(hh P)" != "$(hh Z)" ] || { note "rc=5 P: binario == pin/base (placebo NULLO: l'edit non entra nel codegen — cambiare placebo)"; fin 5; }
+for a in MA MB MC M2; do [ "$(hh $a)" != "$(hh Z)" ] || { note "rc=7 $a: binario == base (patch NON entrata)"; fin 7; }; done
 
 RC=0
 bilat(){ # $1=braccio $2=nome $3=file $4=marcatore $5..=opzioni oracle
