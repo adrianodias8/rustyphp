@@ -30,6 +30,9 @@ FX2="$REPO/php-rust/wp174-harness/fixtures/fx-sw2-gc.php"
 FX1="$REPO/php-rust/wp174-harness/fixtures/fx-sw1.php"
 H2="$REPO/php-rust/wp172-harness"
 FXCR="$H1/fx-cr1.php"
+# EMENDA S-183 (dichiarata dopo il rc=3 delle 20:16: fx-cr1/fx-sw2-gc non distinguono B da M): fixture NUOVA fx-rt1.php (cicli locali +
+# gc_collect_cycles) = gate bilaterale in più E bersaglio del mutante; forma del morso = sole righe «dtor …» o «collectN: …» cambiate
+FXRT="$H/fx-rt1.php"
 SRC="/Volumes/Extreme Pro/Claude/s183-leva"; BUNDLE_MP="$HOME/Claude/phpr-target"; TGT="$BUNDLE_MP/s183-leva-tgt"
 : > "$VERD"
 fin(){ echo "rc=$1 $(date +%T)" > "$DONE"; exit "$1"; }
@@ -37,7 +40,7 @@ note(){ echo "$*" >> "$VERD"; }
 
 grep -qw s183 "$LOCK" 2>/dev/null || { note "rc=9 lock s183 assente (per TOKEN)"; fin 9; }
 /sbin/mount | grep -q " $BUNDLE_MP " || { note "rc=8 bundle NON montata ($BUNDLE_MP)"; fin 8; }
-for f in "$FX2" "$FX1" "$H2/fx-sl1.php" "$H2/fx-sl2.php" "$H2/fx-sl3.php" "$FXCR"; do [ -s "$f" ] || { note "rc=7 fixture assente: $f"; fin 7; }; done
+for f in "$FX2" "$FX1" "$H2/fx-sl1.php" "$H2/fx-sl2.php" "$H2/fx-sl3.php" "$FXCR" "$FXRT"; do [ -s "$f" ] || { note "rc=7 fixture assente: $f"; fin 7; }; done
 PH=$(shasum -a 256 "$PIN" | cut -c1-16)
 [ "$PH" = "$PIN_ATTESO" ] || { note "rc=9 pin $PH ≠ atteso $PIN_ATTESO"; fin 9; }
 cd "$REPO" || fin 7
@@ -58,6 +61,10 @@ diff -q "$OUT/sw1-oracle.out" "$OUT/sw1-pin.out" > /dev/null || { note "rc=7 fx-
 perl -e 'alarm 120; exec @ARGV or die' -- "$PIN" "$FXCR" > "$OUT/fxcr1-pin.out" 2>&1
 grep -q "FX-CR1 DONE" "$OUT/fxcr1-pin.out" || { note "rc=7 riferimento: marcatore FX-CR1 assente sul pin"; fin 7; }
 diff -q "$OUT/fxcr1-oracle.out" "$OUT/fxcr1-pin.out" > /dev/null || { note "rc=7 fx-cr1: pin ≠ oracle (fixture non bilaterale a monte)"; fin 7; }
+"$ORACLE" -d log_errors=0 -d display_errors=1 "$FXRT" > "$OUT/fxrt1-oracle.out" 2>&1
+perl -e 'alarm 120; exec @ARGV or die' -- "$PIN" "$FXRT" > "$OUT/fxrt1-pin.out" 2>&1
+grep -q "FX-RT1 DONE" "$OUT/fxrt1-pin.out" || { note "rc=7 riferimento: marcatore FX-RT1 assente sul pin"; fin 7; }
+diff -q "$OUT/fxrt1-oracle.out" "$OUT/fxrt1-pin.out" > /dev/null || { note "rc=7 fx-rt1: pin ≠ oracle (fixture non bilaterale a monte)"; fin 7; }
 NACE=$(grep -c '^ACE' "$OUT/fxcr1-oracle.out")
 note "RIFERIMENTO: pin fx-sw2-gc $(tr '\n' ' ' < "$OUT/ref.out" | cut -c1-160) · fx-sw1 pin==oracle BYTE-ID · fx-cr1 pin==oracle BYTE-ID (righe ACE: $NACE)"
 
@@ -139,17 +146,18 @@ bilat fxsl1 "$H2/fx-sl1.php" "FX-SL1 DONE" -d log_errors=0 -d display_errors=1
 bilat fxsl2 "$H2/fx-sl2.php" "FX-SL2 DONE" -d log_errors=0 -d display_errors=1
 bilat fxsl3 "$H2/fx-sl3.php" "FX-SL3 DONE" -d log_errors=0 -d display_errors=1
 bilat fxcr1 "$FXCR" "FX-CR1 DONE" -d log_errors=0 -d display_errors=1
+bilat fxrt1 "$FXRT" "FX-RT1 DONE" -d log_errors=0 -d display_errors=1
 
 # mutante: DEVE divergere dall'oracle su fx-cr1 con SOLE righe «dtor …» cambiate (esito esatto), oppure rompere ≥1 blocco di fx-sw2-gc
-perl -e 'alarm 120; exec @ARGV or die' -- "$OUT/phpr-M" "$FXCR" > "$OUT/fxcr1-M.out" 2>&1
-diff "$OUT/fxcr1-oracle.out" "$OUT/fxcr1-M.out" > "$OUT/fxcr1-M.diff" || true
-MCH=$(grep -c '^[<>]' "$OUT/fxcr1-M.diff"); MBAD=$(grep '^[<>]' "$OUT/fxcr1-M.diff" | grep -vc '^[<>] dtor ')
+perl -e 'alarm 120; exec @ARGV or die' -- "$OUT/phpr-M" "$FXRT" > "$OUT/fxrt1-M.out" 2>&1
+diff "$OUT/fxrt1-oracle.out" "$OUT/fxrt1-M.out" > "$OUT/fxrt1-M.diff" || true
+MCH=$(grep -c '^[<>]' "$OUT/fxrt1-M.diff"); MBAD=$(grep '^[<>]' "$OUT/fxrt1-M.diff" | grep -vcE '^[<>] (dtor |collect[0-9]+: |[0-9]+$)')
 perl -e 'alarm 120; exec @ARGV or die' -- "$OUT/phpr-M" "$FX2" > "$OUT/M.out" 2>&1
 rotte "$OUT/ref.out" "$OUT/M.out" | sort -u > "$OUT/M.rotte"; MR=$(wc -l < "$OUT/M.rotte" | tr -d ' ')
 if { [ "$MCH" -gt 0 ] && [ "$MBAD" -eq 0 ]; } || [ "$MR" -gt 0 ]; then
-  note "MUTANTE: morde — fx-cr1 righe cambiate $MCH (non-dtor $MBAD) · fx-sw2-gc blocchi rotti $MR ($(tr '\n' ' ' < "$OUT/M.rotte")): la fixture presidia il rischio (note GC / ordine dei rilasci)"
+  note "MUTANTE: morde — fx-rt1 righe cambiate $MCH (non dtor/collect $MBAD) · fx-sw2-gc blocchi rotti $MR ($(tr '\n' ' ' < "$OUT/M.rotte")): la fixture presidia il rischio (note GC / ordine dei rilasci)"
 else
-  note "MUTANTE: NON morde nella forma attesa (fx-cr1 cambiate $MCH, non-dtor $MBAD; fx-sw2-gc rotti $MR; ab-out/s183-leva/fxcr1-M.diff) -> rc=3"; [ "$RC" -eq 0 ] && RC=3
+  note "MUTANTE: NON morde nella forma attesa (fx-rt1 cambiate $MCH, non dtor/collect $MBAD; fx-sw2-gc rotti $MR; ab-out/s183-leva/fxrt1-M.diff) -> rc=3"; [ "$RC" -eq 0 ] && RC=3
 fi
 
 # disasm agli atti (p.6): istr/bl/blr/sp_refs di run_loop di B vs pin s180 (S-104: ogni leva su run_loop pretende il disasm)

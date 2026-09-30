@@ -1,5 +1,5 @@
 --- ../wp181-harness/s181-leva-build.sh	2026-09-22 14:05:47
-+++ s183-leva-build.sh	2026-09-30 20:07:43
++++ s183-leva-build.sh	2026-09-30 20:18:53
 @@ -1,6 +1,9 @@
  #!/bin/bash
 -# s181-leva-build.sh — bracci Z (gemello del pin s180) e B (leva L-CR1) + MUTANTE (criterio s181-criterio-cr1.md p.2/p.3/p.6):
@@ -12,7 +12,7 @@
  # (1) TRE build nella stessa target separata: Z = sorgente del pin (ZCOMMIT, atteso == pin al byte ⇒ SL in-run NON
  # stimabile, dichiarato), B = commit della leva (COMMIT), M = B + mutante «ip=1 anche sul cammino LENTO di Call»
  # (sostituzione sull'archivio, mai sul tree) che DEVE rompere fx-cr1 sulle righe ACE (esito ESATTO); (2) pin atteso s180
-@@ -17,22 +20,23 @@
+@@ -17,30 +20,34 @@
  set -u
  export PATH=/usr/bin:/bin:/usr/sbin:/opt/homebrew/bin:"$HOME/.cargo/bin"
  REPO="/Volumes/Extreme Pro/Claude/php-rust-experiment"
@@ -31,18 +31,22 @@
 -FXCR="$H/fx-cr1.php"
 -SRC="/Volumes/Extreme Pro/Claude/s181-leva"; TGT="/Volumes/Extreme Pro/Claude/s181-leva-tgt"
 +FXCR="$H1/fx-cr1.php"
++# EMENDA S-183 (dichiarata dopo il rc=3 delle 20:16: fx-cr1/fx-sw2-gc non distinguono B da M): fixture NUOVA fx-rt1.php (cicli locali +
++# gc_collect_cycles) = gate bilaterale in più E bersaglio del mutante; forma del morso = sole righe «dtor …» o «collectN: …» cambiate
++FXRT="$H/fx-rt1.php"
 +SRC="/Volumes/Extreme Pro/Claude/s183-leva"; BUNDLE_MP="$HOME/Claude/phpr-target"; TGT="$BUNDLE_MP/s183-leva-tgt"
  : > "$VERD"
  fin(){ echo "rc=$1 $(date +%T)" > "$DONE"; exit "$1"; }
  note(){ echo "$*" >> "$VERD"; }
  
 -grep -qw s181 "$LOCK" 2>/dev/null || { note "rc=9 lock s181 assente (per TOKEN)"; fin 9; }
+-for f in "$FX2" "$FX1" "$H2/fx-sl1.php" "$H2/fx-sl2.php" "$H2/fx-sl3.php" "$FXCR"; do [ -s "$f" ] || { note "rc=7 fixture assente: $f"; fin 7; }; done
 +grep -qw s183 "$LOCK" 2>/dev/null || { note "rc=9 lock s183 assente (per TOKEN)"; fin 9; }
 +/sbin/mount | grep -q " $BUNDLE_MP " || { note "rc=8 bundle NON montata ($BUNDLE_MP)"; fin 8; }
- for f in "$FX2" "$FX1" "$H2/fx-sl1.php" "$H2/fx-sl2.php" "$H2/fx-sl3.php" "$FXCR"; do [ -s "$f" ] || { note "rc=7 fixture assente: $f"; fin 7; }; done
++for f in "$FX2" "$FX1" "$H2/fx-sl1.php" "$H2/fx-sl2.php" "$H2/fx-sl3.php" "$FXCR" "$FXRT"; do [ -s "$f" ] || { note "rc=7 fixture assente: $f"; fin 7; }; done
  PH=$(shasum -a 256 "$PIN" | cut -c1-16)
  [ "$PH" = "$PIN_ATTESO" ] || { note "rc=9 pin $PH ≠ atteso $PIN_ATTESO"; fin 9; }
-@@ -40,7 +44,7 @@
+ cd "$REPO" || fin 7
  SHA0=$(git rev-parse --verify "$COMMIT^{commit}") || { note "rc=7 commit $COMMIT inesistente"; fin 7; }
  SHAZ=$(git rev-parse --verify "$ZCOMMIT^{commit}") || { note "rc=7 commit $ZCOMMIT inesistente"; fin 7; }
  AVX=$(df -k "/Volumes/Extreme Pro" | awk 'NR>1{printf "%.0f", $4/1048576}')
@@ -51,7 +55,18 @@
  awk -v a="$AVX" 'BEGIN{exit !(a+0 < 15)}' && { note "rc=8 Extreme ${AVX}G < 15G: niente build"; fin 8; }
  
  # riferimento: pin su fx-sw2-gc (marcatore) e gate bilaterale fx-sw1 + fx-cr1 sul pin (sanità del gate)
-@@ -92,31 +96,30 @@
+@@ -54,6 +61,10 @@
+ perl -e 'alarm 120; exec @ARGV or die' -- "$PIN" "$FXCR" > "$OUT/fxcr1-pin.out" 2>&1
+ grep -q "FX-CR1 DONE" "$OUT/fxcr1-pin.out" || { note "rc=7 riferimento: marcatore FX-CR1 assente sul pin"; fin 7; }
+ diff -q "$OUT/fxcr1-oracle.out" "$OUT/fxcr1-pin.out" > /dev/null || { note "rc=7 fx-cr1: pin ≠ oracle (fixture non bilaterale a monte)"; fin 7; }
++"$ORACLE" -d log_errors=0 -d display_errors=1 "$FXRT" > "$OUT/fxrt1-oracle.out" 2>&1
++perl -e 'alarm 120; exec @ARGV or die' -- "$PIN" "$FXRT" > "$OUT/fxrt1-pin.out" 2>&1
++grep -q "FX-RT1 DONE" "$OUT/fxrt1-pin.out" || { note "rc=7 riferimento: marcatore FX-RT1 assente sul pin"; fin 7; }
++diff -q "$OUT/fxrt1-oracle.out" "$OUT/fxrt1-pin.out" > /dev/null || { note "rc=7 fx-rt1: pin ≠ oracle (fixture non bilaterale a monte)"; fin 7; }
+ NACE=$(grep -c '^ACE' "$OUT/fxcr1-oracle.out")
+ note "RIFERIMENTO: pin fx-sw2-gc $(tr '\n' ' ' < "$OUT/ref.out" | cut -c1-160) · fx-sw1 pin==oracle BYTE-ID · fx-cr1 pin==oracle BYTE-ID (righe ACE: $NACE)"
+ 
+@@ -92,31 +103,30 @@
  else
  # Z = sorgente del pin nella target separata (gemello: se byte-id col pin lo si dichiara)
  archivio "$SHAZ" || { note "rc=7 archivio Z fallito"; fin 7; }
@@ -92,7 +107,7 @@
  fi
  
  RC=0
-@@ -129,7 +132,7 @@
+@@ -129,24 +139,25 @@
    perl -e 'alarm 300; exec @ARGV or die' -- "$OUT/phpr-B" "$f" > "$OUT/$n-B.out" 2>&1
    [ -s "$OUT/$n-B.out" ] || { note "B: $n output VUOTO -> rc=2"; RC=2; return; }
    [ -z "$m" ] || grep -q "$m" "$OUT/$n-B.out" || { note "B: $n marcatore $m ASSENTE -> rc=2"; RC=2; return; }
@@ -101,31 +116,34 @@
  }
  bilat fxsw1 "$FX1" "FX-SW1 DONE"
  bilat fxsl1 "$H2/fx-sl1.php" "FX-SL1 DONE" -d log_errors=0 -d display_errors=1
-@@ -137,16 +140,16 @@
+ bilat fxsl2 "$H2/fx-sl2.php" "FX-SL2 DONE" -d log_errors=0 -d display_errors=1
  bilat fxsl3 "$H2/fx-sl3.php" "FX-SL3 DONE" -d log_errors=0 -d display_errors=1
  bilat fxcr1 "$FXCR" "FX-CR1 DONE" -d log_errors=0 -d display_errors=1
++bilat fxrt1 "$FXRT" "FX-RT1 DONE" -d log_errors=0 -d display_errors=1
  
 -# mutante: DEVE divergere dall'oracle su fx-cr1 ESATTAMENTE sulle righe ACE (esito esatto, mai «diverso da»)
-+# mutante: DEVE divergere dall'oracle su fx-cr1 con SOLE righe «dtor …» cambiate (esito esatto), oppure rompere ≥1 blocco di fx-sw2-gc
- perl -e 'alarm 120; exec @ARGV or die' -- "$OUT/phpr-M" "$FXCR" > "$OUT/fxcr1-M.out" 2>&1
+-perl -e 'alarm 120; exec @ARGV or die' -- "$OUT/phpr-M" "$FXCR" > "$OUT/fxcr1-M.out" 2>&1
 -MACE=$(grep -c '^ACE' "$OUT/fxcr1-M.out")
- diff "$OUT/fxcr1-oracle.out" "$OUT/fxcr1-M.out" > "$OUT/fxcr1-M.diff" || true
+-diff "$OUT/fxcr1-oracle.out" "$OUT/fxcr1-M.out" > "$OUT/fxcr1-M.diff" || true
 -GONE_NONACE=$(grep '^<' "$OUT/fxcr1-M.diff" | grep -vc '^< ACE')
 -EXTRA_BAD=$(grep '^>' "$OUT/fxcr1-M.diff" | grep -vcE '^> (Warning: Undefined variable \$[a-z]+ in .* on line [0-9]+)?$')
 -if [ "$MACE" -lt "$NACE" ] && [ "$GONE_NONACE" -eq 0 ] && [ "$EXTRA_BAD" -eq 0 ]; then
 -  note "MUTANTE: morde (emenda 6) — righe ACE oracle $NACE vs M $MACE; sparite solo righe ACE, in più solo warning «Undefined variable» ($(grep -c '^> Warning' "$OUT/fxcr1-M.diff")): la fixture presidia il rischio (b)"
-+MCH=$(grep -c '^[<>]' "$OUT/fxcr1-M.diff"); MBAD=$(grep '^[<>]' "$OUT/fxcr1-M.diff" | grep -vc '^[<>] dtor ')
++# mutante: DEVE divergere dall'oracle su fx-cr1 con SOLE righe «dtor …» cambiate (esito esatto), oppure rompere ≥1 blocco di fx-sw2-gc
++perl -e 'alarm 120; exec @ARGV or die' -- "$OUT/phpr-M" "$FXRT" > "$OUT/fxrt1-M.out" 2>&1
++diff "$OUT/fxrt1-oracle.out" "$OUT/fxrt1-M.out" > "$OUT/fxrt1-M.diff" || true
++MCH=$(grep -c '^[<>]' "$OUT/fxrt1-M.diff"); MBAD=$(grep '^[<>]' "$OUT/fxrt1-M.diff" | grep -vcE '^[<>] (dtor |collect[0-9]+: |[0-9]+$)')
 +perl -e 'alarm 120; exec @ARGV or die' -- "$OUT/phpr-M" "$FX2" > "$OUT/M.out" 2>&1
 +rotte "$OUT/ref.out" "$OUT/M.out" | sort -u > "$OUT/M.rotte"; MR=$(wc -l < "$OUT/M.rotte" | tr -d ' ')
 +if { [ "$MCH" -gt 0 ] && [ "$MBAD" -eq 0 ]; } || [ "$MR" -gt 0 ]; then
-+  note "MUTANTE: morde — fx-cr1 righe cambiate $MCH (non-dtor $MBAD) · fx-sw2-gc blocchi rotti $MR ($(tr '\n' ' ' < "$OUT/M.rotte")): la fixture presidia il rischio (note GC / ordine dei rilasci)"
++  note "MUTANTE: morde — fx-rt1 righe cambiate $MCH (non dtor/collect $MBAD) · fx-sw2-gc blocchi rotti $MR ($(tr '\n' ' ' < "$OUT/M.rotte")): la fixture presidia il rischio (note GC / ordine dei rilasci)"
  else
 -  note "MUTANTE: NON morde nella forma attesa (ACE oracle $NACE vs M $MACE, sparite non-ACE $GONE_NONACE, in più non-warning $EXTRA_BAD; ab-out/s181-leva/fxcr1-M.diff) -> rc=3"; [ "$RC" -eq 0 ] && RC=3
-+  note "MUTANTE: NON morde nella forma attesa (fx-cr1 cambiate $MCH, non-dtor $MBAD; fx-sw2-gc rotti $MR; ab-out/s183-leva/fxcr1-M.diff) -> rc=3"; [ "$RC" -eq 0 ] && RC=3
++  note "MUTANTE: NON morde nella forma attesa (fx-rt1 cambiate $MCH, non dtor/collect $MBAD; fx-sw2-gc rotti $MR; ab-out/s183-leva/fxrt1-M.diff) -> rc=3"; [ "$RC" -eq 0 ] && RC=3
  fi
  
  # disasm agli atti (p.6): istr/bl/blr/sp_refs di run_loop di B vs pin s180 (S-104: ogni leva su run_loop pretende il disasm)
-@@ -156,7 +159,7 @@
+@@ -156,7 +167,7 @@
    objdump -d --no-show-raw-insn --disassemble-symbols="$sym" "$1" > "$OUT/disasm-$2-run_loop.s" 2>/dev/null
    echo "istr=$(grep -cE '^ *[0-9a-f]+:' "$OUT/disasm-$2-run_loop.s") bl=$(grep -cE '[[:space:]]bl[[:space:]]' "$OUT/disasm-$2-run_loop.s") blr=$(grep -cE '[[:space:]]blr[[:space:]]' "$OUT/disasm-$2-run_loop.s") sp_refs=$(grep -c '\[sp' "$OUT/disasm-$2-run_loop.s")"
  }
