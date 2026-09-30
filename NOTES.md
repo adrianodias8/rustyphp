@@ -5,6 +5,217 @@ this session unless it is explicitly labelled "upstream's claim".
 
 ---
 
+# Session 3 — 2026-09-30 — slices 2 and 3: the per-include index rebuild, the namespaced call fallback
+
+Same environment as sessions 1 and 2 (Docker `linux/arm64`, oracle PHP 8.5.7, rustc 1.98.1). Three
+binaries were kept side by side: `/target/base` (upstream `9d4ef5ba`, unmodified), `/target/prev`
+(the commit each slice started from) and `/target/release` (the working tree).
+
+## 1. Slice 2 — every include re-indexed the whole loaded image (`26f30a38`)
+
+PROFILE.md §5.2 blamed SipHash (28.7 % of `autoload` samples). Replacing the hasher was the small
+part. Re-profiling after the swap showed what the hashing was *for*: each include unit was lowered
+against a freshly built index of every class already loaded.
+
+| step | `autoload_instantiate_cold`, single runs |
+|---|---:|
+| unmodified | 565–589 ms |
+| FxHash in the lowering/compile symbol maps, incremental `unit_fp`, one reordered test | 405–438 ms |
+| + cached seed class index, per-position registration cache | 231–240 ms |
+
+Profile of the intermediate state (FxHash only): hashing still 26.6 % (11.1 % SipHash left in
+`unit_fp`'s `DefaultHasher`, 15.5 % FxHash); the class index build ~18 % of the run, `unit_fp`,
+`seed_stub_mask` and `unit_remap_elided` ~7.5 % each — all proportional to the number of classes
+already loaded, per include. Parsing the included file itself: 3 %.
+
+What changed (`vm/mod.rs`, `lower/mod.rs`):
+
+- `Vm::unit_fp`: the registered-classes and aliases digests are maintained at the three insert
+  sites (`class_index_insert`, `seed_alias_push`). The digest is an XOR of per-entry hashes, so the
+  incremental value is bit-identical to the former full walk.
+- `Vm::seed_class_index`: built once, handed to the lowering as an `Rc` (`ClassIndex` = read-only
+  base + the unit's own layer), extended in place when the only registrations since the last
+  include are appended seed classes. An alias, a conditional name or any other registration
+  forces a full rebuild through the same `build_seed_class_index` function.
+- `Vm::seed_registered`: per-position registration cache for the stub mask and the elided remap.
+- The lowering and compile symbol maps use FxHash, like the rest of the engine.
+
+Regression test: `baseline/repro/include-storm-seed-index.phpt` — conditional classes, a
+conditional declared only on a later re-include, `class_alias`, duplicate conditional
+declarations in two branches, `eval` against the image, autoloaded files in between. Identical to
+the oracle with the unit cache on and off and in both `PHPR_REG_LOWER` modes.
+
+A/B, **unmodified vs `26f30a38`** (so it includes session 2's fixes), 7 rounds, 123 sections —
+`bench/results/2026-09-30-ab-seed-index.tsv`:
+
+| benchmark | sections | geomean B/A | min | max |
+|---|---:|---:|---:|---:|
+| `Zend/bench.php` | 18 | 0.996 | 0.952 | 1.018 |
+| `Zend/micro_bench.php` | 35 | 0.992 | 0.862 | 1.051 |
+| arrays | 20 | 0.990 | 0.969 | 1.007 |
+| strings | 21 | 0.769 | 0.004 | 1.048 |
+| oop | 21 | 0.988 | 0.940 | 1.023 |
+| autoload | 3 | **0.683** | **0.400** | 0.996 |
+| symfony-boot | 3 | **0.893** | 0.809 | 0.995 |
+
+- `autoload_instantiate_cold`: 546.7 → 218.6 ms (**0.400×**, spreads 24.0 % / 2.2 %).
+- Symfony `boot_autoload_and_kernel` 10.2 → 8.2 ms (0.809), `first_request` 6.9 → 6.1 ms (0.885).
+- One section above 1.05: micro_bench `$x = self::$x` 198 → 208 ms (1.051, spread A 21.2 %).
+
+## 2. Slice 3 — the namespaced function fallback was resolved on every call (`7a5f9d49`)
+
+`count($a)` written unqualified inside `namespace App` compiles to `Op::CallNsFallback`
+(`App\count`, then global `count`), because a namespaced function declared later must be able to
+shadow the builtin. That is nearly every builtin call in Symfony. Each execution ran:
+
+1. `is_name_callable("App\count")` — three table lookups, then a **linear, case-folding scan of
+   the ~400 host-builtin names** and three further host tables; always a miss;
+2. `is_name_callable("count")` — the same, up to the first hit;
+3. `invoke_named("count")` — the resolution again, from the top.
+
+Share of `symfony-steady` samples (5,000 requests), inclusive:
+
+| | unmodified | hashed lookup only | + site cache |
+|---|---:|---:|---:|
+| `host_builtin_canonical` | 6.14 % | 0.56 % | 0.00 % |
+| `is_name_callable` | 9.60 % | 3.60 % | 0.00 % |
+| resolution left at the call site (`NsIc::get` 0.16 %, `call_ns_fallback_site` self 0.08 %) | — | — | ~0.3 % |
+
+The hashed lookup alone (`FxHashMap` over the name table, query folded through `LcKey`) moved the
+samples and **not the wall time** (no measurable change on the whole run): the cost was the
+repeated resolution, of which the scan was only the most visible part. Hence the cache.
+
+- `NsIc` (`bytecode.rs`): a cell on the op, the analogue of Zend's `INIT_NS_FCALL_BY_NAME`
+  runtime-cache slot, with the contract of upstream's `PropIc` (shared between op clones,
+  invisible to structural equality). Key: run epoch, `Vm::fn_gen` (bumped at both
+  `linked_functions` insert sites) and the identity of the running module. Targets: the namespaced
+  function, the global one, or — for a registry value builtin — its entry point, called through
+  `value_builtin_call` with no lookup at all. An undefined function is never cached.
+- **Layout.** With the hit path written inside the `run_loop` arm, `oop.php` — which is not
+  namespaced and never executes this op — drifted +1.7–4.5 % on 12 of 21 sections (geomean 1.017).
+  Moved to `Vm::call_ns_fallback_site` (`calls.rs`, `#[inline(never)]`), leaving the arm the size
+  it had: oop 1.005, and 1.003 in a 9-round rerun. Upstream's warning that `run_loop` is
+  layout-sensitive holds for a change this small; `run.rs` grew by one line.
+
+Semantic probe (eval / include / conditional declarations before and after a site has run,
+undefined-then-defined, by-ref arguments, host builtins, closures and methods): **byte-identical
+between the unmodified engine, `26f30a38` and `7a5f9d49`**, in both lowering modes. Regression
+test: `baseline/repro/ns-fallback-site-cache.phpt`.
+
+A/B, **`26f30a38` vs `7a5f9d49`**, 7 rounds, 123 sections —
+`bench/results/2026-09-30-ab-ns-site-cache.tsv`:
+
+| benchmark | sections | geomean B/A | min | max |
+|---|---:|---:|---:|---:|
+| `Zend/bench.php` | 18 | 1.000 | 0.982 | 1.017 |
+| `Zend/micro_bench.php` | 35 | 1.001 | 0.963 | 1.028 |
+| arrays | 20 | 1.001 | 0.993 | 1.015 |
+| strings | 21 | 0.977 | 0.916 | 1.035 |
+| oop | 21 | 1.005 | 0.980 | 1.036 |
+| autoload | 3 | 0.987 | 0.976 | 1.009 |
+| symfony-boot | 3 | **0.937** | **0.881** | 0.970 |
+
+- Symfony `handle_requests` (200 requests): 49.0 → 43.2 ms (**0.881**, spreads 2.3 % / 2.8 %); a
+  second run with 9 rounds gave 49.0 → 43.3 ms (0.883, spreads 1.8 % / 1.9 %).
+- No section above 1.05. Worst: `prop_rmw_1m` 1.036 (spread B 28.1 %), `preg_match_small_500k`
+  1.035 (spreads 18.9 % / 10.6 %), `getter_setter_fluent_1m` 1.033. In the 9-round rerun (oop and
+  symfony-boot only) `prop_rmw_1m` was 1.002 and `getter_setter_fluent_1m` 0.999, and two *other*
+  sections led (`arrow_fn_1m` 1.032, `closure_use_1m` 1.025). Noise.
+- The three strings sections below 0.95 sit inside their own spreads (12–21 %); not claimed.
+- Host load average was 7.3 when the run started (the laptop had just woken); 0.7 inside the VM.
+
+## 3. Where the engine stands against the oracle
+
+`bench/run.sh`, 5 runs, engines interleaved, on `7a5f9d49` — `bench/results/2026-09-30-slices-2-3.md`.
+"Session 1" is `bench/results/2026-09-30.md` (unmodified engine); the oracle was re-measured in
+both, and each ratio uses the oracle of its own run. `php -n` = no opcache.
+
+| section (in-script timer) | phpr, session 1 | phpr now | `php -n` now | phpr ÷ `php -n`, session 1 | now |
+|---|---:|---:|---:|---:|---:|
+| `autoload_instantiate_cold` (2,000 classes) | 576.4 ms | 224.5 ms | 31.9 ms | 18.07× | **7.03×** |
+| Symfony `boot_autoload_and_kernel` | 10.7 ms | 8.4 ms | 2.3 ms | 5.00× | **3.60×** |
+| Symfony `first_request` | 7.4 ms | 6.5 ms | 2.6 ms | 3.06× | **2.52×** |
+| Symfony `handle_requests` (200) | 51.8 ms | 46.2 ms | 5.9 ms | 8.64× | **7.88×** |
+
+| whole process, wall | phpr, session 1 | phpr now | phpr ÷ `php -n`, session 1 | now |
+|---|---:|---:|---:|---:|
+| `Zend/bench.php` | 1.83 s | 1.80 s | 7.96× | 7.83× |
+| `Zend/micro_bench.php` | 9.52 s | 9.32 s | 8.73× | 8.63× |
+| arrays | 2.98 s | 2.90 s | 4.81× | 4.75× |
+| strings | 6.47 s | 4.17 s | 3.48× | 2.28× |
+| oop | 5.90 s | 6.10 s | 9.83× | 9.84× |
+| autoload | 0.61 s | 0.26 s | 15.25× | 6.50× |
+| symfony-boot | 0.08 s | 0.07 s | 8.00× | 7.00× |
+
+- The strings row is session 2's `.=` fix, not this session's work.
+- oop: both engines were ~3 % slower in this run than in session 1's (oracle 0.60 → 0.62 s); the
+  ratio is unchanged, which agrees with the A/B (1.005, 1.003).
+- `handle_requests` reads 46.2 ms here and 43.2 ms in the A/B: different runs, 5 rounds against
+  7. The A/B is the instrument for deltas; this table is for the distance to the oracle.
+- A steady Symfony request is still 7.9× the oracle. The re-profile of the final tree
+  (`/scratch/prof-s3`, not committed): dispatch loop 32.8 %, VM handler bodies 17.6 %, `Rc` 10.6 %,
+  allocation 8.0 %, `RefCell` 5.3 %. The namespace fallback is gone from it; what is left that is
+  name-shaped is builtin argument plumbing (lookup by name and pre-call checks, 2.2 %) and the
+  engine's symbol maps (2.8 %). The remaining distance is slices 4–6, not more lookups.
+- The results file's "Problems" line about `isset(Foo::$x)` is stale: `bench/run.sh` still patches
+  that statement out of `micro_bench.php`, although phpr has parsed it since session 2.
+
+## 4. Gates (final tree, `7a5f9d49`)
+
+| gate | result |
+|---|---|
+| `cargo test --release --no-fail-fast` (root) | **1749 passed / 1 failed / 2 ignored** — the failure is the root-only unwritable-path test |
+| upstream's LOC-cap test (`loc_dente`) | caps raised and declared: slice 2 `vm/mod.rs`, `lower/mod.rs`, `lower/class.rs`; slice 3 `bytecode.rs` +69, `vm/mod.rs` +15, `compile/expr.rs` +2, `vm/run.rs` +1 |
+| `baseline/gate.sh` | **PASS**: 3047 → 3047, pass→fail 0, pass→skip 0; repro tests 7/7 |
+| repro tests on the oracle (`run-tests.php`) | both new `.phpt`s PASS |
+| smoke (a) Composer `require monolog/monolog` | resolution identical, `vendor/` byte-identical (152 files) |
+| smoke (b) PHPUnit on DBAL 4.5.0 | unchanged: 4146 tests, 5931 assertions, 10 errors, 1 failure, 639 skipped; 6.29 s / 6.25 s wall (6.53 / 6.38 on the unmodified engine, session 1) |
+
+## 5. Found on the way, not fixed
+
+1. **An already-bound call site rebinds when the namespaced function is declared later.** In
+   `namespace App`, `function a() { return ucfirst("x"); }`, call `a()`, then
+   `eval('namespace App; function ucfirst(…) {…}')` (or `include` a file declaring it), call `a()`
+   again: PHP still calls the global `ucfirst` — its runtime-cache slot keeps the first binding —
+   and phpr calls `App\ucfirst`. Same for a site inside a loop. Pre-existing (phpr re-resolved on
+   every call); the site cache preserves it by invalidating on `fn_gen`. `NsIc` now makes the PHP
+   behaviour a small change (do not invalidate a filled site). To check first: whether phpr's unit
+   cache reuses one compiled unit across repeated `include`s of the same file, where PHP compiles
+   a fresh op array — and so a fresh cache — each time.
+2. **Builtin function names are case-sensitive.** `StrToUpper("q")`, `COUNT([1])` → "Call to
+   undefined function", in the global namespace and in a namespace; a host builtin (`Preg_Quote`)
+   and a user function called in another case resolve (checked in a namespace). The value
+   registry is looked up with the name as written.
+3. **`sprintf` cannot be shadowed in a namespace.** With `App\sprintf` declared before the first
+   call, `sprintf(…)` inside `namespace App` still runs the builtin (PHP runs `App\sprintf`);
+   `strlen` and `count` shadow correctly. `sprintf` is compiled to its own op before the fallback
+   is considered.
+4. The mid-work autoload profile had overwritten `bench/profiles/autoload.*` in `26f30a38`;
+   `7a5f9d49` restores the session-1 files that PROFILE.md cites. `bench/profile.sh` writes into
+   the repository unconditionally — profile a modified engine into `/scratch` instead.
+
+## 6. Commits
+
+| commit | content |
+|---|---|
+| `26f30a38` | slice 2, `include-storm-seed-index.phpt`, `2026-09-30-ab-seed-index.tsv` |
+| `7a5f9d49` | slice 3, `ns-fallback-site-cache.phpt`, `2026-09-30-ab-ns-site-cache.tsv`, session-1 autoload profile restored |
+| (this one) | this section, `DECISION_KERNEL.md` §6 rows 2–3, `bench/results/2026-09-30-slices-2-3.md` |
+
+Nothing was pushed.
+
+## 7. What is next
+
+1. Slice 4 of `DECISION_KERNEL.md` §6: `foreach` by position over a held `Rc` clone instead of the
+   snapshot (`packed_foreach_sum_1m`, `assoc_foreach_200k_x5` are the rows to move). Check it
+   against upstream's `PERF_MAP.md` and vetoed-lever list before starting.
+2. The three divergences in §5 above are small and each needs only its `.phpt`; 5.2 (case-folding
+   the registry lookup) is the one real code could hit.
+3. Still the owner's: where the fork lives, the license/name question, and the verdict on the
+   DRAFT decision (session 1, §5).
+
+---
+
 # Session 2 — 2026-09-30 — three fixes: `count()` dynamic path, quiet static-property fetch, in-place `.=`
 
 Same environment as session 1 (Docker `linux/arm64`, oracle PHP 8.5.7, rustc 1.98.1). Every

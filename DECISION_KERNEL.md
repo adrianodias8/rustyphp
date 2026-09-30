@@ -282,8 +282,8 @@ Ordered by measured size ÷ estimated risk. None touches `php-types`' public API
 | # | slice | measured ceiling | touches |
 |---:|---|---|---|
 | 1 | ~~`.=` with int/float operand: convert, then take the in-place path~~ **done, session 2** — and for every target form (property, array element, static, reference), which were all quadratic too | 992× → 1.7× on that pattern; 231–706× on the others | five handlers + one gate op |
-| 2 | Symbol maps under FxHash; incremental `unit_fp` | up to 28.7 % of autoload | lowering, unit linking |
-| 3 | Resolve builtins and `host_builtin_canonical` at compile/link time | 6.1 % + ~2 % of a request | compiler, call ops |
+| 2 | ~~Symbol maps under FxHash; incremental `unit_fp`~~ **done, session 3** — the hasher was the small part: every include rebuilt an index of the whole loaded image, now cached and extended in place | cold autoload 546.7 → 218.6 ms (0.400×); Symfony boot 10.2 → 8.2 ms | lowering, unit linking |
+| 3 | ~~Resolve builtins and `host_builtin_canonical` at compile/link time~~ **done, session 3**, as a per-site run-time cache (`NsIc`): link-time binding would be wrong, a namespaced function declared later must still shadow the builtin. `Op::CallBuiltin`'s own lookup by name (PROFILE.md §5.4) is untouched | Symfony `handle_requests` 49.0 → 43.2 ms (0.881×) | call ops |
 | 4 | `foreach` by position over a held `Rc` clone instead of a snapshot | 1 alloc + 5 clones/element; `foreach` 8–10× → ? | iterator state |
 | 5 | Remove the per-array-write and per-call allocation | 1 malloc+free each | path machinery, call binder |
 | 6 | Dispatch loop: current frame held outside the `Vec`, cached stack/ops slices | up to 20.6 % | `run_loop` |
