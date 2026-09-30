@@ -138,21 +138,98 @@ A/B `e48f4910` → `a08311f0`, 7 rounds — `bench/results/2026-09-30-ab-foreach
 Gates: `cargo test` 1749 / 1 / 2; LOC cap `vm/run.rs` +8 declared; phpt gate PASS (3048,
 0 pass→fail), repro 12/12; DBAL unchanged.
 
+## 2b. Slice 5 — the per-call and per-array-write allocation (`25a5e4a3`)
+
+PROFILE.md §4 counted three allocations Zend does not make: `foreach` (gone with slice 4), the
+array element write, the call to a function with a typed parameter.
+
+- **Typed calls.** `simple_call` — the admission of the allocation-free stack→slot paths
+  (`Op::Call`, `methodcall_fast`, `bind_params`) — excluded any function with a parameter hint,
+  because `enter_callee` did the coercion after building the frame from an argument `Vec`. Now a
+  hinted body starts with `Op::CoerceParams`, which coerces / checks the passed arguments in the
+  callee frame with the caller's line and strict_types — what Zend's `RECV` opcodes do — and
+  hints no longer disqualify. The op sits *before* `CheckArity`: PHP type-checks each passed
+  argument before it finds the missing one (two corpus tests caught the first order:
+  `function_arguments/argument_count_incorrect_userland_strict`, `pipe_operator/type_mismatch`).
+  By-reference, variadic and generator functions keep `enter_callee`'s coercion.
+- **Array writes.** `$a[k] = v` popped its key through `pop_keys` — `Vec::split_off` of one
+  element — on every write; the single-key form pops the key directly. Same for `$a[k] op= v`
+  and `$a[k]++`. The append-with-prefix form `$a[k][] = v` keeps the `Vec`: its one key is a
+  prefix, and the first attempt treated it as the leaf — the Symfony section's checksum
+  (`RESULT DIFFERS` in `bench/ab.sh`) caught it before anything else did.
+
+`bench/alloc/count.sh`, fresh `mem-census` build:
+
+| operation | before | after |
+|---|---:|---:|
+| array element write | 1 malloc + free | **0** |
+| typed function call | 1 | **0** |
+| `foreach` (slice 4) | 1 + 1 realloc, 5.25 clones/element | **0**, 2.25 clones/element |
+| concat | 2 | 2 (the result string) |
+
+Regression test `typed-call-direct-path.phpt` (`EXPECTF`). The wider probe is byte-identical
+between `a08311f0` and this commit; the diffs it shows against the oracle are pre-existing
+(deprecation-line attribution for implicit float→int conversion, `object given` for a class
+name in a TypeError, the `called in` file of an included strict unit, `.=` on a null-vivified
+nested key warning, `Indirect modification` on ArrayAccess `.=`/`++`, `Cannot access offset of
+type array` wording, the null-offset deprecation).
+
+A/B `a08311f0` → `25a5e4a3`, 7 rounds — `bench/results/2026-09-30-ab-direct-calls.tsv`:
+
+| benchmark | sections | geomean B/A | min | max |
+|---|---:|---:|---:|---:|
+| `Zend/bench.php` | 18 | 1.002 | 0.947 | 1.250 |
+| `Zend/micro_bench.php` | 35 | 1.002 | 0.942 | 1.035 |
+| arrays | 20 | 0.992 | 0.948 | 1.017 |
+| strings | 21 | 0.994 | 0.955 | 1.017 |
+| oop | 21 | 1.014 | 0.883 | 1.121 |
+| autoload | 3 | 1.010 | 1.008 | 1.015 |
+| symfony-boot | 3 | 0.998 | 0.995 | 1.003 |
+
+- `function_call_1m` (a typed `add1(int $x): int`) 169.6 → 149.8 ms (**0.883**);
+  `packed_index_write_1m` 0.948. Symfony `handle_requests` 0.995 — its typed methods evidently do
+  not reach the inline-cache fast path often enough to show.
+- `strcat(200000)` 8 → 10 ms is the 1 ms timer.
+- **Three oop sections read +6–12 % in every A/B of this slice** — `prop_rmw_1m` 1.121,
+  `static_method_call_1m` 1.118, `prop_write_1m` 1.062 — with spreads under 5 %. They execute no
+  typed call and no array write. Bisecting the change (six builds: each edit alone, the call arm
+  inline or out of line, the new op unused) reproduced the same three sections whenever the
+  *executed* bytecode changed and never when only `run_loop`'s code changed; the loop itself, in
+  a standalone script, runs in 127 ms on both binaries. Then the unchanged binary alone: the same
+  `oop.php` under four path names gives `prop_rmw_1m` **168, 168, 188, 190 ms**
+  (`bench/path-sensitivity.sh`, committed), and sweeping a `Counter` object's heap address with
+  0–96 padding objects gives 116 ms everywhere but two positions at 124–136 ms — on *both*
+  binaries. So: the section has a slow placement (+12–17 %) that depends on where the object,
+  the frame buffers or the operand stack land, and this binary's allocation pattern (fewer
+  allocations before the section) lands in it under the harness's path. Not a code regression;
+  not understood either (store-to-load aliasing between the object's storage and the frame is
+  the suspect — needs hardware counters, i.e. bare metal). **Open item** — and a warning for
+  every future A/B on `oop.php`: a delta on these sections is a placement effect until shown
+  otherwise.
+
+Gates: `cargo test` 1749 / 1 / 2; LOC caps declared; phpt gate PASS (3048, 0 pass→fail),
+repro 13/13; DBAL unchanged.
+
 ## 3. Commits
 
 | commit | content |
 |---|---|
 | `e48f4910` | the three fixes, four `.phpt`s, baseline lists advanced, `2026-09-30-ab-ns-binding.tsv` |
 | `a08311f0` | slice 4, `foreach-held-array.phpt`, `2026-09-30-ab-foreach.tsv` |
-| (this one) | this section, `DECISION_KERNEL.md` §6 row 4 |
+| `79a1c9cd` | session-4 notes up to slice 4, `DECISION_KERNEL.md` §6 row 4 |
+| `25a5e4a3` | slice 5, `typed-call-direct-path.phpt`, `2026-09-30-ab-direct-calls.tsv`, `bench/path-sensitivity.sh` |
+| (this one) | §2b, `DECISION_KERNEL.md` §6 row 5 |
 
 Nothing was pushed.
 
 ## 4. What is next
 
-1. Slice 5 (`DECISION_KERNEL.md` §6): the per-array-write and per-call allocation.
+1. The placement effect of §2b: find what aliases (object storage, frame slots, operand
+   stack), on bare metal with counters if the VM cannot tell; it is worth up to 17 % on property
+   access and it confounds every `oop.php` A/B.
 2. Slice 6, the dispatch loop — now the whole of the `foreach` gap and most of the request path.
-3. `ArgumentCountError` for builtin arity (§1); `assert` declarable in a namespace (§1).
+3. `ArgumentCountError` for builtin arity (§1); `assert` declarable in a namespace (§1); the
+   pre-existing diagnostics divergences listed in §2b.
 4. Still the owner's: fork location, license/name, the verdict on the DRAFT decision.
 
 ---

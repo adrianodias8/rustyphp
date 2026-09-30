@@ -285,7 +285,7 @@ Ordered by measured size ÷ estimated risk. None touches `php-types`' public API
 | 2 | ~~Symbol maps under FxHash; incremental `unit_fp`~~ **done, session 3** — the hasher was the small part: every include rebuilt an index of the whole loaded image, now cached and extended in place | cold autoload 546.7 → 218.6 ms (0.400×); Symfony boot 10.2 → 8.2 ms | lowering, unit linking |
 | 3 | ~~Resolve builtins and `host_builtin_canonical` at compile/link time~~ **done, session 3**, as a per-site run-time cache (`NsIc`): link-time binding would be wrong, a namespaced function declared later must still shadow the builtin. `Op::CallBuiltin`'s own lookup by name (PROFILE.md §5.4) is untouched | Symfony `handle_requests` 49.0 → 43.2 ms (0.881×) | call ops |
 | 4 | ~~`foreach` by position over a held `Rc` clone instead of a snapshot~~ **done, session 4** — the remaining gap is dispatch (row 6) | `packed_foreach_sum_1m` 0.863, `nested_pass_by_value_100k` 0.554; ~30 ns/element left, ≈6.8× the oracle (4.5 ms per million) | iterator state |
-| 5 | Remove the per-array-write and per-call allocation | 1 malloc+free each | path machinery, call binder |
+| 5 | ~~Remove the per-array-write and per-call allocation~~ **done, session 4** — array write, typed call and `foreach` all at 0 allocations; only concat allocates | typed `function_call_1m` 0.883; `packed_index_write_1m` 0.948 | path machinery, call binder |
 | 6 | Dispatch loop: current frame held outside the `Vec`, cached stack/ops slices | up to 20.6 % | `run_loop` |
 | 7 | Bytecode cache, steps 2 and 3 of §4 | 36 % of a short Symfony run | new module |
 | 8 | Worker mode | removes boot per request | `php-server` |
