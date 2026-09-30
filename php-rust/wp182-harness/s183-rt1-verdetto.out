@@ -1,0 +1,51 @@
+== s183 LEVA L-RT1 rt1 — A=19a2faa8 MISURATO (/Volumes/Extreme Pro/Claude/php-rust-experiment/php-rust/wp182-harness/ab-out/arm-A, pin s181) Z=a1bd2a0b MISURATO (/Volumes/Extreme Pro/Claude/php-rust-experiment/php-rust/wp182-harness/ab-out/arm-Z, gemello del pin ricostruito) B=9ef70777 MISURATO (/Volumes/Extreme Pro/Claude/php-rust-experiment/php-rust/wp182-harness/ab-out/arm-B, tree + L-CR1) — R=5, N: calls-dq=60000000 arith-dq=250000000 prop-dq=150000000, PREV prop-dq A (stesso binario, S-181/S-183: 31,60/31,73/31,60): 31.60, 2026-09-30 20:23:36 ==
+sentinella LS: /Applications/Antigravity /Users/francescotinti/.local/share/uv/tools/serena-agent/bin/python3 /Users/francescotinti/.rustup/toolchains/1.98.1-aarch64-apple-darwin/libexec/rust-analyzer-proc-macro-srv /Users/francescotinti/.rustup/toolchains/stable-aarch64-apple-darwin/bin/rust-analyzer 
+parità calls-dq: A==Z==B==atteso oracle (60000000 )
+parità arith-dq: A==Z==B==atteso oracle (85937499750000000 )
+parità prop-dq: A==Z==B==atteso oracle (300000000 )
+floors: A=0.03 Z=0.02 B=0.02 oracle=0.05
+  coppia1 [AZB]: callsA=5.46 callsZ=5.44 callsB=5.25 propA=4.72 propZ=4.74 propB=4.72 dqA=4.58 dqZ=4.56 dqB=4.54 | callsO=1.39 propO=2.15 dqO=2.21
+  coppia2 [BAZ]: callsA=5.35 callsZ=5.37 callsB=5.19 propA=4.72 propZ=4.74 propB=4.72 dqA=4.56 dqZ=4.59 dqB=4.54 | callsO=1.38 propO=2.23 dqO=2.21
+  coppia3 [ZBA]: callsA=5.36 callsZ=5.37 callsB=5.23 propA=4.76 propZ=4.76 propB=4.72 dqA=4.57 dqZ=4.54 dqB=4.54 | callsO=1.32 propO=2.15 dqO=2.22
+  coppia4 [ABZ]: callsA=5.41 callsZ=5.46 callsB=5.29 propA=4.71 propZ=4.74 propB=4.75 dqA=4.79 dqZ=4.50 dqB=4.56 | callsO=1.37 propO=2.15 dqO=2.20
+  coppia5 [BZA]: callsA=5.54 callsZ=5.52 callsB=5.22 propA=4.74 propZ=4.81 propB=4.74 dqA=4.57 dqZ=4.55 dqB=4.54 | callsO=1.33 propO=2.15 dqO=2.21
+LAYOUT calls-dq: A=89.67 Z=90.33 ⇒ |A−Z| (colonna) 0.67 / (appaiata) 0.33 ns/iter; banda tra run same-binary |A−PREV| = n/d (nessun PREV same-toolchain: la A di oggi diventa PREV) (rumore drop-1 A'=1.83 Z'=1.50)
+LAYOUT prop-dq: A=31.27 Z=31.47 ⇒ |A−Z| (colonna) 0.20 / (appaiata) 0.20 ns/iter; banda tra run same-binary |A−PREV| = 0.33 (rumore drop-1 A'=0.20 Z'=0.13)
+LAYOUT arith-dq: A=18.16 Z=18.12 ⇒ |A−Z| (colonna) 0.04 / (appaiata) 0.04 ns/iter; banda tra run same-binary |A−PREV| = n/d (nessun PREV same-toolchain: la A di oggi diventa PREV) (rumore drop-1 A'=0.08 Z'=0.20)
+GIUDICE calls-dq (BERSAGLIO, 1 Call+CheckArity+BinarySS+Ret per iter): oracle=22.00 ns/iter; A/oracle=4.08× Z/oracle=4.11× B/oracle=3.95×
+GIUDICE calls-dq L-RT1 (D = A−B) B: A=89.67 B=86.83 ns/iter D=A−B colonna=+2.83 appaiata=+2.50 soglia=4.00 (rumore drop-1 A'=1.83 B'=1.00, SL=0.67) segni 5/5 -> NON nominato (vale 0); direzione FIRMATA (B più veloce); regressione (D < −max(4,rumore)): no
+ATTESA (criterio-rt1 p.4): D ∈ [1;4]: CENTRATA (+2.83/+2.50)
+GUARDIA prop-dq (sola regressione, nessun Call nel loop): oracle=14.00 ns/iter; A/oracle=2.23× Z/oracle=2.25× B/oracle=2.24×
+GUARDIA prop-dq (attesa |D| < 1) B: A=31.27 B=31.33 ns/iter D=A−B colonna=-0.07 appaiata=-0.07 soglia=4.00 (rumore drop-1 A'=0.20 B'=0.13, SL=0.20) segni 1/5 -> NON nominato (vale 0); direzione sotto il rumore/SL (B più lento); regressione (D < −max(4,rumore)): no
+GUARDIA prop-dq ESITO attesa |D|<1: RISPETTATA (D -0.07/-0.07, segni 1/5)
+GUARDIA arith-dq (sola regressione, nessun Call nel loop): oracle=8.64 ns/iter; A/oracle=2.10× Z/oracle=2.10× B/oracle=2.09×
+GUARDIA arith-dq (attesa |D| < 1) B: A=18.16 B=18.08 ns/iter D=A−B colonna=+0.08 appaiata=+0.08 soglia=4.00 (rumore drop-1 A'=0.08 B'=0.00, SL=0.04) segni 5/5 -> NON nominato (vale 0); direzione sotto il rumore/SL (B più veloce); regressione (D < −max(4,rumore)): no
+GUARDIA arith-dq ESITO attesa |D|<1: RISPETTATA (D +0.08/+0.08, segni 5/5)
+PREV per la prossima misura (same-binary pin s181): calls-dq A=89.67 arith-dq A=18.16 prop-dq A=31.27 (PREV: 31.60)
+SOLO DIREZIONE: D +2.83/+2.50 ≥ max(rumore 1.83, SL 0.67) con segni 5/5 ma sotto la soglia ⇒ L-RT1 TENUTA nel tree (keep-partial-wins), non promossa (rc=3)
+ESITO rc=3
+sentinella LS fine: /Applications/Antigravity /Users/francescotinti/.local/share/uv/tools/serena-agent/bin/python3 /Users/francescotinti/.rustup/toolchains/1.98.1-aarch64-apple-darwin/libexec/rust-analyzer-proc-macro-srv /Users/francescotinti/.rustup/toolchains/stable-aarch64-apple-darwin/bin/rust-analyzer 
+== finestra A/B L-RT1: quiescenza PASS al tentativo 1, Data 18G, bracci A=19a2faa8 Z=a1bd2a0b B=9ef70777 ==
+-- sentinelle INIZIO 2026-09-30 20:23:25: Data=18G · total = 5120.00M  used = 4056.06M  free = 1063.94M  (encrypted) · load averages: 1.73 2.29 2.61
+   updater: 
+   top-8 CPU:
+     100.0 /Applications/Google
+       2.0 /Applications/Google
+       2.0 /Applications/Google
+       1.6 /Applications/Google
+       1.4 /Applications/Google
+       1.2 /Applications/Antigravity
+       0.9 /Applications/Google
+       0.8 /System/Library/PrivateFrameworks/UVFSXPCService.framework/Versions/A/XPCServices/UVFSService.xpc/Contents/MacOS/UVFSService
+-- sentinelle FINE 2026-09-30 20:28:35: Data=18G · total = 5120.00M  used = 4040.06M  free = 1079.94M  (encrypted) · load averages: 2.39 2.36 2.53
+   updater: 
+   top-8 CPU:
+      17.5 /usr/bin/top
+       6.6 /usr/libexec/sysmond
+       6.4 /usr/libexec/ContinuityCaptureAgent
+       4.8 /Applications/Google
+       4.0 /Applications/Google
+       3.7 /Applications/Google
+       3.7 /Applications/Google
+       2.7 /Applications/Google
+watchdog: 11 campioni, Data min=18G, campioni con updater=0, allarmi=0
