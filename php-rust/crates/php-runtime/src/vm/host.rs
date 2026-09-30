@@ -3220,13 +3220,13 @@ impl<'m> super::Vm<'m> {
             )));
             return Ok(Zval::Bool(false));
         }
-        self.class_index.insert(alias_key, cid);
+        self.class_index_insert(alias_key, cid);
         // Make the alias visible to the *lowering image* too, so a later unit
         // can `extends`/`implements` it (monolog's tests alias the legacy
         // PHPUnit_Framework_TestCase). An index-only entry: the alias resolves
         // to the ORIGINAL decl, so inherited private-property mangling keeps
         // the real declaring-class name and class identity is preserved.
-        self.seed_aliases.push((alias, orig));
+        self.seed_alias_push(alias, orig);
         Ok(Zval::Bool(true))
     }
     pub(super) fn ho_interface_exists(&mut self, args: &[Zval]) -> Result<Zval, PhpError> {

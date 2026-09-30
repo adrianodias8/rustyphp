@@ -19,7 +19,12 @@
 //! Calls, arrays, references, OOP and generators are deliberately out of slice;
 //! `Module::functions` / `closures` are left empty until the call opcode lands.
 
-use std::collections::{HashMap, HashSet};
+// Fork: FxHash for the lowering/compile symbol tables (the rest of the engine
+// already uses it). std's SipHash `RandomState` was 28.7 % of the samples of
+// an autoload-heavy run (PROFILE.md §5.2): every include unit rebuilds these
+// maps over the whole loaded image. Iteration order was already unspecified.
+type HashMap<K, V> = rustc_hash::FxHashMap<K, V>;
+type HashSet<K> = rustc_hash::FxHashSet<K>;
 use std::rc::Rc;
 
 use php_types::{ObjectInfo, PhpStr, PropVis};
@@ -72,7 +77,7 @@ struct ProgramCtx<'a> {
     /// Indices into `funcs` that are conditional declarations: they do NOT resolve
     /// a call by name at compile time (dispatched dynamically, callable only once
     /// their `DeclareFn` runs).
-    conditional_fns: &'a HashSet<usize>,
+    conditional_fns: &'a std::collections::HashSet<usize>,
     registry: &'a Registry,
     classes: &'a [std::rc::Rc<ClassDecl>],
     class_index: &'a rustc_hash::FxHashMap<Vec<u8>, ClassId>,
@@ -377,7 +382,7 @@ fn compile_program_impl_mode(
     let mut elided_classes: u32 = 0;
     // Contract v2 (WP-63): rebased conditional set — indices into the
     // RETAINED `classes` vec, matching what `run_linked` walks.
-    let mut cond_retained: std::collections::HashSet<usize> = std::collections::HashSet::new();
+    let mut cond_retained: std::collections::HashSet<usize> = std::collections::HashSet::default();
     if link.is_none() {
         classes.reserve(program.classes.len());
     }
@@ -731,7 +736,7 @@ impl<'a> FnCompiler<'a> {
             n_temps_max: 0,
             exc_regions: Vec::new(),
             finally_scopes: Vec::new(),
-            labels: HashMap::new(),
+            labels: HashMap::default(),
             pending_gotos: Vec::new(),
             scope_path: Vec::new(),
             next_scope: 0,

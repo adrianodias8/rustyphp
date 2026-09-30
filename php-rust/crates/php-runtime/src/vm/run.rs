@@ -3792,7 +3792,7 @@ impl<'m> super::Vm<'m> {
                         let line = self.cur_line(top);
                         return Err(self.class_redeclaration_fatal(old, file, line));
                     }
-                    self.class_index.insert(key, *cid);
+                    self.class_index_insert(key, *cid);
                     self.serializable_link_check(*cid)?;
                 }
                 Op::DeclareDeferred { idx } => {

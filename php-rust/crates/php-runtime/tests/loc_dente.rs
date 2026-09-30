@@ -55,7 +55,7 @@ fn nessun_sorgente_rs_oltre_cap() {
         // p.1) — mod.rs +62 (push_method_frame_one +28, ammissione
         // array-callable in try_autoload +34); calls.rs (+31,
         // call_method_one) resta fuori allowlist sotto il cap 2000.
-        ("php-runtime/src/vm/mod.rs", 26190, "monolite VM — bersaglio A2; +62 L-AU1 S-163 PRE-dichiarato; +59 flag gc-idle S-176 DICHIARATO S-180 (tree tenuto, keep-partial-wins); +222 fork 2026-09-30 (count()/Countable dynamic path, quiet static-property fetch, in-place `.=`, their tests): DECLARED"),
+        ("php-runtime/src/vm/mod.rs", 26355, "monolite VM — bersaglio A2; +62 L-AU1 S-163 PRE-dichiarato; +59 flag gc-idle S-176 DICHIARATO S-180 (tree tenuto, keep-partial-wins); +387 fork 2026-09-30 (count()/Countable dynamic path, quiet static-property fetch, in-place `.=`, seed class index cache, their tests): DECLARED"),
         ("php-runtime/src/vm/host.rs", 7727, "hostcall — backlog A2; +18 L-AM2 S-162 PRE-dichiarato; +1 flag gc-idle S-176 DICHIARATO S-180"),
         // S-156: salita DICHIARATA +29 (leva HD2-hostcall: braccio
         // CallHostBuiltin, pop diretti ≤4) — verbale wp156-harness/s156-promo.
@@ -89,25 +89,25 @@ fn nessun_sorgente_rs_oltre_cap() {
         // S-174 «Sweep-in-op» (criterio wp174-harness/s174-criterio.md p.5): +87 netti
         // (sweep_idle/sweep_skip_next + 5 siti in place + back-edge fuso, commenti
         // inclusi), cap alzato DICHIARANDO prima della promozione (differita: Data).
-        ("php-runtime/src/vm/run.rs", 7587, "run_loop — +29 L-RT1 (upstream S-183, Ret in place) · ULTIMO o mai (A2); +102 L-MCk S-166 + 174 L-SL1 S-171 + 109 L-SL2 S-172 + 74 fetta 3 S-173 + 87 Sweep-in-op S-174 + 11 flag gc-idle S-176 (DICHIARATO S-180) + 32 L-CR1 S-181 (DICHIARATO) dichiarati; +154 fork 2026-09-30 (count()/Countable dynamic path, quiet static-property fetch, in-place `.=`, their tests): DECLARED"),
+        ("php-runtime/src/vm/run.rs", 7587, "run_loop — +29 L-RT1 (upstream S-183, Ret in place) · ULTIMO o mai (A2); +102 L-MCk S-166 + 174 L-SL1 S-171 + 109 L-SL2 S-172 + 74 fetta 3 S-173 + 87 Sweep-in-op S-174 + 11 flag gc-idle S-176 (DICHIARATO S-180) + 32 L-CR1 S-181 (DICHIARATO) dichiarati; +154 fork 2026-09-30 (count()/Countable dynamic path, quiet static-property fetch, in-place `.=`, seed class index cache, their tests): DECLARED"),
         ("php-runtime/tests/eval.rs", 4773, "batteria eval"),
         ("php-builtins/tests/builtins.rs", 4772, "batteria builtins"),
-        ("php-runtime/src/lower/mod.rs", 3838, "lowering"),
+        ("php-runtime/src/lower/mod.rs", 3940, "lowering; +102 fork 2026-09-30 (count()/Countable dynamic path, quiet static-property fetch, in-place `.=`, seed class index cache, their tests): DECLARED"),
         ("php-runtime/src/vm/dom.rs", 3641, "ponte DOM"),
         ("php-types/src/big5.rs", 3372, "GENERATO, cap fisso"),
         ("php-builtins/src/string.rs", 2865, "builtins stringhe"),
         ("php-builtins/src/file.rs", 2758, "builtins file"),
-        ("php-runtime/src/compile/expr.rs", 2605, "compile expr; +15 fork 2026-09-30 (count()/Countable dynamic path, quiet static-property fetch, in-place `.=`, their tests): DECLARED"),
+        ("php-runtime/src/compile/expr.rs", 2605, "compile expr; +15 fork 2026-09-30 (count()/Countable dynamic path, quiet static-property fetch, in-place `.=`, seed class index cache, their tests): DECLARED"),
         ("php-builtins/src/date.rs", 2458, "builtins date"),
-        ("php-runtime/src/bytecode.rs", 2328, "bytecode; +22 fork 2026-09-30 (count()/Countable dynamic path, quiet static-property fetch, in-place `.=`, their tests): DECLARED"),
+        ("php-runtime/src/bytecode.rs", 2328, "bytecode; +22 fork 2026-09-30 (count()/Countable dynamic path, quiet static-property fetch, in-place `.=`, seed class index cache, their tests): DECLARED"),
         ("php-runtime/src/preg.rs", 2290, "preg"),
         ("php-types/src/memcensus.rs", 2268, "strumentazione census"),
-        ("php-runtime/src/lower/class.rs", 2168, "lowering classi"),
-        ("php-runtime/src/vm/arrays.rs", 2200, "array ops; +33 fork 2026-09-30 (count()/Countable dynamic path, quiet static-property fetch, in-place `.=`, their tests): DECLARED"),
+        ("php-runtime/src/lower/class.rs", 2173, "lowering classi; +5 fork 2026-09-30 (FxHash alias comment): DECLARED"),
+        ("php-runtime/src/vm/arrays.rs", 2200, "array ops; +33 fork 2026-09-30 (count()/Countable dynamic path, quiet static-property fetch, in-place `.=`, seed class index cache, their tests): DECLARED"),
         ("php-runtime/src/lsp_check.rs", 2094, "lsp check"),
         ("php-builtins/src/fileinfo.rs", 2083, "builtins fileinfo"),
         ("php-server/src/worker_pool.rs", 2074, "server worker pool"),
-        ("php-runtime/src/lower/expr.rs", 2030, "lowering expr; +1 fork 2026-09-30 (count()/Countable dynamic path, quiet static-property fetch, in-place `.=`, their tests): DECLARED"),
+        ("php-runtime/src/lower/expr.rs", 2030, "lowering expr; +1 fork 2026-09-30 (count()/Countable dynamic path, quiet static-property fetch, in-place `.=`, seed class index cache, their tests): DECLARED"),
     ];
     let crates = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let mut files = Vec::new();

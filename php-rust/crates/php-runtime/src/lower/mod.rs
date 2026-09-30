@@ -14,7 +14,12 @@
 //! phpt-runner's capability scan (step 6) turns these into motivated SKIPs.
 
 use std::borrow::Cow;
-use std::collections::{HashMap, HashSet};
+// Fork: FxHash for the lowering/compile symbol tables (the rest of the engine
+// already uses it). std's SipHash `RandomState` was 28.7 % of the samples of
+// an autoload-heavy run (PROFILE.md §5.2): every include unit rebuilds these
+// maps over the whole loaded image. Iteration order was already unspecified.
+type HashMap<K, V> = rustc_hash::FxHashMap<K, V>;
+type HashSet<K> = rustc_hash::FxHashSet<K>;
 
 use bumpalo::Bump;
 use mago_database::file::File;
@@ -139,6 +144,7 @@ pub fn lower_source_seeded(
     seed_aliases: &[(Vec<u8>, Vec<u8>)],
     declared: &dyn Fn(&[u8]) -> Option<usize>,
     seed_conditional: &std::collections::HashSet<Vec<u8>>,
+    seed_index: Option<SeedClassIndex>,
     defer: DeferPolicy,
 ) -> Result<Program, LowerError> {
     lower_source_impl(
@@ -152,6 +158,7 @@ pub fn lower_source_seeded(
             seed_aliases,
             declared,
             seed_conditional,
+            seed_index,
         )),
         defer,
     )
@@ -165,7 +172,124 @@ type Seed<'a> = (
     &'a [(Vec<u8>, Vec<u8>)],
     &'a dyn Fn(&[u8]) -> Option<usize>,
     &'a std::collections::HashSet<Vec<u8>>,
+    Option<SeedClassIndex>,
 );
+
+/// The seed image's lowercase class name → seed position index, shared
+/// (`Rc`) between the VM's cache and every unit lowered against that image.
+pub type SeedClassIndex = std::rc::Rc<rustc_hash::FxHashMap<Vec<u8>, usize>>;
+
+/// Build (or, from `from` > 0, EXTEND) the seed class index over
+/// `sclasses[from..]`: the lowercase name of every RUNTIME-DECLARED seed class
+/// maps to its seed position — for a seed-conditional name, to the position
+/// of the duplicate the runtime actually declared (WP-70 S-70.2 / E-71.H2:
+/// first image never wins for conditionals; for plain classes the seed
+/// position is authoritative because elision can skew id alignment). An
+/// undeclared name gets no entry, so a dependent statement defers to run
+/// time like Zend. Duplicate names keep the first entry (`or_insert`).
+/// Runtime `class_alias` entries resolve to the ORIGINAL decl and are added
+/// only on a full build (`from == 0`); an incremental extension is only valid
+/// while the alias list is unchanged — the VM enforces that.
+pub fn build_seed_class_index(
+    sclasses: &[std::rc::Rc<crate::hir::ClassDecl>],
+    declared: &dyn Fn(&[u8]) -> Option<usize>,
+    seed_conditional: &std::collections::HashSet<Vec<u8>>,
+    saliases: &[(Vec<u8>, Vec<u8>)],
+    from: usize,
+    ci: &mut rustc_hash::FxHashMap<Vec<u8>, usize>,
+) {
+    for (i, cd) in sclasses.iter().enumerate().skip(from) {
+        let key = cd.name.to_ascii_lowercase();
+        if let Some(rid) = declared(&key) {
+            // `rid != i` first: for a plain class the runtime id IS the
+            // seed position, and the (SipHash) set probe used to be paid
+            // for every class of the image on every include.
+            let idx = if rid != i
+                && seed_conditional.contains(&key)
+                && rid < sclasses.len()
+                && sclasses[rid].name.to_ascii_lowercase() == key
+            {
+                rid
+            } else {
+                i
+            };
+            ci.entry(key).or_insert(idx);
+        }
+    }
+    if from == 0 {
+        for (alias, orig) in saliases {
+            if let Some(&i) = ci.get(&orig.to_ascii_lowercase()) {
+                ci.entry(alias.to_ascii_lowercase()).or_insert(i);
+            }
+        }
+    }
+}
+
+/// The lowering's class-name index: an optional shared, read-only BASE (the
+/// VM's cached seed index) under an owned LAYER holding this unit's own
+/// classes and its removals. Lookups check the layer, then — unless the key
+/// was removed — the base. Same observable behaviour as the single owned map
+/// it replaces; the base is never mutated.
+#[derive(Default)]
+pub(crate) struct ClassIndex {
+    base: Option<SeedClassIndex>,
+    local: HashMap<Vec<u8>, usize>,
+    removed: HashSet<Vec<u8>>,
+}
+
+impl ClassIndex {
+    fn owned(local: HashMap<Vec<u8>, usize>) -> Self {
+        ClassIndex { base: None, local, removed: HashSet::default() }
+    }
+
+    fn layered(base: SeedClassIndex) -> Self {
+        ClassIndex { base: Some(base), local: HashMap::default(), removed: HashSet::default() }
+    }
+
+    pub(crate) fn get(&self, key: &[u8]) -> Option<&usize> {
+        if let Some(v) = self.local.get(key) {
+            return Some(v);
+        }
+        if self.removed.contains(key) {
+            return None;
+        }
+        self.base.as_ref().and_then(|b| b.get(key))
+    }
+
+    pub(crate) fn contains_key(&self, key: &[u8]) -> bool {
+        self.get(key).is_some()
+    }
+
+    pub(crate) fn insert(&mut self, key: Vec<u8>, value: usize) -> Option<usize> {
+        let shadowed = if self.removed.remove(&key) {
+            None
+        } else {
+            self.base.as_ref().and_then(|b| b.get(&key).copied())
+        };
+        self.local.insert(key, value).or(shadowed)
+    }
+
+    pub(crate) fn remove(&mut self, key: &[u8]) -> Option<usize> {
+        let local = self.local.remove(key);
+        if self.base.as_ref().is_some_and(|b| b.contains_key(key)) {
+            self.removed.insert(key.to_vec());
+        }
+        local
+    }
+
+    /// Flatten into one owned map (the prelude cache keeps a plain map).
+    fn into_map(self) -> HashMap<Vec<u8>, usize> {
+        let mut m = match self.base {
+            Some(b) => (*b).clone(),
+            None => HashMap::default(),
+        };
+        for k in &self.removed {
+            m.remove(k);
+        }
+        m.extend(self.local);
+        m
+    }
+}
 
 // WP-65 B-65.3 (KB65-3): cumulative wall-ns of the two lower phases over
 // SEEDED lowers only (include/eval/deferred + autoload retries — the
@@ -309,7 +433,7 @@ fn lower_source_impl(
                 a1w.close();
             }
             low.classes = pclasses;
-            low.class_index = pindex;
+            low.class_index = ClassIndex::owned(pindex);
             low.functions = pfunctions;
             low.fn_index = pfn_index;
             // Start the unit's `static $x` ids past the prelude's own bindings:
@@ -331,7 +455,7 @@ fn lower_source_impl(
         // `__FILE__`/backtrace to "eval()'d code". Calling a caller user function
         // from eval therefore remains unsupported here (a later phase resolves it
         // against the caller module instead of re-emitting).
-        Some((sclasses, sstatic, straits, sglobals, saliases, declared, seed_conditional)) => {
+        Some((sclasses, sstatic, straits, sglobals, saliases, declared, seed_conditional, seed_index)) => {
             // Seed the shared global variable name→slot registry (step 57): a
             // seeded (`include`/`eval`) unit numbers its `$GLOBALS['x']` / `global
             // $x` slots to *agree* with `main`'s (and every earlier unit's), since
@@ -347,41 +471,19 @@ fn lower_source_impl(
             low.classes = sclasses.to_vec();
             low.seed_class_len = sclasses.len();
             low.seed_conditional = seed_conditional.clone();
-            let mut ci: HashMap<Vec<u8>, usize> = HashMap::new();
-            for (i, cd) in sclasses.iter().enumerate() {
-                // WP-70 S-70.2: a seed entry is eagerly resolvable only if its
-                // name is DECLARED (runtime class table) — a conditional
-                // declaration never executed stays unresolvable, so a
-                // dependent statement defers to run time exactly like Zend
-                // (the phantom-class family: b_chain/b4/b5/b6).
-                let key = cd.name.to_ascii_lowercase();
-                if let Some(rid) = declared(&key) {
-                    // E-71.H2 (WP-72): a CONDITIONAL name binds to the image
-                    // of the branch the runtime actually DECLARED — the
-                    // runtime id picks the right duplicate (never "first
-                    // image wins": fixtures h2a/h2c fataled on the
-                    // un-executed branch). ONLY for seed-conditional names:
-                    // for plain classes the seed position is authoritative
-                    // (elision can skew id alignment — hk regression).
-                    let idx = if seed_conditional.contains(&key)
-                        && rid < sclasses.len()
-                        && sclasses[rid].name.to_ascii_lowercase() == key
-                    {
-                        rid
-                    } else {
-                        i
-                    };
-                    ci.entry(key).or_insert(idx);
+            // The seed's name → position index. The VM hands in a cached
+            // one (`seed_index`) that it extends incrementally as the image
+            // grows — building it here again for every include walked the
+            // whole loaded image each time (PROFILE.md §5.2). The unit's own
+            // classes go into the layer on top; the base is never written.
+            low.class_index = match seed_index {
+                Some(base) => ClassIndex::layered(base),
+                None => {
+                    let mut ci: HashMap<Vec<u8>, usize> = HashMap::default();
+                    build_seed_class_index(sclasses, declared, seed_conditional, saliases, 0, &mut ci);
+                    ClassIndex::owned(ci)
                 }
-            }
-            // Runtime `class_alias` entries resolve to the ORIGINAL decl (index
-            // only — no clone), so `extends LegacyName` inherits the real class.
-            for (alias, orig) in saliases {
-                if let Some(&i) = ci.get(&orig.to_ascii_lowercase()) {
-                    ci.entry(alias.to_ascii_lowercase()).or_insert(i);
-                }
-            }
-            low.class_index = ci;
+            };
             // Seed already-loaded traits so a `use T` here resolves against a trait
             // declared in an earlier (e.g. autoloaded) unit (step 21, trait analogue
             // of seed_classes). The keys are recorded so only this unit's *new*
@@ -519,7 +621,7 @@ type GotoSite<'a> = (&'a [u8], BarrierStack, Line);
 /// of, the innermost such barrier (the first mismatching stack entry) picks the
 /// message — the same one PHP reports.
 fn validate_goto(body: &[Stmt]) -> Result<(), LowerError> {
-    let mut labels: LabelMap = HashMap::new();
+    let mut labels: LabelMap = HashMap::default();
     let mut gotos: Vec<GotoSite> = Vec::new();
     let mut counter: u32 = 0;
     collect_goto(body, &mut Vec::new(), &mut counter, &mut labels, &mut gotos)?;
@@ -1024,7 +1126,7 @@ fn lower_prelude_uncached() -> LoweredPrelude {
             arena.chunk_capacity()
         );
     }
-    (low.classes, low.class_index, low.functions, low.fn_index, low.static_count)
+    (low.classes, low.class_index.into_map(), low.functions, low.fn_index, low.static_count)
 }
 
 /// A name→slot scope: the script globals, or one function's locals. Holds the
@@ -1083,12 +1185,12 @@ struct Lowerer<'f> {
     fn_index: HashMap<Vec<u8>, usize>,
     /// Indices into `functions` that are *conditional* declarations (registered at
     /// run time by `DeclareFn`, not resolvable by name eagerly).
-    conditional_fns: HashSet<usize>,
+    conditional_fns: std::collections::HashSet<usize>,
     /// Traits declared inside a branch, registered at run time (DeclareTrait).
     conditional_traits: Vec<(Vec<u8>, LoweredTrait)>,
     /// Indices into `classes` that are *conditional* declarations (registered at
     /// run time by `DeclareClass`, not resolvable by name eagerly).
-    conditional_classes: HashSet<usize>,
+    conditional_classes: std::collections::HashSet<usize>,
     /// Start offsets of the class-like statements the hoist RESERVED (WP-69
     /// S-69.1 family): a statement re-declaring an in-use name is not hoisted
     /// — it stays a runtime (re)declaration whose `DeclareClass` raises
@@ -1122,7 +1224,7 @@ struct Lowerer<'f> {
     /// Hoisted user classes and a name→index map (ASCII-lowercased; PHP class
     /// names are case-insensitive), step 19.
     classes: Vec<std::rc::Rc<ClassDecl>>,
-    class_index: HashMap<Vec<u8>, usize>,
+    class_index: ClassIndex,
     /// How many leading `classes` entries came from the cross-unit seed image
     /// (0 for a standalone/main lowering). A statement-level class whose name
     /// maps into the seed prefix is a RE-declaration from a re-included file
@@ -1263,10 +1365,10 @@ impl<'f> Lowerer<'f> {
             locals: None,
             after_closing_tag: false,
             functions: Vec::new(),
-            fn_index: HashMap::new(),
-            conditional_fns: HashSet::new(),
-            conditional_classes: HashSet::new(),
-            hoisted_class_spans: HashSet::new(),
+            fn_index: HashMap::default(),
+            conditional_fns: std::collections::HashSet::new(),
+            conditional_classes: std::collections::HashSet::new(),
+            hoisted_class_spans: HashSet::default(),
             conditional_traits: Vec::new(),
             closures: Vec::new(),
             prog_name: prog_name.into(),
@@ -1275,18 +1377,18 @@ impl<'f> Lowerer<'f> {
             static_count: 0,
             strict: false,
             classes: Vec::new(),
-            class_index: HashMap::new(),
+            class_index: ClassIndex::default(),
             seed_class_len: 0,
-            seed_conditional: std::collections::HashSet::new(),
+            seed_conditional: std::collections::HashSet::default(),
             used_conditional_seed: std::cell::Cell::new(false),
-            traits: HashMap::new(),
+            traits: HashMap::default(),
             cur_class: None,
             cur_function: None,
             cur_trait: None,
             cur_namespace: Vec::new(),
-            use_classes: HashMap::new(),
-            use_functions: HashMap::new(),
-            use_consts: HashMap::new(),
+            use_classes: HashMap::default(),
+            use_functions: HashMap::default(),
+            use_consts: HashMap::default(),
             promoted: Vec::new(),
             hook_prop: None,
             hook_backed: false,

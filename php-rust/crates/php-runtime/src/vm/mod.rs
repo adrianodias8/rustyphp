@@ -696,6 +696,15 @@ pub fn vm_new<'m>(
         module,
         classes: module.classes.iter().map(|c| &**c).collect(),
         class_index: module.class_index.clone(),
+        class_index_digest: module
+            .class_index
+            .iter()
+            .fold(0u64, |acc, (name, id)| acc ^ ci_entry_digest(name, *id)),
+        seed_aliases_digest: 0,
+        class_index_inserts: 0,
+        seed_ci: None,
+        seed_reg: Vec::new(),
+        seed_reg_inserts: u64::MAX,
         class_module: vec![module; module.classes.len()],
         modules: vec![module],
         main_hir,
@@ -3041,7 +3050,32 @@ pub struct Vm<'m> {
     /// through this, not `self.classes`.
     classes: Vec<&'m CompiledClass>,
     /// Global case-insensitive class-name → [`ClassId`] index over `classes`.
+    /// Written ONLY through [`Self::class_index_insert`], which keeps
+    /// `class_index_digest` in step.
     class_index: HashMap<Vec<u8>, ClassId>,
+    /// XOR of [`ci_entry_digest`] over every `class_index` entry — the
+    /// registered-names digest [`Self::unit_fp`] used to recompute by walking
+    /// the whole table on EVERY include (7.6 % of an autoload-heavy run,
+    /// PROFILE.md §5.2). XOR is order-independent, so the running value is
+    /// bit-identical to the old full walk.
+    class_index_digest: u64,
+    /// Same for `seed_aliases` ([`alias_digest`]); appended through
+    /// [`Self::seed_alias_push`] only.
+    seed_aliases_digest: u64,
+    /// Number of `class_index_insert` calls so far — the "did anything get
+    /// registered" clock the two seed caches below are validated against.
+    class_index_inserts: u64,
+    /// The seed image's lowercase-name → position index, handed to every
+    /// seeded lowering instead of being rebuilt per include; see
+    /// [`Self::seed_class_index`].
+    seed_ci: Option<SeedCiCache>,
+    /// Per seed position: the runtime class id registered for that seed
+    /// class, `None` while unregistered (a still-undeclared conditional).
+    /// Filled lazily and re-probed only when `class_index_inserts` moved;
+    /// see [`Self::seed_registered`]. Replaces a lowercase+hash-lookup per
+    /// seed entry per include in the stub mask and the elided remap.
+    seed_reg: Vec<Option<ClassId>>,
+    seed_reg_inserts: u64,
     /// Defining [`Module`] of each class in `classes`, parallel to it (step 57,
     /// Phase 1c-2b). For a class linked by an `eval`/`include` unit this is that
     /// unit's leaked module, so a method frame entered for the class resolves its
@@ -6309,10 +6343,11 @@ impl<'m> Vm<'m> {
     /// in retained (`module.classes`) space, matching `run_linked`.
     /// `seed_len` is the pre-delta seed length the compile elided against.
     fn unit_remap_elided(
-        &self,
+        &mut self,
         program: &Program,
         seed_len: usize,
     ) -> (Vec<ClassId>, Vec<ClassId>, Vec<usize>) {
+        self.seed_registered();
         // WP-64 E1-64 (H5''): this walk is the SECOND O(seed) per-include
         // pass (lowercase alloc per entry) — timed so tranche 2 quotes BOTH.
         #[cfg(feature = "mem-census")]
@@ -6322,8 +6357,12 @@ impl<'m> Vm<'m> {
         let mut new_locals: Vec<usize> = Vec::new();
         let mut k = 0usize; // retained (module.classes) cursor
         for (i, cd) in program.classes.iter().enumerate() {
-            let lower = cd.name.to_ascii_lowercase();
-            let registered = self.class_index.get(&lower).copied();
+            // Seed prefix: the per-position registration cache (see
+            // `seed_stub_mask`); otherwise the lookup as before.
+            let registered = match self.seed_reg.get(i) {
+                Some(r) if self.seed_classes.get(i).is_some_and(|sc| Rc::ptr_eq(sc, cd)) => *r,
+                _ => self.class_index.get(&cd.name.to_ascii_lowercase()).copied(),
+            };
             // Mirror of the compile-side predicate: the unit's own conditionals
             // and its genuinely-new names were materialized, everything else
             // (masked classes + whole seed prefix) was elided.
@@ -6467,8 +6506,8 @@ impl<'m> Vm<'m> {
             self.unit_chain_fp =
                 fp_mix(self.unit_chain_fp, b"mint-class", &leaked.classes[i].name);
             if !leaked.conditional_classes.contains(&i) {
-                self.class_index
-                    .insert(leaked.classes[i].name.to_ascii_lowercase(), self.classes.len() - 1);
+                let id = self.classes.len() - 1;
+                self.class_index_insert(leaked.classes[i].name.to_ascii_lowercase(), id);
             }
         }
 
@@ -6703,6 +6742,7 @@ impl<'m> Vm<'m> {
         // failure instead of retrying forever.
         let mut attempted: std::collections::HashSet<Vec<u8>> = std::collections::HashSet::new();
         loop {
+            let seed_index = self.seed_class_index();
             match crate::lower_source_seeded(
                 name,
                 src,
@@ -6715,6 +6755,7 @@ impl<'m> Vm<'m> {
                 // binding consults the class table, never a compile registry).
                 &|k| self.class_index.get(k).copied(),
                 &self.seed_conditional,
+                Some(seed_index),
                 crate::DeferPolicy::All,
             ) {
                 Ok(program) => {
@@ -6835,6 +6876,7 @@ impl<'m> Vm<'m> {
         // the seeded lowerer — error out instead of retrying forever.
         let mut attempted: std::collections::HashSet<Vec<u8>> = std::collections::HashSet::new();
         let program = loop {
+            let seed_index = self.seed_class_index();
             match crate::lower_source_seeded(
                 &file,
                 &snippet,
@@ -6848,6 +6890,7 @@ impl<'m> Vm<'m> {
                 // the conditional registry of the lowering (phantom family).
                 &|k| self.class_index.get(k).copied(),
                 &self.seed_conditional,
+                Some(seed_index),
                 crate::DeferPolicy::No,
             ) {
                 Ok(p) => break p,
@@ -7035,14 +7078,23 @@ impl<'m> Vm<'m> {
     /// (its `Op::DeclareClass` may need the real thing); a seed conditional
     /// never registered (name absent from `class_index`) also compiles in full,
     /// preserving today's behaviour.
-    fn seed_stub_mask(&self, program: &Program) -> Vec<bool> {
+    fn seed_stub_mask(&mut self, program: &Program) -> Vec<bool> {
+        // Seed prefix entries answer from the per-position cache (no
+        // lowercase, no hash); anything else — the unit's own classes, or a
+        // prefix that is not this VM's seed — takes the lookup as before.
+        self.seed_registered();
         program
             .classes
             .iter()
             .enumerate()
             .map(|(i, cd)| {
                 !program.conditional_classes.contains(&i)
-                    && self.class_index.contains_key(&cd.name.to_ascii_lowercase())
+                    && match self.seed_reg.get(i) {
+                        Some(r) if self.seed_classes.get(i).is_some_and(|sc| Rc::ptr_eq(sc, cd)) => {
+                            r.is_some()
+                        }
+                        _ => self.class_index.contains_key(&cd.name.to_ascii_lowercase()),
+                    }
             })
             .collect()
     }
@@ -7112,24 +7164,107 @@ impl<'m> Vm<'m> {
         self.statics.len().hash(&mut h);
         self.linked_functions.len().hash(&mut h);
         // Registered classes: (name, id) digest, XOR-combined so the HashMap's
-        // iteration order cannot leak into the fingerprint.
-        let mut acc: u64 = 0;
-        for (name, id) in &self.class_index {
-            let mut eh = std::collections::hash_map::DefaultHasher::new();
-            name.hash(&mut eh);
-            id.hash(&mut eh);
-            acc ^= eh.finish();
-        }
-        acc.hash(&mut h);
-        let mut aacc: u64 = 0;
-        for (alias, target) in &self.seed_aliases {
-            let mut eh = std::collections::hash_map::DefaultHasher::new();
-            alias.hash(&mut eh);
-            target.hash(&mut eh);
-            aacc ^= eh.finish();
-        }
-        aacc.hash(&mut h);
+        // iteration order cannot leak into the fingerprint — maintained
+        // incrementally at the insert sites (`class_index_digest`), same
+        // per-entry hash as the former per-include walk.
+        self.class_index_digest.hash(&mut h);
+        self.seed_aliases_digest.hash(&mut h);
         h.finish()
+    }
+
+    /// The one write path into `class_index` (three callers: unit link,
+    /// `Op::DeclareClass`, `class_alias`). Keeps `class_index_digest` exact,
+    /// including when a key is overwritten.
+    pub(super) fn class_index_insert(&mut self, key: Vec<u8>, id: ClassId) {
+        self.class_index_inserts += 1;
+        let new = ci_entry_digest(&key, id);
+        if let Some(old) = self.class_index.insert(key.clone(), id) {
+            self.class_index_digest ^= ci_entry_digest(&key, old);
+        }
+        self.class_index_digest ^= new;
+    }
+
+    /// The one write path into `seed_aliases` (see `class_index_insert`).
+    pub(super) fn seed_alias_push(&mut self, alias: Vec<u8>, orig: Vec<u8>) {
+        self.seed_aliases_digest ^= alias_digest(&alias, &orig);
+        self.seed_aliases.push((alias, orig));
+    }
+
+    /// The seed class index for the current image (`lower::build_seed_class_index`
+    /// semantics, bit for bit), cached across includes. Unchanged image ⇒ the
+    /// same `Rc`. Image grown by appended seed classes whose registrations are
+    /// the ONLY registrations since the cache was built (the include-storm
+    /// case) ⇒ extended in place over the new positions. Anything else — an
+    /// alias, a conditional name folded in, a registration that is not one of
+    /// the appended classes (an older conditional declared later) ⇒ full
+    /// rebuild, exactly the old per-include construction.
+    fn seed_class_index(&mut self) -> crate::lower::SeedClassIndex {
+        let seed_len = self.seed_classes.len();
+        let inserts = self.class_index_inserts;
+        let aliases_len = self.seed_aliases.len();
+        let cond_len = self.seed_conditional.len();
+        if let Some(mut c) = self.seed_ci.take() {
+            if c.seed_len == seed_len && c.inserts == inserts && c.aliases_len == aliases_len && c.cond_len == cond_len {
+                let map = Rc::clone(&c.map);
+                self.seed_ci = Some(c);
+                return map;
+            }
+            if seed_len > c.seed_len && c.aliases_len == aliases_len && c.cond_len == cond_len && inserts >= c.inserts {
+                let declared_new = (c.seed_len..seed_len)
+                    .filter(|&i| self.class_index.contains_key(&self.seed_classes[i].name.to_ascii_lowercase()))
+                    .count() as u64;
+                if inserts - c.inserts == declared_new {
+                    crate::lower::build_seed_class_index(
+                        &self.seed_classes,
+                        &|k| self.class_index.get(k).copied(),
+                        &self.seed_conditional,
+                        &self.seed_aliases,
+                        c.seed_len,
+                        Rc::make_mut(&mut c.map),
+                    );
+                    c.seed_len = seed_len;
+                    c.inserts = inserts;
+                    let map = Rc::clone(&c.map);
+                    self.seed_ci = Some(c);
+                    return map;
+                }
+            }
+        }
+        let mut ci = rustc_hash::FxHashMap::default();
+        crate::lower::build_seed_class_index(
+            &self.seed_classes,
+            &|k| self.class_index.get(k).copied(),
+            &self.seed_conditional,
+            &self.seed_aliases,
+            0,
+            &mut ci,
+        );
+        let map = Rc::new(ci);
+        self.seed_ci = Some(SeedCiCache { map: Rc::clone(&map), seed_len, inserts, aliases_len, cond_len });
+        map
+    }
+
+    /// `seed_reg[i]` = the class id registered under seed class `i`'s name
+    /// (see the field). Cheap to consult per include: a `None` is re-probed
+    /// only after a registration happened, new positions are probed once.
+    fn seed_registered(&mut self) -> &[Option<ClassId>] {
+        let n = self.seed_classes.len();
+        let from = self.seed_reg.len().min(n);
+        self.seed_reg.truncate(n);
+        if self.seed_reg_inserts != self.class_index_inserts {
+            for i in 0..from {
+                if self.seed_reg[i].is_none() {
+                    self.seed_reg[i] =
+                        self.class_index.get(&self.seed_classes[i].name.to_ascii_lowercase()).copied();
+                }
+            }
+            self.seed_reg_inserts = self.class_index_inserts;
+        }
+        for i in from..n {
+            let r = self.class_index.get(&self.seed_classes[i].name.to_ascii_lowercase()).copied();
+            self.seed_reg.push(r);
+        }
+        &self.seed_reg
     }
 
     /// Resolve an `include`/`require` path to a real file (step 57, Phase 2): an
@@ -15751,6 +15886,36 @@ pub(crate) const HOST_REF: &[&[u8]] = &[
 /// case-insensitively in ASCII (mirrors the compiler's resolution).
 fn name_eq_ignore_case(a: &[u8], b: &[u8]) -> bool {
     a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.eq_ignore_ascii_case(y))
+}
+
+/// See [`Vm::seed_class_index`].
+struct SeedCiCache {
+    map: crate::lower::SeedClassIndex,
+    seed_len: usize,
+    inserts: u64,
+    aliases_len: usize,
+    cond_len: usize,
+}
+
+/// Per-entry term of the registered-classes digest in [`Vm::unit_fp`]: the
+/// exact hash the former per-include walk computed for `(name, id)`
+/// (`Vec<u8>` and `&[u8]` hash identically: length prefix + bytes).
+fn ci_entry_digest(name: &[u8], id: ClassId) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut eh = std::collections::hash_map::DefaultHasher::new();
+    name.hash(&mut eh);
+    id.hash(&mut eh);
+    eh.finish()
+}
+
+/// Per-entry term of the aliases digest in [`Vm::unit_fp`] (see
+/// [`ci_entry_digest`]).
+fn alias_digest(alias: &[u8], target: &[u8]) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut eh = std::collections::hash_map::DefaultHasher::new();
+    alias.hash(&mut eh);
+    target.hash(&mut eh);
+    eh.finish()
 }
 
 /// Lowercased key view for the ci-keyed indexes (`class_index`,
