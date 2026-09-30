@@ -1278,19 +1278,83 @@ impl<'m> Vm<'m> {
     /// the compiler could not resolve it statically. When neither is callable the
     /// catchable "Call to undefined function" reports the namespaced `name`, exactly
     /// as PHP does (`N\foo()` rather than the bare `foo()`).
+    ///
+    /// With a site cache (`ic`, from [`Op::CallNsFallback`]) the outcome is
+    /// recorded for the next execution of the same site (see [`NsIc`]); an
+    /// undefined function is never cached.
     pub(super) fn invoke_named_fallback(
         &mut self,
         name: &[u8],
         fallback: &[u8],
         args: Vec<Zval>,
+        ic: Option<&NsIc>,
     ) -> Result<(), PhpError> {
         if self.is_name_callable(name) {
+            if let Some(ic) = ic {
+                ic.fill(self.fn_gen, self.module_key(), NsTarget::Primary);
+            }
             self.invoke_named(name, args)
         } else if self.is_name_callable(fallback) {
+            if let Some(ic) = ic {
+                // `FallbackValue` only when `invoke_named` would reach the
+                // registry arm: no hoisted or linked user function of that
+                // name (both covered by the cache key).
+                let fb = fallback.strip_prefix(b"\\").unwrap_or(fallback);
+                let target = if self.module.find_fn_ci(fb).is_none()
+                    && !self.linked_functions.contains_key(LcKey::new(fb).as_slice())
+                {
+                    match self.registry.get(fb) {
+                        Some(Builtin::Value(f)) => NsTarget::FallbackValue(*f),
+                        _ => NsTarget::Fallback,
+                    }
+                } else {
+                    NsTarget::Fallback
+                };
+                ic.fill(self.fn_gen, self.module_key(), target);
+            }
             self.invoke_named(fallback, args)
         } else {
             Err(undefined_builtin(name))
         }
+    }
+
+    /// [`Op::CallNsFallback`] through its site cache (fork slice 3, see
+    /// [`NsIc`]): a hit skips both `is_name_callable` probes, and for a
+    /// registry value builtin the whole `invoke_named` lookup.
+    /// `#[inline(never)]`: the body stays OUT of `run_loop`, whose layout is
+    /// measured-sensitive (the arm is the same size as before the cache).
+    #[inline(never)]
+    pub(super) fn call_ns_fallback_site(
+        &mut self,
+        top: usize,
+        name: &[u8],
+        fallback: &[u8],
+        mut args: Vec<Zval>,
+        ic: &NsIc,
+    ) -> Result<(), PhpError> {
+        match ic.get(self.fn_gen, self.module_key()) {
+            Some(NsTarget::FallbackValue(f)) => {
+                if args.iter().any(|a| matches!(a, Zval::ArgPlace(_))) {
+                    self.materialize_arg_places(top, &mut args, None)?;
+                }
+                // The name `invoke_named` would hand to the pre-call body.
+                let fb = fallback.strip_prefix(b"\\").unwrap_or(fallback);
+                let result = self.value_builtin_call(top, f, fb, &mut args)?;
+                let top = self.frames.len() - 1;
+                self.frames[top].stack.push(result);
+                Ok(())
+            }
+            Some(NsTarget::Fallback) => self.invoke_named(fallback, args),
+            Some(NsTarget::Primary) => self.invoke_named(name, args),
+            _ => self.invoke_named_fallback(name, fallback, args, Some(ic)),
+        }
+    }
+
+    /// Identity of the running module for the [`NsIc`] key (`find_fn_ci`
+    /// is per module; `self.module` switches across include/eval).
+    #[inline]
+    pub(super) fn module_key(&self) -> usize {
+        self.module as *const Module as usize
     }
 
     /// Enter a freshly-built callee `frame`: if its body is a generator,

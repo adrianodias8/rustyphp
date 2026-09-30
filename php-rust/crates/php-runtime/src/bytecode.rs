@@ -302,6 +302,74 @@ impl Clone for MethodIc {
     }
 }
 
+/// What a [`NsIc`] site resolved to last time.
+#[derive(Debug, Clone, Copy)]
+pub enum NsTarget {
+    /// Never filled. An undefined function is NOT cached: the error path
+    /// re-resolves every time (rare, and a later declaration must bind).
+    Empty,
+    /// The namespaced `name` binds (user function in some unit).
+    Primary,
+    /// The global `fallback` binds, to something other than a registry
+    /// value builtin (host builtin, user function): re-enter `invoke_named`.
+    Fallback,
+    /// The global `fallback` is a registry value builtin (`count`, `strlen`,
+    /// `is_array`, …): call its entry point directly, no lookup at all.
+    FallbackValue(crate::builtin::BuiltinFn),
+}
+
+/// Per-site cache for the namespaced two-step function lookup
+/// ([`Op::CallNsFallback`]) — the analogue of Zend's `INIT_NS_FCALL_BY_NAME`
+/// runtime-cache slot. Without it EVERY unqualified builtin call in
+/// namespaced code (`count($a)` inside `namespace App`) ran two
+/// `is_name_callable` probes (up to eight table lookups, the namespaced
+/// one always missing) plus a full `invoke_named` re-resolution: ~10% of a
+/// Symfony request (fork slice 3, see PROFILE.md).
+///
+/// Key: `(run epoch, Vm::fn_gen, running-module identity)`. `fn_gen` is
+/// bumped on every `linked_functions` insert (`Op::DeclareFn`, include /
+/// eval registration), so a function declared later invalidates every
+/// site; the module identity covers `find_fn_ci`, which is per module.
+/// The registry and the host tables are immutable for the life of the
+/// VM. Same contract as [`PropIc`]: `Rc`-shared between op clones,
+/// invisible to structural equality.
+#[derive(Debug)]
+pub struct NsIc(Rc<std::cell::Cell<(u64, u64, usize, NsTarget)>>);
+
+impl NsIc {
+    /// The cached target when filled IN THIS RUN under the same function
+    /// generation and running module.
+    #[inline]
+    pub fn get(&self, fn_gen: u64, module_key: usize) -> Option<NsTarget> {
+        let (epoch, gen, m, t) = self.0.get();
+        (!matches!(t, NsTarget::Empty) && gen == fn_gen && m == module_key && epoch == ic_epoch())
+            .then_some(t)
+    }
+
+    #[inline]
+    pub fn fill(&self, fn_gen: u64, module_key: usize, target: NsTarget) {
+        self.0.set((ic_epoch(), fn_gen, module_key, target));
+    }
+}
+
+impl Default for NsIc {
+    fn default() -> Self {
+        NsIc(Rc::new(std::cell::Cell::new((0, 0, 0, NsTarget::Empty))))
+    }
+}
+
+impl PartialEq for NsIc {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+impl Clone for NsIc {
+    fn clone(&self) -> Self {
+        NsIc(Rc::clone(&self.0))
+    }
+}
+
 /// The storable cell a dimension write ([`Op::AssignDim`] / [`Op::AppendDim`])
 /// is rooted at. Reads don't need this — they consume a base *value* off the
 /// stack — but a write must reach back into a real cell to persist (and to
@@ -526,7 +594,8 @@ pub enum Op {
     /// `fallback` — exactly PHP's two-step lookup, so a function defined in another
     /// unit (autoloaded / included) still binds. When neither is defined the
     /// catchable "Call to undefined function `name`()" reports the namespaced name.
-    CallNsFallback { name: Rc<[u8]>, fallback: Rc<[u8]>, argc: u32 },
+    /// `ic` caches the resolution per site (see [`NsIc`]).
+    CallNsFallback { name: Rc<[u8]>, fallback: Rc<[u8]>, argc: u32, ic: NsIc },
     /// `[callee, argsArray] -> [result]` — a dynamic call with argument unpacking
     /// `$f(...$a)` (CLO). Pop the runtime argument array (its values become the
     /// positional arguments, in order) and the callee beneath it, then dispatch

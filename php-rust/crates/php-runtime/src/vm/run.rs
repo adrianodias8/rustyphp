@@ -3087,14 +3087,14 @@ impl<'m> super::Vm<'m> {
                     let callee = self.frames[top].stack.pop().expect("CallValue callee");
                     self.invoke_value(callee, args)?;
                 }
-                Op::CallNsFallback { name, fallback, argc } => {
+                Op::CallNsFallback { name, fallback, argc, ic } => {
                     let n = *argc as usize;
                     let mut args = Vec::with_capacity(n);
                     for _ in 0..n {
                         args.push(self.frames[top].stack.pop().expect("CallNsFallback argument"));
                     }
                     args.reverse();
-                    self.invoke_named_fallback(&name, &fallback, args)?;
+                    self.call_ns_fallback_site(top, &name, &fallback, args, ic)?;
                 }
                 Op::CallValueArgs => {
                     // Spread `$f(...$a)`: the arguments are the values of a runtime
@@ -3110,7 +3110,7 @@ impl<'m> super::Vm<'m> {
                     let argsval =
                         self.frames[top].stack.pop().expect("CallNsFallbackArgs array");
                     let args = args_from_array_value(argsval);
-                    self.invoke_named_fallback(&name, &fallback, args)?;
+                    self.invoke_named_fallback(&name, &fallback, args, None)?;
                 }
                 Op::Throw => {
                     let v = self.frames[top].stack.pop().expect("throw operand");
@@ -3747,6 +3747,7 @@ impl<'m> super::Vm<'m> {
                         )));
                     }
                     self.linked_functions.insert(name.to_ascii_lowercase(), (m, idx));
+                    self.fn_gen += 1;
                 }
                 Op::DeclareTrait { idx } => {
                     // A conditional trait declaration executed: register the

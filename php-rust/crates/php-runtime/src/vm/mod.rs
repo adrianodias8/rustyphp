@@ -37,7 +37,7 @@ use php_types::{
 use crate::builtin::{Builtin, BuiltinRefFn, Ctx, Registry};
 use crate::bytecode::{
     Addr, ClassTarget, CompiledClass, CompiledMethod, DimBase, FieldBase, FieldStep, Func,
-    Instantiable, Module, Op, PropInfo, StaticInit,
+    Instantiable, Module, NsIc, NsTarget, Op, PropInfo, StaticInit,
 };
 use crate::coerce::coerce_to_hint;
 use crate::hir::{
@@ -722,6 +722,7 @@ pub fn vm_new<'m>(
         seed_static: main_hir.map_or(0, |p| p.static_count),
         seed_globals: main_hir.map(|p| p.slots.clone()).unwrap_or_default(),
         linked_functions: HashMap::default(),
+        fn_gen: 1,
         included_files: HashSet::default(),
         #[cfg(feature = "relbase-probe")]
         relbase_remap: (0..module.classes.len().max(65536)).collect(),
@@ -3140,6 +3141,10 @@ pub struct Vm<'m> {
     /// fingerprint ([`Vm::unit_fp`]) — two VMs with equal chains loaded the same
     /// code in the same order, so seeded lowering of the next unit is replayable.
     unit_chain_fp: u64,
+
+    /// Generation of `linked_functions`: bumped on every insert, so a
+    /// [`NsIc`] filled under an older generation misses (fork slice 3).
+    fn_gen: u64,
 
     /// WP-62 M2.3 DIAGNOSTIC (form-B pre-quote, K-M1): identity class-id
     /// table simulating the per-execution remap indirection cost in the hot
@@ -6582,6 +6587,7 @@ impl<'m> Vm<'m> {
                 continue; // prelude-named user fn: historical silent skip
             }
             self.linked_functions.insert(lower, (leaked, idx));
+            self.fn_gen += 1;
         }
         let baseline = self.frames.len();
         let mut frame = Frame::new(&leaked.main, leaked);
@@ -15067,7 +15073,16 @@ macro_rules! host_builtins {
         vec: $( $( $lit:literal )|+ => $body:expr , )+
     ) => {
         pub(crate) fn host_builtin_canonical(name: &[u8]) -> Option<&'static [u8]> {
-            HOST_BUILTIN_NAMES.iter().copied().find(|h| name.eq_ignore_ascii_case(h))
+            // Fork: a hashed lookup. This ran as a linear, case-folding scan of
+            // the whole table, and it sits on the run-time namespace fallback
+            // of every unqualified builtin call in namespaced code
+            // (`is_name_callable`, twice per call): 6.1 % of the samples of a
+            // Symfony request (PROFILE.md §5.3). The table is lowercase; the
+            // query is folded once into a stack buffer.
+            use std::sync::OnceLock;
+            static INDEX: OnceLock<rustc_hash::FxHashMap<&'static [u8], &'static [u8]>> = OnceLock::new();
+            let index = INDEX.get_or_init(|| HOST_BUILTIN_NAMES.iter().map(|&h| (h, h)).collect());
+            index.get(LcKey::new(name).as_slice()).copied()
         }
 
         /// Every host-builtin name, for `get_defined_functions()['internal']`.

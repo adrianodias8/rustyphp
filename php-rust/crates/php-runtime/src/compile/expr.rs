@@ -1306,6 +1306,7 @@ impl<'a> super::FnCompiler<'a> {
                         name: name.into(),
                         fallback: fb.into(),
                         argc: args.len() as u32,
+                        ic: crate::bytecode::NsIc::default(),
                     });
                     return Ok(());
                 }
@@ -1357,6 +1358,7 @@ impl<'a> super::FnCompiler<'a> {
                         name: name.into(),
                         fallback: fb.into(),
                         argc: args.len() as u32,
+                        ic: crate::bytecode::NsIc::default(),
                     });
                     return Ok(());
                 }
