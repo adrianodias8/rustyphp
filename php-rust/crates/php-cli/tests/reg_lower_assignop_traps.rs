@@ -25,9 +25,9 @@ const TRAPS: &[(&str, &str)] = &[
 
 fn traps_dir() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../wp100-harness/assignop-traps")
+        .join("tests/fixtures/assignop-traps")
         .canonicalize()
-        .expect("wp100-harness/assignop-traps esiste in-tree")
+        .expect("tests/fixtures/assignop-traps exists in-tree")
 }
 
 fn run_mode(reg: &str, file: &std::path::Path) -> (String, String, bool) {
