@@ -210,6 +210,32 @@ A/B `a08311f0` → `25a5e4a3`, 7 rounds — `bench/results/2026-09-30-ab-direct-
 Gates: `cargo test` 1749 / 1 / 2; LOC caps declared; phpt gate PASS (3048, 0 pass→fail),
 repro 13/13; DBAL unchanged.
 
+## 2c. Re-profile after slices 2–5 (`DECISION_KERNEL.md` §6 row 9)
+
+`bench/profile.sh` with `OUT=bench/profiles/after-slice-5` (new option; the session-1 set stays
+where PROFILE.md cites it), same method as session 1. Percent of samples; shares, so a bucket
+grows when another shrinks (strings: the quadratic `.=` memcpy is gone).
+
+| | `Zend/bench` | arrays | oop | symfony-steady | symfony-boot | strings | autoload |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| VM dispatch loop, session 1 → now | 54.5 → 52.2 | 28.4 → 30.5 | 34.2 → 32.8 | 30.9 → 34.2 | 15.1 → 19.0 | 5.6 → 8.0 | 1.6 → 2.7 |
+| `Rc` + `RefCell` + alloc, session 1 → now | 10.7 → 10.9 | 31.9 → 31.2 | 22.3 → 23.4 | 20.3 → 23.7 | 21.4 → 16.9 | 19.7 → 28.5 | 3.9 → 7.5 |
+| parser / HIR / compile | 1.9 → 1.0 | 0.6 → 0.6 | 1.8 → 1.6 | 4.1 → 3.2 | 36.1 → 36.0 | 0.4 → 0.4 | 86.9 → 72.8 |
+| name resolution (`host_builtin_canonical`, `is_name_callable`) | — | — | — | 9.6 → 0 | 3.0 → 0 | — | — |
+| SipHash | — | — | — | — | — | — | 28.7 → 0 |
+
+The session-1 figures are read from the bucket files; the session-1 table in this file has its
+two Symfony columns swapped (`symfony-steady` there shows boot's numbers and vice versa).
+
+- The PLAN §3 thresholds are unchanged by four slices: `Rc` + `RefCell` + allocation is 11–31 %,
+  never near the 40 % that would argue for a new value model. What the slices removed was
+  algorithmic (re-indexing, re-resolution, snapshots, argument vectors); what is left is the
+  dispatch loop (row 6) and, for short runs, compilation (row 7).
+- `autoload` is still 73 % lowering + compilation, now genuinely per line rather than per
+  loaded class: the bytecode cache (row 7) is the next lever for boot-heavy workloads.
+- `symfony-steady`: dispatch 34 %, handler bodies 17 %, `Rc` 12 %, `RefCell` 5 %, allocation
+  7 % — the request path is now a plain interpreter-overhead profile.
+
 ## 3. Commits
 
 | commit | content |
@@ -218,7 +244,8 @@ repro 13/13; DBAL unchanged.
 | `a08311f0` | slice 4, `foreach-held-array.phpt`, `2026-09-30-ab-foreach.tsv` |
 | `79a1c9cd` | session-4 notes up to slice 4, `DECISION_KERNEL.md` §6 row 4 |
 | `25a5e4a3` | slice 5, `typed-call-direct-path.phpt`, `2026-09-30-ab-direct-calls.tsv`, `bench/path-sensitivity.sh` |
-| (this one) | §2b, `DECISION_KERNEL.md` §6 row 5 |
+| `a8cb8496` | §2b, `DECISION_KERNEL.md` §6 row 5 |
+| (this one) | §2c, `bench/profiles/after-slice-5/`, `bench/profile.sh` `OUT=` |
 
 Nothing was pushed.
 

@@ -12,6 +12,7 @@
 #
 # Env: ONLY="zend_bench arrays oop symfony-boot" · FREQ (Hz, default 2999)
 #      REUSE=1 re-collapses existing perf.data instead of recording again
+#      OUT=<dir> output directory (default bench/profiles — the session-1 set)
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
@@ -21,7 +22,10 @@ PROF_TARGET="${PROF_TARGET:-/target/prof}"
 PHPR_PROF="$PROF_TARGET/release/phpr"
 FREQ="${FREQ:-2999}"
 ONLY="${ONLY:-zend_bench arrays oop symfony-boot symfony-steady strings autoload}"
-OUT="$HERE/profiles"
+# OUT: where the folded stacks / flamegraphs / bucket tables go. The default is
+# the committed session-1 set (unmodified engine); a profile of a modified
+# engine goes in a subdirectory (session 4: bench/profiles/after-slice-5/).
+OUT="${OUT:-$HERE/profiles}"
 W="$SCRATCH/bench-work"
 PD="$SCRATCH/perf-data"
 mkdir -p "$OUT" "$PD" "$W/lib"

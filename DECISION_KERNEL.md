@@ -289,7 +289,7 @@ Ordered by measured size ÷ estimated risk. None touches `php-types`' public API
 | 6 | Dispatch loop: current frame held outside the `Vec`, cached stack/ops slices | up to 20.6 % | `run_loop` |
 | 7 | Bytecode cache, steps 2 and 3 of §4 | 36 % of a short Symfony run | new module |
 | 8 | Worker mode | removes boot per request | `php-server` |
-| 9 | **Re-profile.** Only then ask whether arrays need a new representation (C-lite) | — | — |
+| 9 | **Re-profile.** Only then ask whether arrays need a new representation (C-lite) — **done once, session 4** (NOTES.md session 4 §2c): `Rc` + `RefCell` + alloc 11–31 %, still under every PLAN threshold; dispatch and compilation are what is left | — | — |
 
 Two correctness bugs found on the way blocked the target frameworks; **both fixed in session 2**
 with their `.phpt`s: `count()` on a `Countable` through any dynamic call (it broke Composer

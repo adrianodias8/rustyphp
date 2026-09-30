@@ -20,3 +20,4 @@ bench/symfony-app/vendor/
 bench/results/raw/
 bench/profiles/*.perf.data
 bench/profiles/*.folded
+bench/profiles/*/*.folded
