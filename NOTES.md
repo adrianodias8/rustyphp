@@ -5,6 +5,158 @@ this session unless it is explicitly labelled "upstream's claim".
 
 ---
 
+# Session 4 — 2026-09-30 — the three namespaced-call divergences fixed; slice 4 (`foreach`)
+
+Same environment. `/target/prev` was rebuilt from the commit each change started from
+(`e38b1997`, then `e48f4910`); every A/B below is against it.
+
+## 1. The three divergences of session 3 §5 — one root, fixed together (`e48f4910`)
+
+All three sat in the unqualified call inside a namespace (`sprintf(…)` in `namespace App`).
+Before designing anything the extent was measured: every function both engines define (762 names
+in common, plus `assert`) was declared as `App\<name>(...$a) { return 'S'; }` by `eval` and then
+called unqualified, one process per name (`probe.tmp/run.sh`, not committed).
+
+| | oracle | phpr before | phpr after |
+|---|---:|---:|---:|
+| names whose namespaced shadow is called | 762 of 763 | **426** | 763 |
+
+The 336 that could not be shadowed were every *host* builtin (`sprintf`, `array_map`,
+`is_callable`, `json_decode`, `preg_*`, `date_*`, `curl_*`, `xml_*`, `session_*`, …), every
+by-reference builtin (`sort`, `array_push`, `preg_match`, `sscanf`, `array_multisort`, the
+`reset`/`end` family) and every prelude / global user function — all bound statically by
+`compile::call` when the name was not a *registry* builtin. phpunit-bridge's ClockMock and DnsMock
+shadow exactly these (`time`, `microtime`, `sleep`, `date`, `checkdnsrr`, `gethostbyname`, …).
+The one name PHP itself refuses to declare in a namespace is `assert`; phpr accepts it (residue).
+
+What changed:
+
+1. **Sticky binding.** `NsIc` is keyed on the run epoch alone: the first execution of a site
+   decides, as Zend's `INIT_NS_FCALL_BY_NAME` runtime-cache slot does. `fn_gen` and the
+   running-module key are gone — the module key made a unit function's site re-resolve whenever it
+   was called from another unit (found by the re-include probe). A unit run again in the same
+   request (repeated `include` served by the unit cache, same `Module`) has the sites of its
+   top-level code and closures reset (`Module::reset_ns_sites`, `Vm::units_run`): PHP compiles a
+   fresh op array per include; the functions it declared keep their bindings.
+2. **By-value host builtins** compile to `Op::CallNsFallback` like registry builtins, with a new
+   target `NsTarget::FallbackHost(canon)` that dispatches directly with `Op::CallHostBuiltin`'s
+   epilogue. The site helper now pops up to four arguments straight into a stack buffer for any
+   builtin target (no `Vec`), as the two static call ops do.
+3. **Everything whose static sequence depends on the callee's shape** — out-param, ref-first and
+   scanf host builtins, `array_multisort`, registry `RefFirst` builtins, a spread on a host
+   builtin, a global user or prelude function — goes behind a new op, `Op::NsShadowGuard`:
+   `guard → user; <static sequence>; Jump end; user: <dynamic call by the namespaced name>; end:`.
+   The guard runs *before* the arguments (Zend's order) and binds on its first execution. The
+   arguments are compiled once per branch and evaluated on one — checked with side-effecting
+   arguments. Cost: two op dispatches per such call in namespaced code, and the argument
+   bytecode twice for those sites. Registered in census (`N_OPS` 201 → 202), `reg_lower`,
+   jump threading and liveness like session 2's `PropConcatGate`.
+4. **Case folding.** `compile::call` folds the name once (the tables are lowercase);
+   `invoke_named` and `is_name_callable` look the registry up through `LcKey`;
+   `ReflectionFunction` reports an internal function's lowercase name.
+
+Verification, all byte-identical to the oracle in the default, `PHPR_REG_LOWER=1` and
+`PHPR_UNIT_CACHE=0` modes: the session-3 probe (now identical on every line, including the
+mixed-case one), a case probe in the global namespace and in a namespace, a guard probe (every
+by-reference family with no shadow, argument side effects, spreads, shadows with by-reference
+parameters, sites that already ran, fully qualified names, named arguments, methods / closures /
+generators, undefined-then-declared), a re-include probe (top-level code and closures rebind, a
+unit function keeps its bindings, a binding made inside a unit holds when called from main).
+Committed as four `.phpt`s: `ns-shadow-builtins`, `ns-reinclude-binding`,
+`builtin-names-case-insensitive`, `builtin-names-case-insensitive-ns`.
+
+One divergence seen and left: a builtin called with the wrong number of arguments throws `Error`
+where PHP throws `ArgumentCountError` (`strlen()` with no argument). Unrelated to names.
+
+Gates: `cargo test` 1749 / 1 (root-only) / 2; LOC caps declared; phpt gate **3047 → 3048**
+(`Zend/tests/frameless_jmp_004`: a case-folded call to a namespaced shadow), 0 pass→fail, repro
+11/11; baseline lists advanced with `run-baseline.sh` — `ext/spl` +2 passes (`bug31185`,
+`bug36287`), `ext/standard` `serialization_objects_016` skip→pass and `image/bug13213` skip→fail
+(`GetImageSize` now resolves, the JPEG comment case behind it does not); Composer and DBAL
+unchanged.
+
+A/B `e38b1997` → `e48f4910`, 7 rounds, 123 sections — `bench/results/2026-09-30-ab-ns-binding.tsv`:
+
+| benchmark | sections | geomean B/A | min | max |
+|---|---:|---:|---:|---:|
+| `Zend/bench.php` | 18 | 1.003 | 0.973 | 1.143 |
+| `Zend/micro_bench.php` | 35 | 1.005 | 0.957 | 1.110 |
+| arrays | 20 | 0.997 | 0.968 | 1.039 |
+| strings | 21 | 0.999 | 0.971 | 1.019 |
+| oop | 21 | 0.991 | 0.955 | 1.009 |
+| autoload | 3 | 1.002 | 0.966 | 1.037 |
+| symfony-boot | 3 | 0.997 | 0.953 | 1.045 |
+
+- Symfony `handle_requests` 46.2 → 45.9 ms (0.995): the guard and the host-builtin route cost
+  nothing measurable on the request path.
+- `ary2(50000)` 7 → 8 ms is the 1 ms timer. `$x = $str[0]` 1.110 in this run, 1.038 in a 9-round
+  rerun, 0.992 against the null-lever build. `int_func()` (`strlen("hello")` in the global
+  namespace, a path this change does not touch): **1.058, 1.064, then 0.977** in three prev-vs-new
+  runs and 0.925 in the slice-4 A/B where it is the *A* side that had not changed — the machine's
+  state moves that section by ±6 % between runs.
+- The layout band, measured as upstream does: the same tree built with `--features null-lever`
+  against itself moves `micro_bench` sections by **0.962 … 1.032** (geomean 0.998). A micro delta
+  inside that band is not a finding.
+
+## 2. Slice 4 — `foreach` over a held array (`a08311f0`)
+
+`snapshot_entries` copied every `(key, value)` pair of the array into a `Vec` before the first
+iteration — one allocation and two clones per element, and a third clone at bind time.
+`IterState::ByVal` now holds one `Rc` of the array and walks it by position
+(`PhpArray::positions` / `entry_at`, skipping tombstones); the key is materialised only when the
+loop binds one. The semantics are PHP's own refcount semantics: the loop's reference keeps the
+array unchanged, a write to the source through the body separates it, a reference element is
+still read live. `yield from` over an array keeps its snapshot.
+
+Regression test `foreach-held-array.phpt` (the session's probe: source modified / unset /
+appended / replaced in the body, also through a reference; reference elements and the
+lingering-reference gotcha; tombstones; destructuring; the value target aliasing the array;
+property and static sources; hash escalation mid-loop) — identical to the oracle before and after,
+in both lowering modes.
+
+A/B `e48f4910` → `a08311f0`, 7 rounds — `bench/results/2026-09-30-ab-foreach.tsv`:
+
+| benchmark | sections | geomean B/A | min | max |
+|---|---:|---:|---:|---:|
+| `Zend/bench.php` | 18 | 0.998 | 0.947 | 1.039 |
+| `Zend/micro_bench.php` | 35 | 0.986 | 0.925 | 1.031 |
+| arrays | 20 | **0.958** | **0.554** | 1.052 |
+| strings | 21 | 0.997 | 0.976 | 1.050 |
+| oop | 21 | 0.994 | 0.980 | 1.003 |
+| autoload | 3 | 0.986 | 0.940 | 1.022 |
+| symfony-boot | 3 | 0.992 | 0.953 | 1.037 |
+
+- `packed_foreach_sum_1m` 35.3 → 30.5 ms (0.863), `packed_foreach_kv_1m` 37.2 → 32.1 ms (0.864),
+  `assoc_foreach_200k_x5` 0.945, `nested_cow_copy_modify_100k` 0.949,
+  `nested_pass_by_value_100k` 66.1 → 36.6 ms (**0.554**: the inner arrays were cloned into the
+  snapshot).
+- Above 1.05: `assoc_isset_miss_200k_x5` 1.052, spread B 21.9 %, no `foreach` in the section.
+- `packed_foreach_sum_1m` is now ~30 ns per element against the oracle's ~4.5 ms per million: the
+  loop body is `IterNext`, `LoadSlot`, `Binary(Add)`, `StoreSlot`, `Jump` — what is left is
+  dispatch (slice 6), not the iterator.
+
+Gates: `cargo test` 1749 / 1 / 2; LOC cap `vm/run.rs` +8 declared; phpt gate PASS (3048,
+0 pass→fail), repro 12/12; DBAL unchanged.
+
+## 3. Commits
+
+| commit | content |
+|---|---|
+| `e48f4910` | the three fixes, four `.phpt`s, baseline lists advanced, `2026-09-30-ab-ns-binding.tsv` |
+| `a08311f0` | slice 4, `foreach-held-array.phpt`, `2026-09-30-ab-foreach.tsv` |
+| (this one) | this section, `DECISION_KERNEL.md` §6 row 4 |
+
+Nothing was pushed.
+
+## 4. What is next
+
+1. Slice 5 (`DECISION_KERNEL.md` §6): the per-array-write and per-call allocation.
+2. Slice 6, the dispatch loop — now the whole of the `foreach` gap and most of the request path.
+3. `ArgumentCountError` for builtin arity (§1); `assert` declarable in a namespace (§1).
+4. Still the owner's: fork location, license/name, the verdict on the DRAFT decision.
+
+---
+
 # Session 3 — 2026-09-30 — slices 2 and 3: the per-include index rebuild, the namespaced call fallback
 
 Same environment as sessions 1 and 2 (Docker `linux/arm64`, oracle PHP 8.5.7, rustc 1.98.1). Three
