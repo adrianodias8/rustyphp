@@ -101,7 +101,7 @@ while :; do
     continue
   fi
   # guardia bundle: smontata ⇒ il commit TORNA IN CODA e si esce.
-  if ! mount | grep -q " $BUNDLE_MP "; then
+  if ! /sbin/mount | grep -q " $BUNDLE_MP "; then   # /sbin non è nel PATH chiuso: path assoluto (incidente S-183 #2)
     echo "$SHA" > "$Q/$(date +%s)-${S12}"
     echo "REQUEUE $S12 bundle-unmounted $(date '+%F %T')" >> "$FEED"
     notify "$S12: requeue bundle-unmounted"

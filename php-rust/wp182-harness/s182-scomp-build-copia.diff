@@ -1,5 +1,5 @@
---- ../wp181-harness/s181-leva-build.sh	2026-09-22 14:05:47
-+++ s182-scomp-build.sh	2026-09-29 23:59:20
+--- wp181-harness/s181-leva-build.sh	2026-09-22 14:05:47
++++ wp182-harness/s182-scomp-build.sh	2026-09-30 04:19:40
 @@ -1,61 +1,65 @@
  #!/bin/bash
 -# s181-leva-build.sh — bracci Z (gemello del pin s180) e B (leva L-CR1) + MUTANTE (criterio s181-criterio-cr1.md p.2/p.3/p.6):
@@ -72,7 +72,7 @@
 +DAT=$(df -g /System/Volumes/Data | awk 'NR==2{print $4}')
 +note "== s182 bracci SCOMPOSIZIONE L-CR1 — riferimento A = pin s181 $PH, BASE = commit ${SHA0:0:12} (sorgente del pin), bracci Z/P/MA(−a)/MB(−b)/MC(−c)/M2, fixture fx-cr1 $(wc -l < "$FXCR" | tr -d ' ') righe; Extreme ${AVX}G Data ${DAT}G $(date '+%F %T') =="
  awk -v a="$AVX" 'BEGIN{exit !(a+0 < 15)}' && { note "rc=8 Extreme ${AVX}G < 15G: niente build"; fin 8; }
-+mount | grep -q " $BUNDLE_MP " || { note "rc=8 bundle NON montata ($BUNDLE_MP): 'wp182-harness/phpr-target-bundle.sh mount' prima della build"; fin 8; }
++/sbin/mount | grep -q " $BUNDLE_MP " || { note "rc=8 bundle NON montata ($BUNDLE_MP): 'wp182-harness/phpr-target-bundle.sh mount' prima della build"; fin 8; }
 +BFREE=$(df -g "$BUNDLE_MP" | awk 'NR==2{print $4}'); [ "${BFREE:-0}" -ge 10 ] || { note "rc=8 bundle ${BFREE}G liberi < 10G"; fin 8; }
 +[ "${DAT:-0}" -ge 10 ] || { note "rc=8 Data ${DAT}G < 10G: niente build"; fin 8; }
  

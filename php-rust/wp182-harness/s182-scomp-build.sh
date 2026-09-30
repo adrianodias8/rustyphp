@@ -44,7 +44,7 @@ AVX=$(df -k "/Volumes/Extreme Pro" | awk 'NR>1{printf "%.0f", $4/1048576}')
 DAT=$(df -g /System/Volumes/Data | awk 'NR==2{print $4}')
 note "== s182 bracci SCOMPOSIZIONE L-CR1 — riferimento A = pin s181 $PH, BASE = commit ${SHA0:0:12} (sorgente del pin), bracci Z/P/MA(−a)/MB(−b)/MC(−c)/M2, fixture fx-cr1 $(wc -l < "$FXCR" | tr -d ' ') righe; Extreme ${AVX}G Data ${DAT}G $(date '+%F %T') =="
 awk -v a="$AVX" 'BEGIN{exit !(a+0 < 15)}' && { note "rc=8 Extreme ${AVX}G < 15G: niente build"; fin 8; }
-mount | grep -q " $BUNDLE_MP " || { note "rc=8 bundle NON montata ($BUNDLE_MP): 'wp182-harness/phpr-target-bundle.sh mount' prima della build"; fin 8; }
+/sbin/mount | grep -q " $BUNDLE_MP " || { note "rc=8 bundle NON montata ($BUNDLE_MP): 'wp182-harness/phpr-target-bundle.sh mount' prima della build"; fin 8; }
 BFREE=$(df -g "$BUNDLE_MP" | awk 'NR==2{print $4}'); [ "${BFREE:-0}" -ge 10 ] || { note "rc=8 bundle ${BFREE}G liberi < 10G"; fin 8; }
 [ "${DAT:-0}" -ge 10 ] || { note "rc=8 Data ${DAT}G < 10G: niente build"; fin 8; }
 
