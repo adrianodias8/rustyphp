@@ -5,6 +5,24 @@ this session unless it is explicitly labelled "upstream's claim".
 
 ---
 
+# Next session — the owner's plan (given 2026-10-01), in order
+
+1. **Drupal 11 standard install under ferro**, one-shot cli-server mode, SQLite:
+   `drush site:install standard`. Fix each first fatal with an oracle-validated `.phpt`. Record
+   every missing extension/function in `MISSING_FOR_DRUPAL.md`.
+2. **Drupal front page byte-identical to the oracle** (strip tokens), then run it in worker mode.
+   Document every piece of Drupal state that leaks between requests; do not patch Drupal — find
+   what a worker needs to reset.
+3. **wrk**: Drupal front page, anonymous, page cache off — ferro worker vs php-fpm+opcache vs
+   FrankenPHP worker. Tune FrankenPHP (`num_threads`, `GOMAXPROCS`) until it scales, and note the
+   config.
+4. If a bare-metal Linux box is available, re-run the Symfony wrk suite there (needs the owner:
+   no such machine is reachable from this environment).
+
+**No engine micro-slices until step 3 has numbers.**
+
+---
+
 # Session 6 — 2026-10-01 — Ferrophant rebrand; worker recycling and the soak test
 
 1. **Rebrand** (`4583e8f1`): binary `ferro`, builtin `ferro_handle_request`, comments in English,
