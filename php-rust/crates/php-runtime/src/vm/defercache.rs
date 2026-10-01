@@ -97,18 +97,19 @@ impl<'m> super::Vm<'m> {
 }
 
 thread_local! {
-    /// Deferred declarations whose lowering under a fingerprint stopped on a
-    /// missing supertype: (key, fp) -> the UndefinedClass it raised.
-    static DEFER_NEG: RefCell<HashMap<(UnitKey, u64), (Box<[u8]>, crate::MissingSym, Line)>> =
+    /// Lowerings (deferred declarations and include units) that stopped on a
+    /// missing name under a fingerprint: (key, fp) -> the UndefinedClass it
+    /// raised. Deterministic, so the next load autoloads it up front.
+    static LOWER_NEG: RefCell<HashMap<(UnitKey, u64), (Box<[u8]>, crate::MissingSym, Line)>> =
         RefCell::new(HashMap::default());
 }
 
-pub(super) fn defer_neg_get(dk: &UnitKey, fp: u64) -> Option<(Box<[u8]>, crate::MissingSym, Line)> {
-    DEFER_NEG.with(|m| m.borrow().get(&(dk.clone(), fp)).cloned())
+pub(super) fn lower_neg_get(dk: &UnitKey, fp: u64) -> Option<(Box<[u8]>, crate::MissingSym, Line)> {
+    LOWER_NEG.with(|m| m.borrow().get(&(dk.clone(), fp)).cloned())
 }
 
-pub(super) fn defer_neg_put(dk: &UnitKey, fp: u64, e: (Box<[u8]>, crate::MissingSym, Line)) {
-    DEFER_NEG.with(|m| {
+pub(super) fn lower_neg_put(dk: &UnitKey, fp: u64, e: (Box<[u8]>, crate::MissingSym, Line)) {
+    LOWER_NEG.with(|m| {
         let mut m = m.borrow_mut();
         // Bounded like the unit cache's ways: a run that keeps minting new
         // fingerprints starts over rather than growing without limit.
@@ -132,3 +133,47 @@ pub(super) fn defer_unit_key(file: &[u8], line: Line, snippet: &[u8], digest: u6
     UnitKey { path, mtime: (0, 0), size: snippet.len() as u64, reg_mode: crate::compile::reg_lower::enabled() }
 }
 
+
+/// opcache's `revalidate_freq`: a file's unit key (mtime, size) is re-read
+/// from the filesystem at most this often. `PHPR_REVALIDATE_FREQ` (seconds)
+/// sets it; the default is 2 s, opcache's, under the server, and 0 (stat on
+/// every include, like PHP without opcache) for the CLI.
+fn revalidate_freq() -> std::time::Duration {
+    static F: std::sync::OnceLock<std::time::Duration> = std::sync::OnceLock::new();
+    *F.get_or_init(|| {
+        let secs = std::env::var("PHPR_REVALIDATE_FREQ")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(if php_types::sapi::sapi_name() == "cli-server" { 2 } else { 0 });
+        std::time::Duration::from_secs(secs)
+    })
+}
+
+/// The include cache key of `real` (canonical path `key`), from a stat no
+/// older than [`revalidate_freq`].
+pub(super) fn revalidated_unit_key(real: &std::path::Path, key: &[u8]) -> Option<UnitKey> {
+    thread_local! {
+        static STATS: RefCell<HashMap<Vec<u8>, (UnitKey, std::time::Instant)>> = RefCell::new(HashMap::default());
+    }
+    let freq = revalidate_freq();
+    let now = std::time::Instant::now();
+    if !freq.is_zero() {
+        let hit = STATS.with(|m| {
+            m.borrow().get(key).filter(|(_, t)| now.duration_since(*t) < freq).map(|(k, _)| k.clone())
+        });
+        if hit.is_some() {
+            return hit;
+        }
+    }
+    let uk = std::fs::metadata(real).ok().and_then(|m| unit_key_for(key, &m))?;
+    if !freq.is_zero() {
+        STATS.with(|m| {
+            let mut m = m.borrow_mut();
+            if m.len() >= 1 << 16 {
+                m.clear();
+            }
+            m.insert(key.to_vec(), (uk.clone(), now));
+        });
+    }
+    Some(uk)
+}

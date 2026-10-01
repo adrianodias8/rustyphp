@@ -48,7 +48,7 @@ use crate::hir::{
 mod arrays;
 mod calls;
 mod defercache;
-use defercache::{defer_neg_get, defer_neg_put, defer_unit_key};
+use defercache::{defer_unit_key, lower_neg_get, lower_neg_put, revalidated_unit_key};
 // Without `op-census` only the arm/dump stubs and the unit tests use the
 // module — the counters are compiled out of run_loop.
 #[cfg_attr(not(feature = "op-census"), allow(dead_code))]
@@ -734,6 +734,8 @@ pub fn vm_new<'m>(
         seed_traits: main_hir.map(|p| p.traits.clone()).unwrap_or_default(),
         seed_static: main_hir.map_or(0, |p| p.static_count),
         seed_globals: main_hir.map(|p| p.slots.clone()).unwrap_or_default(),
+        fp_traits: Cell::new(PrefixDigest::default()),
+        fp_globals: Cell::new(PrefixDigest::default()),
         linked_functions: HashMap::default(),
         units_run: HashSet::default(),
         included_files: HashSet::default(),
@@ -3162,6 +3164,12 @@ pub struct Vm<'m> {
     /// `frames[0].slots` is grown in step with this so a new global slot addresses a
     /// real cell. Empty (and unused) when no HIR is retained.
     seed_globals: Vec<Box<[u8]>>,
+    /// Ordered digests of `seed_traits`' keys and of `seed_globals`, extended
+    /// in place as those append-only lists grow (`unit_fp` runs on every
+    /// include and deferred declaration; rehashing every global name each
+    /// time was ~3 % of a Drupal request).
+    fp_traits: Cell<PrefixDigest>,
+    fp_globals: Cell<PrefixDigest>,
     /// User functions declared by a linked `eval`/`include` unit (step 57, Phase
     /// 1c-2): lowercased name → (defining module, index into its `functions`), so
     /// they are callable by name after the unit returns. The defining module is
@@ -6250,7 +6258,7 @@ impl<'m> Vm<'m> {
         // unit-load chain so later includes key their cache on it.
         self.unit_chain_fp = fp_mix(self.unit_chain_fp, b"eval", src);
         let mut eval_pure = true;
-        let program = match self.lower_unit(b"eval()'d code", src, &mut eval_pure)? {
+        let program = match self.lower_unit(b"eval()'d code", src, &mut eval_pure, None)? {
             Ok(p) => p,
             Err(_) => return Ok(Zval::Bool(false)),
         };
@@ -6569,7 +6577,17 @@ impl<'m> Vm<'m> {
         // Only the unconditionally-hoisted functions are registered here; a
         // conditional declaration registers itself via its `Op::DeclareFn` when
         // the unit body reaches it (so a guarded polyfill respects its condition).
-        for (idx, f) in leaked.functions.iter().enumerate() {
+        // The shared prelude prefix (the very `Rc`s of `prelude_fns`, in both
+        // modules at the same indices) is "already provided" for every entry
+        // by the rule below: skip it with pointer compares only.
+        let shared = leaked
+            .functions
+            .iter()
+            .zip(saved.functions.iter())
+            .zip(self.prelude_fns.iter())
+            .take_while(|((f, cf), pf)| Rc::ptr_eq(f, pf) && Rc::ptr_eq(cf, pf))
+            .count();
+        for (idx, f) in leaked.functions.iter().enumerate().skip(shared) {
             if leaked.conditional_fns.contains(&idx) {
                 continue;
             }
@@ -6779,6 +6797,7 @@ impl<'m> Vm<'m> {
         name: &[u8],
         src: &[u8],
         pure: &mut bool,
+        cache: Option<(&UnitKey, &mut u64)>,
     ) -> Result<Result<Program, crate::LowerError>, PhpError> {
         if self.main_hir.is_none() {
             return Ok(crate::lower_source(name, src));
@@ -6788,7 +6807,23 @@ impl<'m> Vm<'m> {
         // the VM but not resolvable by the seeded lowerer) — surface the
         // failure instead of retrying forever.
         let mut attempted: std::collections::HashSet<Vec<u8>> = std::collections::HashSet::new();
+        // With a cache key: each attempt's lowering depends only on the VM
+        // state at its start, so the unit is published under the LAST
+        // attempt's fingerprint (`fp_out`), and an attempt that stops on a
+        // missing name is remembered (`lower_neg_put`) so the next request
+        // autoloads it before probing (`run_include`). A trait using another
+        // trait lowers this way on every load.
+        let (cache_key, fp_out) = match cache {
+            Some((k, f)) => (Some(k), Some(f)),
+            None => (None, None),
+        };
+        let mut fp_out = fp_out;
         loop {
+            let attempt_fp = cache_key.map(|_| self.unit_fp());
+            if let (Some(f), Some(a)) = (fp_out.as_deref_mut(), attempt_fp) {
+                *f = a;
+                *pure = true;
+            }
             let seed_index = self.seed_class_index();
             match crate::lower_source_seeded(
                 name,
@@ -6820,6 +6855,9 @@ impl<'m> Vm<'m> {
                     // lowered; autoload it (which may load a trait file into
                     // `seed_traits`) and retry.
                     *pure = false;
+                    if let (Some(k), Some(a)) = (cache_key, attempt_fp) {
+                        lower_neg_put(k, a, (pname.clone(), kind, line));
+                    }
                     if !attempted.insert(pname.to_ascii_lowercase()) {
                         return Ok(Err(crate::LowerError::UndefinedClass {
                             name: pname,
@@ -6939,7 +6977,7 @@ impl<'m> Vm<'m> {
             }
             // A cached UndefinedClass for this fingerprint: the lowering is
             // deterministic, so go straight to the supertype autoload.
-            let neg = dkey.as_ref().and_then(|dk| defer_neg_get(dk, fp));
+            let neg = dkey.as_ref().and_then(|dk| lower_neg_get(dk, fp));
             let lowered = if let Some((name, kind, line)) = neg {
                 Err(crate::LowerError::UndefinedClass { name, kind, line })
             } else {
@@ -6963,7 +7001,7 @@ impl<'m> Vm<'m> {
                 if let (Some(dk), Err(crate::LowerError::UndefinedClass { name, kind, line })) =
                     (&dkey, &r)
                 {
-                    defer_neg_put(dk, fp, (name.clone(), *kind, *line));
+                    lower_neg_put(dk, fp, (name.clone(), *kind, *line));
                 }
                 r
             };
@@ -7238,12 +7276,14 @@ impl<'m> Vm<'m> {
         // global SLOT INDICES by position (and trait bodies by key), and
         // runtime code can mint fresh global slots (`global $x`, `$GLOBALS`)
         // in request-dependent order — same count, different layout.
-        for (k, _) in &self.seed_traits {
-            k.hash(&mut h);
-        }
-        for g in &self.seed_globals {
-            g.hash(&mut h);
-        }
+        let mut d = self.fp_traits.get();
+        d.extend(&self.seed_traits, |(k, _)| k);
+        self.fp_traits.set(d);
+        d.h.hash(&mut h);
+        let mut d = self.fp_globals.get();
+        d.extend(&self.seed_globals, |g| g);
+        self.fp_globals.set(d);
+        d.h.hash(&mut h);
         self.classes.len().hash(&mut h);
         self.statics.len().hash(&mut h);
         self.linked_functions.len().hash(&mut h);
@@ -7442,8 +7482,22 @@ impl<'m> Vm<'m> {
         // any re-link cache) are counted apart from the rest in tag=lcsum.
         #[cfg(feature = "mem-census")]
         let mut census_fp_miss = false;
-        let unit_key = std::fs::metadata(&real).ok().and_then(|m| unit_key_for(&key, &m));
-        let fp = self.unit_fp();
+        let unit_key = revalidated_unit_key(&real, &key);
+        let mut fp = self.unit_fp();
+        // A lowering of these bytes at this fingerprint is known to stop on a
+        // missing name (a trait using a trait): autoload it first, as that
+        // lowering would, then probe under the new fingerprint.
+        if let Some(uk) = &unit_key {
+            let mut tried: Vec<Vec<u8>> = Vec::new();
+            while let Some((name, _, _)) = lower_neg_get(uk, fp) {
+                let lc = name.to_ascii_lowercase();
+                if tried.contains(&lc) || !self.resolve_name_autoload(&name)? {
+                    break;
+                }
+                tried.push(lc);
+                fp = self.unit_fp();
+            }
+        }
         // The per-include fingerprint sequence is the digest of the
         // VM-visible state — identical pre/post elision ⇒ the runtime tables
         // are identical even though the Modules differ. Emitted only with
@@ -7586,12 +7640,6 @@ impl<'m> Vm<'m> {
         // Mark loaded before running, so a `_once` re-entry during the file's own
         // execution (mutual includes) sees it and short-circuits.
         self.included_files.insert(key.clone());
-        // Fold this load event into the chain exactly as the cache-hit path
-        // does, so hit and miss replays keep downstream fingerprints aligned.
-        self.unit_chain_fp = match &unit_key {
-            Some(uk) => fp_mix_key(self.unit_chain_fp, uk),
-            None => fp_mix(self.unit_chain_fp, b"include-nostat", &key),
-        };
         log::debug!(target: "phpr::include", "{:?} {}", mode, String::from_utf8_lossy(&key));
         let mut pure = true;
         // WP-67 E-67.1: open a nested-autoload frame around lower_unit —
@@ -7601,7 +7649,15 @@ impl<'m> Vm<'m> {
         // autoload PhpError cannot leak a stack frame.
         #[cfg(feature = "mem-census")]
         census_nested_lc_push();
-        let lowered = self.lower_unit(&key, &content, &mut pure);
+        let lowered = self.lower_unit(&key, &content, &mut pure, unit_key.as_ref().map(|uk| (uk, &mut fp)));
+        // Fold this load event into the chain exactly as the cache-hit path
+        // does, so hit and miss replays keep downstream fingerprints aligned.
+        // After the lowering: autoloads it fired ran before this unit's event,
+        // as they do on the replay (the negative probe above).
+        self.unit_chain_fp = match &unit_key {
+            Some(uk) => fp_mix_key(self.unit_chain_fp, uk),
+            None => fp_mix(self.unit_chain_fp, b"include-nostat", &key),
+        };
         #[cfg(feature = "mem-census")]
         let nested_lc_ns = census_nested_lc_pop();
         let program = match lowered? {
@@ -17012,6 +17068,26 @@ fn unit_key_for(path: &[u8], meta: &std::fs::Metadata) -> Option<UnitKey> {
         size: meta.len(),
         reg_mode: crate::compile::reg_lower::enabled(),
     })
+}
+
+/// Ordered digest of an append-only list of names, extended over the items
+/// past `len` (a list shorter than `len` was replaced: start over).
+#[derive(Clone, Copy, Default)]
+struct PrefixDigest {
+    len: usize,
+    h: u64,
+}
+
+impl PrefixDigest {
+    fn extend<T>(&mut self, items: &[T], name: impl Fn(&T) -> &[u8]) {
+        if items.len() < self.len {
+            *self = PrefixDigest::default();
+        }
+        for it in &items[self.len..] {
+            self.h = fp_mix(self.h, b"", name(it));
+        }
+        self.len = items.len();
+    }
 }
 
 fn fp_mix(chain: u64, tag: &[u8], data: &[u8]) -> u64 {

@@ -97,14 +97,14 @@ done
 {
   echo "# Drupal 11 front page under wrk — $(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo
-  echo "- ferro: \`$(docker exec ferro-worker sh -c 'sha256sum /target/release/ferro | cut -c1-16')\` ($(git -C "$REPO" rev-parse --short HEAD)), worker mode, RESET=recipe; classic: \`--workers $WORKERS\`, fresh Vm per request, one request per connection (no keep-alive, like \`php -S\`)"
+  echo "- ferro: \`$(docker run --rm -v rustyphp-target:/target:ro "$IMAGE" sh -c 'sha256sum /target/release/ferro | cut -c1-16')\` ($(git -C "$REPO" rev-parse --short HEAD)), worker mode, RESET=recipe; classic: \`--workers $WORKERS\`, fresh Vm per request, one request per connection (no keep-alive, like \`php -S\`)"
   echo "- php-fpm: \`$(docker exec fpm php-fpm -v 2>&1 | head -1)\`, opcache on (validate_timestamps=0, jit off), static pool of $WORKERS, nginx"
   echo "- FrankenPHP: \`$(docker exec frankenphp frankenphp version 2>/dev/null | head -1)\`, $WORKERS workers, num_threads $FK_THREADS, GOMAXPROCS ${FK_GOMAXPROCS:-default}"
   echo "- wrk: $THREADS threads, $CONNS connections, $DURATION per run, $R runs (median), $WARMUP warm-up; $(docker run --rm "$IMAGE" nproc) CPUs in the VM, shared by wrk and the servers"
   echo "- check (token-stripped body of \`/\`): $check"
   echo
   echo "| server | req/s | p50 | p99 | ferro ÷ this |"; echo "|---|---:|---:|---:|---:|"
-  fe="$(median_of <"$TMP/ferro-worker.rps" 2>/dev/null)"
+  fe=""; for a in ferro-worker ferro-classic; do [[ -s "$TMP/$a.rps" ]] && { fe="$(median_of <"$TMP/$a.rps")"; break; }; done
   for arm in $ARMS; do
     rps="$(median_of <"$TMP/$arm.rps")"
     echo "| $arm | $rps | $(lat_ms <"$TMP/$arm.p50") | $(lat_ms <"$TMP/$arm.p99") | $(awk -v a="$fe" -v b="$rps" 'BEGIN{ if (b>0 && a>0) printf "%.2f", a/b; else print "-" }') |"

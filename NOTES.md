@@ -58,6 +58,47 @@ php-fpm 1355 req/s, **ferro-classic 219** (was ~34 at 166 ms × 8 threads), ferr
 What is left is the interpreter itself (`run_loop`, calls, autoload, unserialize): ~3× Zend per
 request with compilation gone. The remaining gap to php-fpm is ~6×.
 
+**Second pass (owner: "adapt from opcache; work on the dispatch loop").** Tools: a frame-pointer
+build (`RUSTFLAGS="-C force-frame-pointers=yes" CARGO_TARGET_DIR=/target/fp`) with
+`CG=fp bench/drupal/oneshot-profile.sh` and `bench/drupal/fold.py` (perf script folded once, then
+self / inclusive / callers in seconds; DWARF unwinding of the same data timed out at 30 min).
+`bench/ab-summary.py` prints `ab.sh`'s per-section geomeans.
+
+Kept (8 alternating rounds, `oneshot-time.sh`: 2a8f4606 28.55 ms → 25.68 ms, −10 %):
+- `unit_fp` hashed every global name and trait key on each of ~1,100 includes/deferred fires per
+  request (2.7 %): ordered prefix digests extended in place (both lists are append-only).
+- `run_linked` re-checked the 112 shared prelude functions on every link, with a byte compare of
+  the file name each: the shared prefix is now skipped by pointer comparison.
+- Four trait files (a trait that `use`s a trait) missed the unit cache on every request — the
+  lowering autoloads mid-way, which marked them impure. Each attempt's "needs X" is now recorded
+  per fingerprint, the next load autoloads X first and probes again, and the unit is published
+  under its final attempt's fingerprint; the include's chain event moved after the lowering so
+  hit and miss stay aligned. Warm requests: 0 unit-cache misses.
+- opcache's `revalidate_freq`: include stat at most every 2 s under the server
+  (`PHPR_REVALIDATE_FREQ`; 0, i.e. every include, in the CLI).
+
+Measured and dropped:
+- **Dispatch fast path** (slice 6, safe Rust): an inner loop keeping `ip`/frame in locals for the
+  hottest simple ops (op-census of a Drupal request: 409k ops; `Sweep` 13.5 %, `LoadVar` 11.4 %,
+  `PushConst` 7.9 %, `JumpIfFalse` 6.9 %, `StoreSlot` 5.4 %). Entered per op from the loop head:
+  `empty_loop` 1.35×, `nestedloop` 1.27× (fused loop ops never take it, but pay the entry).
+  Entered only from the fast ops' own arms: micro rows 1.05–1.5× worse, Drupal unchanged — runs of
+  fast ops are one or two long before a heavy op. Drupal's `run_loop` self time is 16 %, ~9 ns of
+  dispatch per op; the time is in handlers, not dispatch.
+- **Hashed property layout** (`PropsLayout::slot_of`, a hash-vector scan): no Drupal change
+  across alternating rounds, and 6–9 % slower on `magic_get_1m`/`getter_setter_fluent_1m`/
+  `prop_rmw_1m` even with the probe out of line (their classes have 3 properties and never take
+  it — a code-layout effect). Bisected and reverted.
+
+wrk, 8 workers (`bench/results/2026-10-01-drupal-wrk-classic2-w8.md`): php-fpm 1354 req/s,
+ferro-classic **248** (was 219).
+
+Profile now (frame pointers, warm request): `run_loop` self 16 %, `Zval` drop/clone 7 %, allocator
+5 %, `resolve_method_runtime` 1.8 % (half from `dispatch_instance_call`), property resolution
+(`resolve_prop_access` + `PropInfo` map) ~3 %, `unserialize` 11 % inclusive (two allocations
+per value: an intermediate `Ser` tree, then the `Zval`), fibers 10 % inclusive (Drupal's
+renderer), SQLite schema load 2 % (per connection, as in PHP).
+
 ---
 
 # Session 7 — 2026-10-01 — Drupal 11: install, front page, worker mode (steps 1–2)
