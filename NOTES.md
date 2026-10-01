@@ -103,6 +103,26 @@ scope-independent winners only). Drupal warm request ~25.9 → 24.2 ms; wrk 8 wo
 ferro-classic **271** req/s, php-fpm 1280 in the same run
 (`bench/results/2026-10-01-drupal-wrk-classic3-w8.md`).
 
+**Fourth pass — what overtaking php-fpm would take.** Per-feature ratios against PHP 8.5.7 (CLI,
+no opcache; `bench/*.php`): method call 16.6×, property write 18.8×, `instanceof` 12.3×, function
+call 9.7×, `new` 8.9×, closures 8–10×; arrays 2–5×, strings 1.4–5×. In a function, an empty
+`for` iteration is 8.5 ns vs 2.1 (two ops), a call 72.6 ns vs 10.0. Drupal's self time by
+subsystem (`bench/drupal/buckets.py`): dispatch 17 %, objects/props 9 %, Zval clone/drop 8 %,
+arrays 7 %, alloc 7 %, strings 5 %, frames 5 %, GC emulation 4 %, hashing 4 %, unit link 4 %,
+unserialize 3 %, methods 3 %, other 18 % — flat: parity needs every row ~4× smaller.
+`bench/drupal/hotlines.sh` (objdump line tables; perf annotate crashes here) on a call loop:
+the hot instructions are the per-op prologue's dependent loads (`frames` ptr/len → frame →
+`func` → ops) and spills into `run_loop`'s >10 KB stack frame (a ~600-arm `match`).
+
+Tried and reverted this pass:
+- A `FrameStack` wrapper whose epoch lets `run_loop` cache `top`/`func` across ops: function
+  calls 74 → 83 ns, empty loop 8.7 → 9.3 ns (the push/pop bookkeeping and the codegen shift cost
+  more than the two loads saved).
+- Skipping the `$this` GC note at frame exit when the object is already light-demoted and held
+  elsewhere: method calls 121 → 101 ns and the gate stays green, but `PHPR_GC_VERIFY` on the 240
+  php-src `__destruct` tests shows a new under-note (`magic_methods/bug29368_3`: an operand-stack
+  temp dying in an unwind is no longer seen by the current sweep) — the WP-21 window. Reverted.
+
 Profile now (frame pointers, warm request): `run_loop` self 16 %, `Zval` drop/clone 7 %, allocator
 5 %, `resolve_method_runtime` 1.8 % (half from `dispatch_instance_call`), property resolution
 (`resolve_prop_access` + `PropInfo` map) ~3 %, `unserialize` 11 % inclusive (two allocations
