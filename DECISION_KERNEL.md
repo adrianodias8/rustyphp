@@ -1,9 +1,9 @@
-# DECISION_KERNEL.md — **DRAFT**
+# DECISION_KERNEL.md — **DECIDED: outcome A**
 
-> **Status: DRAFT, written 2026-09-30 at the end of the profiling session. Not a decision yet.**
-> It records what the numbers support so the next session starts from an argument instead of a
-> blank page. Section 7 lists what must be checked before this draft is promoted. Nothing in
-> `php-types` or any hot path has been changed.
+> **Status: decided by the owner on 2026-10-01 — outcome A (keep the value model, optimise inside
+> it), with the safety policy of §8.** Written as a draft on 2026-09-30; §7 keeps the caveats that
+> were open at the time and says which were closed. Re-read this decision when Laravel or Drupal
+> can be profiled, or if a bare-metal run with hardware counters contradicts the bucket table.
 
 PLAN.md §3. Evidence: [`PROFILE.md`](PROFILE.md), [`ARCHITECTURE_NOTES.md`](ARCHITECTURE_NOTES.md),
 [`bench/results/`](bench/results/).
@@ -306,7 +306,7 @@ Item 6 is the largest and the riskiest: upstream records that `run_loop` is layo
 `unsafe` outside `php-types`. It must be done in safe Rust and measured A/B against the unchanged
 binary, not judged by reading.
 
-## 7. Why this is still a draft
+## 7. Caveats of the draft, and their status at the decision
 
 1. **One environment.** Everything was measured in a Linux/arm64 VM under Docker on a laptop,
    against the docker-library PHP build. Upstream measures natively on macOS against Homebrew's
@@ -328,3 +328,38 @@ binary, not judged by reading.
 6. **The thresholds are PLAN's.** They were written before it was known that the value model is
    already compact. If the owner's intent behind B was "control the kernel ourselves" rather than
    "fix a measured cost", that is a product decision this document cannot make.
+
+At the decision (2026-10-01): **4 is closed** — slices 4 and 5 were done and the re-profile
+(NOTES.md session 4 §2c) puts `Rc` + `RefCell` + allocation at 11–31 %, under every PLAN
+threshold. **6 was answered by the owner**: the goal is performance and safety, not owning the
+kernel for its own sake — and B's only lever (hand-rolled refcounts, unchecked borrows) trades
+memory safety for at most the 4–5 % `RefCell` share. **1 and 2 move into slice 6**, which starts
+with a bare-metal run with hardware counters and a disassembly of `run_loop`. **3 stays open**:
+re-read when Laravel or Drupal runs. **5** is still checked per slice.
+
+## 8. Safety policy (part of the decision)
+
+Outcome A keeps the engine in safe Rust; this section pins where `unsafe` may live.
+
+1. **Inventory, enforced.** `php-runtime/tests/unsafe_census.rs` pins the number of lines using
+   `unsafe` in every file, with the reason; any other file must have none. Adding `unsafe` means
+   raising a pin in the same commit, with a `SAFETY:` comment at the site. At the decision: 280
+   lines in 23 files — the value model (`zstr.rs` 15, `array.rs` 2), C libraries through FFI
+   (gd, tidy, xslt, zlib: 161), libc system calls (~33), three C callbacks that carry the `Vm` as
+   a raw pointer (pdo, xslt, `vm/mod.rs`), two documented `from_utf8_unchecked` sites, and the
+   instrumentation allocators of the census builds (63, never in the default build). The draft's
+   "17 sites" counted the value model only.
+2. **The value model is checked by Miri.** Every `unsafe` block in `zstr.rs` and `array.rs` has a
+   `SAFETY:` comment, and CI runs their unit tests under Miri with Tree Borrows (32 tests, all
+   pass). Under Stacked Borrows, Miri rejects `PhpStr::as_bytes`: the payload is read through a
+   pointer derived from `&PhpStr`, whose reference covers only the 32-byte header. Tree Borrows
+   accepts that pattern; making Stacked Borrows accept it means turning `PhpStr` into a
+   dynamically sized type that owns its payload, a change to every string in the engine. Recorded,
+   not done; re-open if the language settles on the stricter model.
+3. **No new `unsafe` for speed in the VM.** Slice 6 (the dispatch loop) is done in safe Rust, as
+   §6 already required; a lever that needs `unsafe` in `php-runtime` is a decision for the owner,
+   with an A/B that shows what it buys.
+4. **Known weak spots** (documented, not fixed): the raw `*mut Vm` recovered in C callbacks (sound
+   only while the callback runs inside the `Vm` call that registered it), and `mysqli`'s
+   non-UTF-8 `String` (relies on the `mysql` crate only calling `as_bytes()`; re-check on every
+   bump of that crate).

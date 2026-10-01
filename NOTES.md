@@ -36,6 +36,14 @@ this session unless it is explicitly labelled "upstream's claim".
 9. Corpus 3,048 → **3,051** (bug46106, argument_count_incorrect_internal,
    float_to_int/union_int_string_type_arg), baseline advanced; 0 pass→fail.
 
+10. **Kernel decision: outcome A, decided by the owner** (DECISION_KERNEL.md, status DECIDED, §7
+    caveat status, new §8 safety policy). Safety pass: `SAFETY:` comments on every value-model
+    `unsafe` block; `tests/unsafe_census.rs` pins 280 `unsafe` lines in 23 files; Miri in CI.
+    Miri found that `PhpStr::as_bytes` is UB under Stacked Borrows (payload read through a
+    header-sized reference); Tree Borrows accepts it, and all 32 zstr/array tests pass under it.
+11. CI rewritten (one `ci.yml` in the dev image: build, tests, corpus gate, Miri); first run
+    green on amd64, gate identical to the arm64 baseline (3,051).
+
 Not done: a memory ceiling. The soak shows no growth to bound; with all workers in one process an
 RSS ceiling could only recycle blindly. Revisit if a real application grows.
 

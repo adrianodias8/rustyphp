@@ -514,6 +514,10 @@ impl Drop for PhpArray {
         // LEAK, never a double-free. The emptied Vecs and the KeyIndex free
         // their buffers from the trailing glue as before.
         match &mut self.repr {
+            // SAFETY (both arms): `set_len(0)` first, so the Vec no longer owns
+            // the elements; each one is then `ptr::read` exactly once, in
+            // bounds (i < len), and dropped. A panic mid-drain leaks the rest,
+            // never double-frees them.
             Repr::Packed(slots) => unsafe {
                 let len = slots.len();
                 #[cfg(feature = "mem-census")]

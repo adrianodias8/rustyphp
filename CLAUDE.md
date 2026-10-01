@@ -28,6 +28,9 @@ every measured number and where each session stopped.
   and `NOTES.md`; the commit message carries the A/B geomeans.
 - **Line caps.** `php-rust/crates/php-runtime/tests/loc_cap.rs` caps every source
   file; growing one is declared in the same commit, in its allowlist entry.
+- **`unsafe` is pinned.** `php-rust/crates/php-runtime/tests/unsafe_census.rs` counts it per
+  file; new `unsafe` needs a raised pin and a `SAFETY:` comment in the same commit, and none is
+  added to the VM for speed without the owner's decision (DECISION_KERNEL.md §8).
 - **Comments in English.** The code was translated from Italian; keep it so.
 - **Never push to `upstream`** (it is disabled on purpose). `origin` is
   github.com/adrianodias8/rustyphp; work on `next`.

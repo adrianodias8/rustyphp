@@ -74,10 +74,13 @@ impl ZStr {
     /// The caller must initialise `len` payload bytes before the ZStr is read.
     fn alloc_block(len: usize, cap: usize) -> NonNull<PhpStr> {
         let lay = block_layout(cap);
+        // SAFETY: `lay` has non-zero size (HDR = 32 bytes plus `cap`).
         let raw = unsafe { alloc(lay) };
         let Some(ptr) = NonNull::new(raw.cast::<PhpStr>()) else {
             handle_alloc_error(lay)
         };
+        // SAFETY: `ptr` is a fresh, non-null allocation sized and aligned for the
+        // header; `write` initialises it without reading or dropping the old bytes.
         unsafe {
             ptr.as_ptr().write(PhpStr {
                 rc: Cell::new(1),
@@ -99,6 +102,8 @@ impl ZStr {
 
     #[inline]
     fn data_ptr(ptr: NonNull<PhpStr>) -> *mut u8 {
+        // SAFETY: `ptr` points at a live block of HDR + cap bytes, so the payload
+        // start is in bounds (one past the end when cap == 0).
         unsafe { ptr.as_ptr().cast::<u8>().add(HDR) }
     }
 
@@ -130,6 +135,10 @@ impl ZStr {
         }
         #[cfg(feature = "mem-census")]
         crate::memcensus::adjust(crate::memcensus::CH_STR, more.len() as i64);
+        // SAFETY: rc == 1 (checked above) and `&mut self`: this handle is the only
+        // access to the block. `realloc` keeps the old layout's alignment and
+        // the old bytes; the copy targets [len, need) inside the new cap, and
+        // `more` cannot alias the block (see the doc comment).
         unsafe {
             let (len, cap) = {
                 let h = self.ptr.as_ref();
@@ -185,13 +194,18 @@ impl Drop for ZStr {
         if n == 0 {
             // The death path stays OUT of line like Rc::drop_slow — inlining
             // it bloated EVERY Zval drop site, and run_loop is icache-bound.
+            // SAFETY: the count just reached zero, so this was the last handle.
             unsafe { zstr_drop_slow(self.ptr) }
         }
     }
 }
 
 /// Outlined death path (mirror of `Rc`'s `#[cold] drop_slow`): census note +
-/// block dealloc. Caller guarantees the refcount just hit zero.
+/// block dealloc.
+///
+/// # Safety
+/// The refcount of the block at `ptr` just reached zero: no other handle
+/// exists, and the block was allocated with `block_layout(cap)`.
 #[cold]
 #[inline(never)]
 unsafe fn zstr_drop_slow(ptr: NonNull<PhpStr>) {
@@ -208,6 +222,7 @@ impl Deref for ZStr {
     type Target = PhpStr;
     #[inline]
     fn deref(&self) -> &PhpStr {
+        // SAFETY: a ZStr always points at a live, initialised block (rc >= 1).
         unsafe { self.ptr.as_ref() }
     }
 }
@@ -253,11 +268,14 @@ pub struct ZStrBuilder {
 
 impl ZStrBuilder {
     pub fn push(&mut self, bytes: &[u8]) {
+        // SAFETY: the builder owns a live block whose header was written by alloc_block.
         let cap = unsafe { self.ptr.as_ref().cap };
         assert!(
             bytes.len() <= cap - self.written,
             "ZStrBuilder capacity overflow"
         );
+        // SAFETY: the assert above keeps [written, written + len) inside `cap`; `bytes`
+        // is caller memory and cannot alias a block nobody else can see yet.
         unsafe {
             std::ptr::copy_nonoverlapping(
                 bytes.as_ptr(),
@@ -269,6 +287,9 @@ impl ZStrBuilder {
     }
 
     pub fn finish(self) -> ZStr {
+        // SAFETY: the builder is the block's only owner; `realloc` shrinks it to
+        // `written` bytes of payload, all of them initialised by `push`.
+        // `forget(self)` hands the block to the ZStr without running Drop.
         unsafe {
             let cap = self.ptr.as_ref().cap;
             let mut ptr = self.ptr;
@@ -305,6 +326,8 @@ impl Drop for ZStrBuilder {
     fn drop(&mut self) {
         // Abandoned builder (no `finish`): release the block; no census
         // alloc was recorded yet, so nothing to balance.
+        // SAFETY: `finish` forgets the builder, so this runs only for an abandoned
+        // builder, which still owns its block (allocated with block_layout(cap)).
         unsafe {
             let cap = self.ptr.as_ref().cap;
             dealloc(self.ptr.as_ptr().cast::<u8>(), block_layout(cap));
@@ -326,6 +349,7 @@ impl PhpStr {
             b.len() + crate::memcensus::STR_OVERHEAD,
         );
         let ptr = ZStr::alloc_block(b.len(), b.len());
+        // SAFETY: the block was just allocated with cap == b.len(); `b` is caller memory.
         unsafe {
             std::ptr::copy_nonoverlapping(b.as_ptr(), ZStr::data_ptr(ptr), b.len());
         }
@@ -353,6 +377,8 @@ impl PhpStr {
             total + crate::memcensus::STR_OVERHEAD,
         );
         let ptr = ZStr::alloc_block(total, total);
+        // SAFETY: the block was just allocated with cap == a.len() + b.len(); the two
+        // copies fill [0, a.len()) and [a.len(), total).
         unsafe {
             let d = ZStr::data_ptr(ptr);
             std::ptr::copy_nonoverlapping(a.as_ptr(), d, a.len());
@@ -394,6 +420,8 @@ impl PhpStr {
 
     #[inline]
     pub fn as_bytes(&self) -> &[u8] {
+        // SAFETY: a PhpStr only exists as the header of a block; its `len` payload
+        // bytes follow it in the same allocation and are initialised.
         unsafe {
             std::slice::from_raw_parts((self as *const PhpStr).add(1).cast::<u8>(), self.len)
         }
@@ -471,6 +499,7 @@ mod census {
 
     pub fn record(len: usize) {
         if !REGISTERED.swap(true, Ordering::Relaxed) {
+            // SAFETY: `dump` is an `extern "C" fn()` with no arguments, as atexit requires.
             unsafe { libc::atexit(dump) };
         }
         let i = BOUNDS.iter().position(|&b| len <= b).unwrap_or(7);

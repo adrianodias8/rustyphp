@@ -61,3 +61,12 @@ jobs:
           --skip build_config_to_unwritable_file_errs
       - name: Corpus regression gate
         run: php-rust/docker/run.sh ../baseline/gate.sh
+      # DECISION_KERNEL.md §8: the value model's unsafe code (zstr.rs,
+      # array.rs) runs its unit tests under Miri. Tree Borrows: the string's
+      # payload is read through a header reference, which Stacked Borrows
+      # rejects and Tree Borrows accepts (see §8.2).
+      - name: Miri (value model, Tree Borrows)
+        run: >
+          php-rust/docker/run.sh bash -c 'rustup toolchain install nightly --profile minimal --component miri
+          && cd crates/php-types && cargo +nightly miri setup
+          && MIRIFLAGS=-Zmiri-tree-borrows CARGO_TARGET_DIR=/target/miri cargo +nightly miri test --lib -- zstr array'
