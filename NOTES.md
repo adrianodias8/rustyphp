@@ -167,6 +167,14 @@ calls), so this pass went after the handlers instead:
 
 Drupal warm one-shot, 6 interleaved rounds vs 364c861b: median 21.01 → 19.41 ms (−7.6 %).
 
+wrk, 8 workers (`bench/results/2026-10-01-drupal-wrk-classic4-w8.md`): php-fpm 1421 req/s,
+ferro-classic **294** (4.8×). Scaling: one warm request is 19.4 ms (~51 req/s per thread) but 8
+threads give ~37 per thread. Resident memory of the classic pool, warm: **360 MB with 1 worker,
+2.2 GB with 8** (~270 MB of private compiled state per thread — every cache is thread-local),
+where php-fpm keeps one shared opcache. Next levers by size: GC emulation (`Ret` notes +
+`Sweep` + sweep bodies ≈ 3.5 ms, ~18 %), the per-thread footprint (locality and scaling), the
+dispatch prologue/frame layout (~10 %).
+
 Profile now (frame pointers, warm request): `run_loop` self 16 %, `Zval` drop/clone 7 %, allocator
 5 %, `resolve_method_runtime` 1.8 % (half from `dispatch_instance_call`), property resolution
 (`resolve_prop_access` + `PropInfo` map) ~3 %, `unserialize` 11 % inclusive (two allocations
