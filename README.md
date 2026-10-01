@@ -1,5 +1,7 @@
 # Ferrophant
 
+[![CI](https://github.com/adrianodias8/rustyphp/actions/workflows/ci.yml/badge.svg?branch=next)](https://github.com/adrianodias8/rustyphp/actions/workflows/ci.yml)
+
 **A PHP 8.5 runtime written in Rust — measured against the real thing, and
 vibe-coded end to end.**
 
