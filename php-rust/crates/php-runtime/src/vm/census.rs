@@ -305,7 +305,7 @@ pub fn tag_index(v: &Zval) -> usize {
         Zval::Str(_) => 5,
         Zval::Array(_) => 6,
         Zval::Object(_) | Zval::Closure(_) | Zval::Generator(_) | Zval::Resource(_)
-        | Zval::WeakHandle(_) => 7,
+        | Zval::WeakHandle(..) => 7,
         Zval::Ref(_) => 8,
         Zval::ArgPlace(_) => 9,
     }

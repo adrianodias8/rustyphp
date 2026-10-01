@@ -7,6 +7,7 @@
 //! (`Rc<PhpArray>` + `Rc::make_mut`). The interior `RefCell` is what lets the
 //! evaluator mutate a shared instance in place without cloning it (D-19.1).
 
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::{PhpStr, ZStr, Zval};
@@ -151,6 +152,7 @@ const GC_BIRTH: u8 = 1;
 const GC_DESTRUCTED: u8 = 2;
 const GC_CYCLE_ROOT: u8 = 4;
 const GC_LIGHT_DEMOTED: u8 = 8;
+const GC_HAS_DTOR: u8 = 16;
 
 impl GcMark {
     pub fn new() -> GcMark {
@@ -228,6 +230,18 @@ impl GcMark {
         self.set_flag(GC_LIGHT_DEMOTED, on);
     }
 
+    /// Drop-driven destructors (`PHPR_GC=drop`): the object's class has a
+    /// `__destruct`, set at allocation. With the mode on, the last strong
+    /// reference going away queues the object for its destructor instead of
+    /// freeing it (see `Object::drop`).
+    pub fn has_dtor(&self) -> bool {
+        self.flag(GC_HAS_DTOR)
+    }
+
+    pub fn set_has_dtor(&self, on: bool) {
+        self.set_flag(GC_HAS_DTOR, on);
+    }
+
     /// Drop the buffer-entry marks (slot + BIRTH) — the object no longer has
     /// a buffer entry. The set-mirror bits are NOT touched: they track the
     /// id-sets, not the buffer.
@@ -264,7 +278,31 @@ thread_local! {
 /// Push a released handle id (0 = synthetic carrier, never pushed).
 pub fn free_object_id(id: u32) {
     if id != 0 {
+        // Drop mode: an object freed mid-statement releases its handle at
+        // the statement boundary (`release_quarantined_ids`), not at once —
+        // Zend still holds a failed operand while it builds the exception
+        // (`$o->typed = new stdClass` fails as TypeError #4, not #3), and
+        // frees the opline's temporaries afterwards.
+        if DTOR_MODE.with(|m| m.get()) {
+            QUARANTINED_IDS.with(|q| q.borrow_mut().push(id));
+            DTOR_PENDING.with(|p| p.set(true));
+            return;
+        }
         FREED_OBJECT_IDS.with(|f| f.borrow_mut().push(id));
+    }
+}
+
+/// Release the handles quarantined since the last statement boundary, in
+/// release order (drop mode).
+pub fn release_quarantined_ids() {
+    QUARANTINED_IDS.with(|q| {
+        let mut q = q.borrow_mut();
+        if !q.is_empty() {
+            FREED_OBJECT_IDS.with(|f| f.borrow_mut().extend(q.drain(..)));
+        }
+    });
+    if PENDING_DTORS.with(|q| q.borrow().is_empty()) {
+        DTOR_PENDING.with(|p| p.set(false));
     }
 }
 
@@ -275,6 +313,7 @@ pub fn take_freed_object_id() -> Option<u32> {
 
 /// Clear the freed-id list (a new program run starts a fresh handle space).
 pub fn reset_freed_object_ids() {
+    QUARANTINED_IDS.with(|q| q.borrow_mut().clear());
     FREED_OBJECT_IDS.with(|f| f.borrow_mut().clear());
 }
 
@@ -363,8 +402,93 @@ impl Object {
     }
 }
 
+thread_local! {
+    /// Drop-driven destructors on for this thread (set by the VM).
+    static DTOR_MODE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Objects whose last reference dropped before their `__destruct` ran,
+    /// resurrected under their own handle id, in release order.
+    static PENDING_DTORS: RefCell<std::collections::VecDeque<Rc<RefCell<Object>>>> =
+        const { RefCell::new(std::collections::VecDeque::new()) };
+    static DTOR_PENDING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Live resurrected objects by handle id: a weak handle made before the
+    /// object moved (its `Weak` is dead) resolves here while the object
+    /// lives on; the entry leaves when it is finally freed (so a reused id
+    /// never matches).
+    static RESURRECTED: RefCell<std::collections::HashMap<u32, std::rc::Weak<RefCell<Object>>>> =
+        RefCell::new(std::collections::HashMap::new());
+    static RESURRECTED_N: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static QUARANTINED_IDS: RefCell<Vec<u32>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Upgrade a weak object handle made for handle id `id`, following a
+/// drop-mode resurrection (see [`Object`]'s `Drop`).
+pub fn resolve_weak(w: &std::rc::Weak<RefCell<Object>>, id: u32) -> Option<Rc<RefCell<Object>>> {
+    w.upgrade().or_else(|| {
+        if RESURRECTED_N.with(|n| n.get()) == 0 {
+            return None;
+        }
+        RESURRECTED.with(|m| m.borrow().get(&id)?.upgrade())
+    })
+}
+
+/// Turn drop-driven destructors on or off for this thread.
+pub fn set_dtor_mode(on: bool) {
+    DTOR_MODE.with(|m| m.set(on));
+}
+
+/// Whether an object is waiting for its destructor (one TLS read).
+#[inline]
+pub fn dtor_pending() -> bool {
+    DTOR_PENDING.with(|p| p.get())
+}
+
+/// The next object waiting for its destructor, in release order.
+pub fn pop_pending_dtor() -> Option<Rc<RefCell<Object>>> {
+    PENDING_DTORS.with(|q| {
+        let mut q = q.borrow_mut();
+        let o = q.pop_front();
+        if q.is_empty() && QUARANTINED_IDS.with(|v| v.borrow().is_empty()) {
+            DTOR_PENDING.with(|p| p.set(false));
+        }
+        o
+    })
+}
+
 impl Drop for Object {
     fn drop(&mut self) {
+        // Drop-driven destructors: the last reference to an object whose
+        // `__destruct` has not run yet is gone. Zend calls the destructor at
+        // this point with the object still alive; here the contents move to
+        // a fresh allocation under the SAME handle id (the dying shell keeps
+        // id 0, so the handle is not freed) and wait for the VM's next safe
+        // point. When that destructed object is released again it frees
+        // normally below. A lazy wrapper never runs its own destructor.
+        if self.gc.has_dtor() && !self.gc.destructed() && self.lazy.is_none() && DTOR_MODE.with(|m| m.get()) {
+            let gc = GcMark::new();
+            gc.set_has_dtor(true);
+            let moved = Object {
+                class_id: self.class_id,
+                class_name: self.class_name.clone(),
+                props: std::mem::take(&mut self.props),
+                id: self.id,
+                info: Rc::clone(&self.info),
+                rare: self.rare.take(),
+                lazy: None,
+                proxy_instance: self.proxy_instance.take(),
+                gc,
+            };
+            let id = self.id;
+            self.id = 0;
+            let rc = Rc::new(RefCell::new(moved));
+            RESURRECTED.with(|m| {
+                if m.borrow_mut().insert(id, Rc::downgrade(&rc)).is_none() {
+                    RESURRECTED_N.with(|n| n.set(n.get() + 1));
+                }
+            });
+            PENDING_DTORS.with(|q| q.borrow_mut().push_back(rc));
+            DTOR_PENDING.with(|p| p.set(true));
+            return;
+        }
         // WP-58 Ob.2: the fixed header part allocated at the id choke
         // (`Vm::next_id`) comes back here; the props part is freed by
         // `Props::drop` itself (wherever the taken table ends up dropping).
@@ -382,6 +506,13 @@ impl Drop for Object {
         drop_bounded(DeepDrop::Props(std::mem::take(&mut self.props)));
         if let Some(p) = self.proxy_instance.take() {
             drop_bounded(DeepDrop::Val(*p));
+        }
+        if self.id != 0 && RESURRECTED_N.with(|n| n.get()) != 0 {
+            RESURRECTED.with(|m| {
+                if m.borrow_mut().remove(&self.id).is_some() {
+                    RESURRECTED_N.with(|n| n.set(n.get() - 1));
+                }
+            });
         }
         free_object_id(self.id);
     }

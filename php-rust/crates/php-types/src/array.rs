@@ -569,7 +569,7 @@ fn rd1_drop_val(v: Zval) {
         Zval::Object(o) => drop(o),
         Zval::Generator(g) => drop(g),
         Zval::Resource(r) => drop(r),
-        Zval::WeakHandle(w) => drop(w),
+        Zval::WeakHandle(w, _) => drop(w),
         Zval::ArgPlace(p) => drop(p),
     }
 }

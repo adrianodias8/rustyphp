@@ -88,9 +88,6 @@ ext/spl/tests/DirectoryIterator_empty_constructor.phpt
 ext/spl/tests/DirectoryIterator_uninitialized.phpt
 ext/spl/tests/GlobIterator_constructor_count.phpt
 ext/spl/tests/GlobIterator_internal_null_pointer.phpt
-ext/spl/tests/RecursiveCallbackFilterIteratorTest.phpt
-ext/spl/tests/RecursiveCallbackFilterIterator_trampoline_usage.phpt
-ext/spl/tests/RecursiveDirectoryIterator_getSubPath_basic.phpt
 ext/spl/tests/RecursiveDirectoryIterator_hasChildren.phpt
 ext/spl/tests/RecursiveIteratorIterator_invalid_aggregate.phpt
 ext/spl/tests/RecursiveIteratorIterator_not_initialized.phpt
@@ -104,10 +101,8 @@ ext/spl/tests/SplDoublyLinkedList_offsetGet_param_string.phpt
 ext/spl/tests/SplDoublyLinkedList_serialization.phpt
 ext/spl/tests/SplDoublylinkedlist_offsetunset_first.phpt
 ext/spl/tests/SplDoublylinkedlist_offsetunset_last.phpt
-ext/spl/tests/SplFileInfo_getGroup_basic.phpt
 ext/spl/tests/SplFileInfo_getGroup_error.phpt
 ext/spl/tests/SplFileInfo_getInode_error.phpt
-ext/spl/tests/SplFileInfo_getOwner_basic.phpt
 ext/spl/tests/SplFileInfo_getOwner_error.phpt
 ext/spl/tests/SplFileInfo_getPerms_error.phpt
 ext/spl/tests/SplFileInfo_setFileClass_basic.phpt
@@ -251,7 +246,6 @@ ext/spl/tests/bug45826.phpt
 ext/spl/tests/bug46051.phpt
 ext/spl/tests/bug46088.phpt
 ext/spl/tests/bug46115.phpt
-ext/spl/tests/bug48361.phpt
 ext/spl/tests/bug49723.phpt
 ext/spl/tests/bug51068.phpt
 ext/spl/tests/bug51119.phpt
@@ -274,7 +268,6 @@ ext/spl/tests/bug65069.phpt
 ext/spl/tests/bug65328.phpt
 ext/spl/tests/bug65387.phpt
 ext/spl/tests/bug66127.phpt
-ext/spl/tests/bug66405.phpt
 ext/spl/tests/bug66834.phpt
 ext/spl/tests/bug67247.phpt
 ext/spl/tests/bug67359.phpt
@@ -320,7 +313,6 @@ ext/spl/tests/bug78456.phpt
 ext/spl/tests/bug78863.phpt
 ext/spl/tests/bug79432.phpt
 ext/spl/tests/bug79987.phpt
-ext/spl/tests/bug80663.phpt
 ext/spl/tests/bug80719.phpt
 ext/spl/tests/bug81992.phpt
 ext/spl/tests/bug81992b.phpt
@@ -404,12 +396,6 @@ ext/spl/tests/iterator_010.phpt
 ext/spl/tests/iterator_011.phpt
 ext/spl/tests/iterator_012.phpt
 ext/spl/tests/iterator_013.phpt
-ext/spl/tests/iterator_014.phpt
-ext/spl/tests/iterator_015.phpt
-ext/spl/tests/iterator_016.phpt
-ext/spl/tests/iterator_021.phpt
-ext/spl/tests/iterator_022.phpt
-ext/spl/tests/iterator_023.phpt
 ext/spl/tests/iterator_024.phpt
 ext/spl/tests/iterator_025.phpt
 ext/spl/tests/iterator_026.phpt
@@ -418,7 +404,6 @@ ext/spl/tests/iterator_028.phpt
 ext/spl/tests/iterator_031.phpt
 ext/spl/tests/iterator_032.phpt
 ext/spl/tests/iterator_033.phpt
-ext/spl/tests/iterator_034.phpt
 ext/spl/tests/iterator_035.phpt
 ext/spl/tests/iterator_036.phpt
 ext/spl/tests/iterator_037.phpt
@@ -444,8 +429,6 @@ ext/spl/tests/iterator_055.phpt
 ext/spl/tests/iterator_056.phpt
 ext/spl/tests/iterator_062.phpt
 ext/spl/tests/iterator_069.phpt
-ext/spl/tests/iterator_070.phpt
-ext/spl/tests/iterator_071.phpt
 ext/spl/tests/iterator_count.phpt
 ext/spl/tests/iterator_count_exception.phpt
 ext/spl/tests/iterator_to_array.phpt
@@ -465,13 +448,6 @@ ext/spl/tests/recursive_tree_iterator_006.phpt
 ext/spl/tests/recursive_tree_iterator_007.phpt
 ext/spl/tests/recursive_tree_iterator_008.phpt
 ext/spl/tests/recursive_tree_iterator_setpostfix.phpt
-ext/spl/tests/recursiveiteratoriterator_beginiteration_basic.phpt
-ext/spl/tests/recursiveiteratoriterator_enditeration_basic.phpt
-ext/spl/tests/recursiveiteratoriterator_getsubiterator_basic.phpt
-ext/spl/tests/recursiveiteratoriterator_getsubiterator_variation.phpt
-ext/spl/tests/recursiveiteratoriterator_getsubiterator_variation_002.phpt
-ext/spl/tests/recursiveiteratoriterator_getsubiterator_variation_003.phpt
-ext/spl/tests/recursiveiteratoriterator_nextelement_basic.phpt
 ext/spl/tests/regexIterator_flags_basic.phpt
 ext/spl/tests/regexIterator_mode_basic.phpt
 ext/spl/tests/regexIterator_setMode_error.phpt

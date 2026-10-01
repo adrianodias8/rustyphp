@@ -5,6 +5,7 @@ ext/tokenizer/tests/PhpToken_extension.phpt
 ext/tokenizer/tests/PhpToken_extension_errors.phpt
 ext/tokenizer/tests/PhpToken_final_constructor.phpt
 ext/tokenizer/tests/PhpToken_toString.phpt
+ext/tokenizer/tests/PhpToken_tokenize.phpt
 ext/tokenizer/tests/attributes.phpt
 ext/tokenizer/tests/bad_character.phpt
 ext/tokenizer/tests/bug26463.phpt

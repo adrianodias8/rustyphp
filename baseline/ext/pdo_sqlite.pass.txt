@@ -24,6 +24,8 @@ ext/pdo_sqlite/tests/pdo_sqlite_statement_getattribute.phpt
 ext/pdo_sqlite/tests/pdo_sqlite_tostring_exception.phpt
 ext/pdo_sqlite/tests/subclasses/pdo_sqlite_constants.phpt
 ext/pdo_sqlite/tests/subclasses/pdo_sqlite_createafunction_trampoline.phpt
+ext/pdo_sqlite/tests/subclasses/pdo_sqlite_createcollation.phpt
+ext/pdo_sqlite/tests/subclasses/pdo_sqlite_createcollation_trampoline.phpt
 ext/pdo_sqlite/tests/subclasses/pdosqlite_001.phpt
 ext/pdo_sqlite/tests/subclasses/pdosqlite_002.phpt
 ext/pdo_sqlite/tests/subclasses/pdosqlite_006.phpt

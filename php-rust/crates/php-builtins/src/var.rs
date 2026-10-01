@@ -276,8 +276,8 @@ pub(crate) fn dump(
                             let h = it.next().unwrap_or(Zval::Null);
                             let value = it.next().unwrap_or(Zval::Null);
                             match h {
-                                Zval::WeakHandle(w) => {
-                                    if let Some(o) = w.upgrade() {
+                                Zval::WeakHandle(w, wid) => {
+                                    if let Some(o) = php_types::resolve_weak(&w, wid) {
                                         live.push((Zval::Object(o), value));
                                     }
                                 }
@@ -399,7 +399,7 @@ pub(crate) fn dump(
         }
         // A bare weak handle (only reached if one ever escapes the WeakReference/
         // WeakMap special-casing): the live object, or NULL once collected.
-        Zval::WeakHandle(w) => match w.upgrade() {
+        Zval::WeakHandle(w, wid) => match php_types::resolve_weak(w, *wid) {
             Some(o) => dump(out, &Zval::Object(o), indent, seen, debug),
             None => out.extend_from_slice(b"NULL\n"),
         },
@@ -557,7 +557,7 @@ pub(crate) fn export_into(out: &mut Vec<u8>, v: &Zval, level: usize, seen: &mut 
         }
         // Closures / generators / resources have no `var_export` form
         // (D-47.1 scope-out; PHP warns and yields NULL for a resource).
-        Zval::Closure(_) | Zval::Generator(_) | Zval::Resource(_) | Zval::WeakHandle(_) => {
+        Zval::Closure(_) | Zval::Generator(_) | Zval::Resource(_) | Zval::WeakHandle(..) => {
             out.extend_from_slice(b"NULL")
         }
     }

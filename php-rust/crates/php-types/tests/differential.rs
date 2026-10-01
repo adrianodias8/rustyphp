@@ -188,7 +188,7 @@ fn var_dump(v: &Zval, level: usize, out: &mut String) {
         Zval::Object(_) => unreachable!("differential corpus produces no objects"),
         Zval::Generator(_) => unreachable!("differential corpus produces no generators"),
         Zval::Resource(_) => unreachable!("differential corpus produces no resources"),
-        Zval::WeakHandle(_) => unreachable!("differential corpus produces no weak handles"),
+        Zval::WeakHandle(..) => unreachable!("differential corpus produces no weak handles"),
     }
 }
 

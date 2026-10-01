@@ -1,5 +1,4 @@
 ext/tokenizer/tests/PhpToken_methods.phpt
-ext/tokenizer/tests/PhpToken_tokenize.phpt
 ext/tokenizer/tests/bug54089.phpt
 ext/tokenizer/tests/bug77966.phpt
 ext/tokenizer/tests/gh19507_throw.phpt

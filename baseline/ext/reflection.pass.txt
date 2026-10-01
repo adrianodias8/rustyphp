@@ -13,6 +13,7 @@ ext/reflection/tests/ReflectionClassConstant_isDeprecated_userland.phpt
 ext/reflection/tests/ReflectionClassConstant_isEnumCase.phpt
 ext/reflection/tests/ReflectionClass_FileInfo_basic.phpt
 ext/reflection/tests/ReflectionClass_constructor_001.phpt
+ext/reflection/tests/ReflectionClass_export_basic2.phpt
 ext/reflection/tests/ReflectionClass_getConstants_basic.phpt
 ext/reflection/tests/ReflectionClass_getConstants_filter.phpt
 ext/reflection/tests/ReflectionClass_getConstructor_basic.phpt
@@ -120,6 +121,7 @@ ext/reflection/tests/bug26640.phpt
 ext/reflection/tests/bug29523.phpt
 ext/reflection/tests/bug29828.phpt
 ext/reflection/tests/bug30209.phpt
+ext/reflection/tests/bug30856.phpt
 ext/reflection/tests/bug30961.phpt
 ext/reflection/tests/bug32981.phpt
 ext/reflection/tests/bug33312.phpt

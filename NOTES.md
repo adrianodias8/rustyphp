@@ -23,6 +23,45 @@ this session unless it is explicitly labelled "upstream's claim".
 
 ---
 
+# Session 9 — 2026-10-02 — Drop-driven destructors (owner: "work on GC, smart, inspired by Rust projects")
+
+**Design** (`vm/gcdrop.rs`, `php-types` `Object::drop`; default, `PHPR_GC=classic` keeps the old
+engine). The classic engine kept a STRONG clone of every object in `created`, so no object died
+on its own: notes at every release site, a sweep at every statement, cascades. Now:
+- The registry holds `Weak`s; the refcount reports death. A destructor-less object frees at its
+  last release (handle ids already returned in Zend's postorder by `Object::drop`).
+- An object whose `__destruct` has not run is **resurrected** by `Object::drop` under its own id
+  (contents moved to a new allocation, the shell keeps id 0) and queued; the VM runs queued
+  destructors at the same safe points as the sweep (`Op::Sweep`), sync or resumable. Weak handles
+  (`WeakReference`/`WeakMap`, `Zval::WeakHandle(weak, id)`) follow a live resurrection through a
+  per-thread id map (removed when the object finally frees, so reused ids never match).
+- Cycles: a collection takes a strong snapshot of the live registry into `created`, seeds every
+  object as a root, and runs the existing trial-deletion collector **in classic mode** (notes and
+  sweeps active — Zend's count excludes what refcounting reaps meanwhile, gc_017); survivors and
+  objects minted meanwhile go back to the weak registry. Automatic trigger: Zend's possible roots
+  (an object losing a holder but still held), counted from the notes with the `cycle_root` bit as
+  dedup, at the classic 50k with Zend's adaptive step. (Counting registry growth instead
+  re-classified every large acyclic structure: json_decode of a 30k-object tree ×1.3.)
+- Handle ids freed mid-statement are **quarantined** until the statement boundary or the next
+  user `new` (Zend still holds a failed operand while it builds the exception: TypeError #4,
+  not #3; `spl_object_id(new A), spl_object_id(new A)` share an id).
+- `recycle_frame` drops in Zend's teardown order (CVs, foreach temporaries, dynamic vars, `$this`).
+- Shutdown hands over to the classic store (snapshot + classic walk, unchanged).
+Prior art read for the design: Bacon–Rajan synchronous cycle collection (`bacon_rajan_cc`),
+CPython / `gcmodule` (refcount + cycle detector), `rust-cc` (finalizers with resurrection).
+
+**Results.** Corpus 3,104 (one more than classic: tests/classes/factory_and_singleton_001; the
+classic engine stays at 3,103), 0 pass→fail, repro 51/51; ext baselines regenerated (+37 passes
+accumulated since their last run, 0 lost); Drupal 4/4 identical, worker 10/10 with the recipe.
+Drupal warm one-shot vs 51ffe014: median 19.80 → 18.95 ms (−4.3 %; `Sweep` leaves the op-time
+profile). A/B: oop 0.954 (`new Foo()` 0.643), `json_decode_object_5mb_x5` 0.734, the rest
+0.986–1.006. Probes vs PHP (destructor order, cycles, resurrection, WeakReference, handle ids):
+identical, where classic reused a handle id late. Remaining known difference: PHP runs a function's
+local destructors inside the return (`[a1][a2]r`), ferro at the statement boundary (`r[a1][a2]`) —
+both engines; running them in `Ret` is the follow-up (re-entrancy in the hottest handler).
+
+---
+
 # Session 8 — 2026-10-01 — Drupal under wrk (step 3), classic-mode speed
 
 **Step 3 numbers** (front page, anonymous, `page_cache` uninstalled; `bench/drupal/bench-wrk-drupal.sh`,

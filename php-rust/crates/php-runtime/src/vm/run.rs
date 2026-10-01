@@ -637,7 +637,8 @@ impl<'m> super::Vm<'m> {
     /// three clauses.
     #[inline(always)]
     fn sweep_idle(&self, top: usize, main: bool) -> bool {
-        self.frames[top].flags.get(FrameFlags::IN_DESTRUCTOR) || self.gc_idle[main as usize]
+        self.frames[top].flags.get(FrameFlags::IN_DESTRUCTOR)
+            || (self.gc_idle[main as usize] && !php_types::dtor_pending())
     }
 
     /// True if `func.ops[at]` is an inert `Sweep` (see [`Self::sweep_idle`]):
@@ -4817,9 +4818,7 @@ impl<'m> super::Vm<'m> {
                         };
                         Rc::new(RefCell::new(obj))
                     };
-                    self.created
-                        .insert(clone_rc.borrow().id, Rc::clone(&clone_rc));
-                    self.gc_track(&clone_rc);
+                    self.track_object(&clone_rc);
                     // A clone inherits typed references (typed_properties_081):
                     // its property slots share the source's reference cells, so
                     // the copy becomes an additional owner of each registered
@@ -4859,8 +4858,7 @@ impl<'m> super::Vm<'m> {
                             gc: php_types::GcMark::new(),
                         };
                         let wrc = Rc::new(RefCell::new(wrapper));
-                        self.created.insert(wrc.borrow().id, Rc::clone(&wrc));
-                        self.gc_track(&wrc);
+                        self.track_object(&wrc);
                         Zval::Object(wrc)
                     } else {
                         clone_val.clone()

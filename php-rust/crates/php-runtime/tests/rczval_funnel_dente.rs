@@ -31,7 +31,7 @@ fn rczval_pattern_resta_nel_funnel() {
     let allow: &[(&str, usize, &str)] = &[
         ("php-types/src/zval.rs", usize::MAX, "IL FUNNEL (zcell/zcell_prop + doc + test)"),
         ("php-types/src/array.rs", 1, "#[test] set_returning_displaced_equals_composite"),
-        ("php-types/src/object.rs", 1, "payload Object (mint principale)"),
+        ("php-types/src/object.rs", 2, "payload Object (mint principale) + drop-mode resurrection (vm/gcdrop.rs)"),
         ("php-runtime/src/vm/coroutines.rs", 1, "payload GenState"),
         ("php-runtime/src/vm/host.rs", 6, "payload Resource"),
         ("php-runtime/src/vm/mod.rs", 8, "payload Object/Resource"),

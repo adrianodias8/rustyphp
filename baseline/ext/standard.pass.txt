@@ -194,6 +194,7 @@ ext/standard/tests/array/array_merge_variation6.phpt
 ext/standard/tests/array/array_merge_variation7.phpt
 ext/standard/tests/array/array_merge_variation8.phpt
 ext/standard/tests/array/array_merge_variation9.phpt
+ext/standard/tests/array/array_next_error1.phpt
 ext/standard/tests/array/array_pad.phpt
 ext/standard/tests/array/array_pad_variation3.phpt
 ext/standard/tests/array/array_pad_variation4.phpt
@@ -237,6 +238,7 @@ ext/standard/tests/array/array_shift_basic.phpt
 ext/standard/tests/array/array_shift_variation2.phpt
 ext/standard/tests/array/array_shift_variation3.phpt
 ext/standard/tests/array/array_shift_variation4.phpt
+ext/standard/tests/array/array_shift_variation5.phpt
 ext/standard/tests/array/array_shift_variation6.phpt
 ext/standard/tests/array/array_shift_variation7.phpt
 ext/standard/tests/array/array_slice.phpt
@@ -464,6 +466,7 @@ ext/standard/tests/array/next_basic.phpt
 ext/standard/tests/array/next_variation2.phpt
 ext/standard/tests/array/packed_001.phpt
 ext/standard/tests/array/prev_basic.phpt
+ext/standard/tests/array/prev_error2.phpt
 ext/standard/tests/array/prev_variation2.phpt
 ext/standard/tests/array/range/bug21182.phpt
 ext/standard/tests/array/range/bug24220.phpt
@@ -727,6 +730,7 @@ ext/standard/tests/file/bug44607.phpt
 ext/standard/tests/file/bug44805.phpt
 ext/standard/tests/file/bug45181.phpt
 ext/standard/tests/file/bug45985.phpt
+ext/standard/tests/file/bug49047.phpt
 ext/standard/tests/file/bug52335.phpt
 ext/standard/tests/file/bug55124.phpt
 ext/standard/tests/file/bug61961.phpt
@@ -1165,6 +1169,7 @@ ext/standard/tests/streams/stream_get_line_NUL_delimiter.phpt
 ext/standard/tests/streams/stream_get_meta_data_file_basic.phpt
 ext/standard/tests/streams/stream_get_meta_data_file_variation1.phpt
 ext/standard/tests/streams/stream_get_meta_data_file_variation5.phpt
+ext/standard/tests/streams/stream_get_wrappers.phpt
 ext/standard/tests/streams/stream_is_local.phpt
 ext/standard/tests/streams/stream_select_preserve_keys.phpt
 ext/standard/tests/streams/temp_stream_seek.phpt

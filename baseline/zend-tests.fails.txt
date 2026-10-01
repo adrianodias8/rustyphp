@@ -1446,7 +1446,6 @@ tests/classes/ctor_visibility.phpt
 tests/classes/destructor_and_globals.phpt
 tests/classes/destructor_visibility_001.phpt
 tests/classes/destructor_visibility_002.phpt
-tests/classes/factory_and_singleton_001.phpt
 tests/classes/factory_and_singleton_002.phpt
 tests/classes/factory_and_singleton_005.phpt
 tests/classes/factory_and_singleton_006.phpt

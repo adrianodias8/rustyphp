@@ -49,8 +49,10 @@ mod arrays;
 mod calls;
 mod builtinfast;
 mod defercache;
+mod gcdrop;
 mod fieldfast;
 mod unser;
+use gcdrop::gcdrop_enabled;
 use defercache::{defer_unit_key, inc_index_get, resolve_absolute_include, inc_index_put, inc_memo_get, inc_memo_put, lower_neg_get, lower_neg_put, revalidated_unit_key};
 // Without `op-census` only the arm/dump stubs and the unit tests use the
 // module — the counters are compiled out of run_loop.
@@ -795,6 +797,11 @@ pub fn vm_new<'m>(
         magic_guard: HashSet::default(),
         typed_refs: Vec::new(),
         created: BTreeMap::new(),
+        gc_drop: gcdrop_enabled(),
+        weak_reg: BTreeMap::new(),
+        dtor_class: Vec::new(),
+        drop_gc_next: 50_000,
+        drop_roots: 0,
         teardown_weaks: Vec::new(),
         destructed: HashSet::default(),
         gc_buf: Vec::new(),
@@ -881,6 +888,8 @@ pub fn vm_new<'m>(
         libxml_internal: false,
         libxml_errors: Vec::new(),
     };
+    php_types::set_dtor_mode(vm.gc_drop);
+    gcdrop::discard_pending_dtors();
     // Register the caller module's own functions in the global link table so a
     // call made from inside an `eval()` (where `self.module` is the eval unit,
     // not `main`) still resolves them — and runs each in its defining module, so
@@ -3362,6 +3371,15 @@ pub struct Vm<'m> {
     /// (`Rc::strong_count == 1` ⇒ only this tracking ref remains); entries are
     /// removed as they are destructed or at shutdown.
     created: BTreeMap<u32, Rc<RefCell<Object>>>,
+    /// Drop-driven destructors (`PHPR_GC=drop`, `vm/gcdrop.rs`): the weak
+    /// object registry replacing `created` as the live set, the per-class
+    /// has-`__destruct` memo, and the registry size of the next automatic
+    /// cycle collection.
+    gc_drop: bool,
+    weak_reg: BTreeMap<u32, std::rc::Weak<RefCell<Object>>>,
+    dtor_class: Vec<u8>,
+    drop_gc_next: usize,
+    drop_roots: usize,
     /// S-72.4: weak mirror of the store captured by the teardown dtor-walk
     /// (which consumes `created` wholesale) so the break phase can still
     /// reach the surviving cycles. Populated only during shutdown.
@@ -3903,6 +3921,9 @@ impl<'m> Vm<'m> {
     /// WP-72 "used_n" observable. Post-request_end it MUST be 0 (mass-teardown
     /// signature; KS-DS-78-2). Read by the census instrumentation only.
     pub fn live_objects(&self) -> usize {
+        if self.gc_drop {
+            return self.gc_drop_live();
+        }
         self.created.len()
     }
 
@@ -3962,6 +3983,8 @@ impl<'m> Vm<'m> {
 
         // Object tracking & GC
         self.created.clear();
+        self.weak_reg.clear();
+        gcdrop::discard_pending_dtors();
         self.destructed.clear();
         self.teardown_weaks.clear();
         self.gc_buf.clear();
@@ -4053,6 +4076,14 @@ impl<'m> Vm<'m> {
                 // flag replaces the id-set probe (the set stays authoritative
                 // everywhere else) and the buffer insert is inlined
                 // (gc_buf_push would re-borrow).
+                // Drop mode: an object's death reports itself (Object::drop);
+                // a note only counts a possible cycle root — an object losing
+                // a holder but still held (Zend's gc_possible_root) — for the
+                // automatic collection trigger.
+                if self.gc_drop {
+                    self.gc_drop_possible_root(rc);
+                    return;
+                }
                 let b = rc.borrow();
                 if b.gc.destructed() {
                     return;
@@ -4102,7 +4133,7 @@ impl<'m> Vm<'m> {
                     // Ref can no longer fall through the `_` arm unseen.
                     match &*inner {
                         Zval::Object(rc) => {
-                            if !rc.borrow().gc.destructed() {
+                            if !self.gc_drop && !rc.borrow().gc.destructed() {
                                 self.gc_buf_push(rc, false);
                             }
                         }
@@ -4162,7 +4193,7 @@ impl<'m> Vm<'m> {
             | Zval::Str(_)
             | Zval::Generator(_)
             | Zval::Resource(_)
-            | Zval::WeakHandle(_)
+            | Zval::WeakHandle(..)
             | Zval::ArgPlace(_) => {}
         }
     }
@@ -4237,7 +4268,7 @@ impl<'m> Vm<'m> {
         // lazy reset/materialize, shutdown destructors) — recompute the
         // cached idle predicate EXACTLY, on the error path too (a scheduled
         // destructor's throw). See `gc_idle`.
-        let r = self.gc_sweep_body(resume, main);
+        let r = if self.gc_drop { self.gc_drop_sweep(resume) } else { self.gc_sweep_body(resume, main) };
         self.gc_refresh_idle();
         r
     }
@@ -4766,6 +4797,13 @@ impl<'m> Vm<'m> {
         let mut stack = std::mem::take(&mut frame.stack);
         slots.clear();
         stack.clear();
+        // Zend's teardown order — compiled variables, live temporaries
+        // (`foreach` copies), the dynamic symbol table, then `$this` (the
+        // caller's call operand) — observable in drop mode, where these
+        // releases ARE the objects' deaths (classic `created` pins them).
+        drop(std::mem::take(&mut frame.iters));
+        drop(frame.dyn_vars.take());
+        drop(frame.this.take());
         drop(frame);
         self.frame_pool.put(slots, stack);
     }
@@ -5272,7 +5310,8 @@ impl<'m> Vm<'m> {
     fn gc_idle_compute(&self) -> [bool; 2] {
         let base = self.gc_buf_head >= self.gc_buf.len()
             && (!self.gc_enabled
-                || self.gc_cycle_roots.len() + self.gc_ctr_roots.len() < self.gc_sweep_bound);
+                || self.gc_cycle_roots.len() + self.gc_ctr_roots.len() < self.gc_sweep_bound)
+            && (!self.gc_drop || !self.gc_enabled || self.drop_roots < self.drop_gc_next);
         [base, base && self.gc_light_demoted.is_empty()]
     }
 
@@ -5317,9 +5356,24 @@ impl<'m> Vm<'m> {
         }
         #[cfg(feature = "gc-census")]
         gc_census::collect_begin();
+        // Drop mode collects in classic mode (`vm/gcdrop.rs`): a strong
+        // snapshot of the live registry, every object a root, and the classic
+        // notes/sweeps active while the collection's destructors run (Zend's
+        // count excludes what refcounting reaps meanwhile — gc_017).
+        let drop_mode = self.gc_drop;
+        if drop_mode {
+            self.gc_drop_seed_collect();
+            self.gc_drop = false;
+            php_types::set_dtor_mode(false);
+        }
         self.gc_collecting = true;
         let r = self.collect_cycles_inner();
         self.gc_collecting = false;
+        if drop_mode {
+            self.gc_drop = true;
+            php_types::set_dtor_mode(true);
+            self.gc_drop_release_snapshot();
+        }
         if fullscan {
             // Post-collect size: the next full-scan waits for real growth of
             // the surviving registry, not for churn around the old mark.
@@ -10769,8 +10823,7 @@ impl<'m> Vm<'m> {
         let obj = Object { class_id: cid as u32, class_name, props, id, info, rare: None, lazy: None, proxy_instance: None, gc: php_types::GcMark::new() };
         let rc = Rc::new(RefCell::new(obj));
         // Track for `__destruct` (OOP-3d), like every other freshly minted object.
-        self.created.insert(id, Rc::clone(&rc));
-        self.gc_track(&rc);
+        self.track_object(&rc);
         // Non-constant declared defaults (`= []`, `= SOME_CONST`, …) live in the
         // class's `prop_init` thunk — run it on the fresh instance, like
         // `Op::InitProps` after `Op::Alloc`. A failing thunk degrades to the
@@ -12867,6 +12920,13 @@ impl<'m> Vm<'m> {
     /// Only `new` runs this — internal allocations (unserialize, reflection,
     /// host code) bypass constructor visibility like Zend's object_init does.
     fn check_new_ctor_access(&self, cur: Option<ClassId>, cid: ClassId) -> Result<(), PhpError> {
+        // Drop mode: a user `new` takes back the handles freed since the
+        // last statement boundary first, so it reuses them as Zend does
+        // (`spl_object_id(new A), spl_object_id(new A)` share an id); an
+        // internally built exception does not (see `free_object_id`).
+        if self.gc_drop {
+            php_types::release_quarantined_ids();
+        }
         let Some(cc) = self.classes.get(cid) else { return Ok(()) };
         if !matches!(cc.instantiable, Instantiable::Yes) {
             return Ok(());
@@ -12933,8 +12993,7 @@ impl<'m> Vm<'m> {
         let obj = Object { class_id: cid as u32, class_name, props, id, info, rare: None, lazy: None, proxy_instance: None, gc: php_types::GcMark::new() };
         let rc = Rc::new(RefCell::new(obj));
         // Track for `__destruct` (OOP-3d): the extra strong ref drives the sweep.
-        self.created.insert(id, Rc::clone(&rc));
-        self.gc_track(&rc);
+        self.track_object(&rc);
         Ok(Zval::Object(rc))
     }
 
@@ -15066,7 +15125,7 @@ impl<'m> Vm<'m> {
             .filter(|t| {
                 t.cell.strong_count() > 0
                     && std::ptr::eq(t.cell.as_ptr(), ptr)
-                    && t.obj.strong_count() > 1
+                    && t.obj.strong_count() > usize::from(!self.gc_drop)
             })
             .map(|t| (t.hint.clone(), t.class_name.clone(), t.prop.clone()))
             .collect();
@@ -16028,7 +16087,7 @@ fn format_bt_arg(v: &Zval) -> String {
         Zval::Closure(_) => "Object(Closure)".to_string(),
         Zval::Generator(_) => "Object(Generator)".to_string(),
         Zval::Resource(r) => format!("Resource id #{}", r.borrow().id),
-        Zval::WeakHandle(_) => "Object(WeakReference)".to_string(),
+        Zval::WeakHandle(..) => "Object(WeakReference)".to_string(),
         Zval::Ref(rc) => format_bt_arg(&rc.borrow()),
     }
 }
@@ -19453,7 +19512,7 @@ fn match_case_repr(v: &Zval) -> String {
         ),
         Zval::Generator(_) => "of type Generator".to_string(),
         Zval::Resource(_) => "of type resource".to_string(),
-        Zval::WeakHandle(_) => "of type WeakReference".to_string(),
+        Zval::WeakHandle(..) => "of type WeakReference".to_string(),
         Zval::Ref(c) => match_case_repr(&c.borrow()),
     }
 }
@@ -23304,7 +23363,11 @@ mod tests {
                 function fx() { $name='dd'; $$name = new D('x1'); $local = new D('x3'); foreach ([new D('x2')] as $v) { return 'z'; } }
                 echo fx(); $n = new D('x4'); unset($n); echo '.';"
             ),
-            b"r[a2][a1][a3].m[b1][this][b2].q[c2][c1][c3].z[x2][x3][x1][x4]."
+            // Drop-driven destructors (default): Zend's teardown ORDER within
+            // each return (PHP: `[a1][a2]r[a3].[b1][this]m[b2].[c2][c1]q[c3].
+            // [x3][x2][x1]z[x4].`); the remaining difference is timing — PHP
+            // runs them inside the return, ferro at the statement boundary.
+            b"r[a1][a2][a3].m[b1][this][b2].q[c2][c1][c3].z[x3][x2][x1][x4]."
         );
     }
 
@@ -23326,7 +23389,10 @@ mod tests {
                 function f5($a) { $args = func_get_args(); return 'f'; }
                 echo f5(1, new D('e1'), new D('e2')); $n = new D('e3'); unset($n); echo '.';"
             ),
-            b"G[d3].f[e1][e2][e3].[d2][d1]"
+            // Drop-driven destructors (default): the generator's objects die
+            // with it at the unset's statement boundary (PHP: `[d1][d2]G[d3].
+            // [e1][e2]f[e3].` — inside the unset, inner generator first).
+            b"G[d2][d1][d3].f[e1][e2][e3]."
         );
     }
 

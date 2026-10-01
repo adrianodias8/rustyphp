@@ -1080,6 +1080,14 @@ impl<'m> Vm<'m> {
     }
 
     pub(super) fn run_shutdown_destructors(&mut self) {
+        // Drop mode hands shutdown to the classic store (`vm/gcdrop.rs`):
+        // queued destructors run, every live object becomes a strong
+        // `created` entry, and the proven walk below runs unchanged.
+        if self.gc_drop {
+            let _ = self.gc_drop_shutdown_snapshot();
+            self.gc_drop = false;
+            php_types::set_dtor_mode(false);
+        }
         // Phase A (S-72.4, Zend `shutdown_destructors`): repeated
         // `zend_hash_reverse_apply(symbol_table, zend_call_destructors)` —
         // walk the GLOBAL slots in REVERSE order and release only an OBJECT

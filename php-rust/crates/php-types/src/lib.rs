@@ -30,7 +30,7 @@ pub use array::{ArrayAppendError, Key, LeafWrite, PhpArray};
 pub use diag::{Diag, Diags, PhpError};
 pub use generator::{GenKey, GenState, GenStatus};
 pub use object::{is_opaque_handle_class, mangle_prop_key, prop_display_name, unmangle_prop_key, GcMark, LazyKind, ObjRare, Object, ObjectInfo, PropVis, Props, PropsLayout, WalkMark};
-pub use object::{free_object_id, reset_freed_object_ids, take_freed_object_id};
+pub use object::{dtor_pending, free_object_id, pop_pending_dtor, release_quarantined_ids, resolve_weak, reset_freed_object_ids, set_dtor_mode, take_freed_object_id};
 pub use stream::{
     open_data_stream, open_file_stream, open_php_stream, DirHandle, ResKind, Resource, Stream, StreamBackend,
 };

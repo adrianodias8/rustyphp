@@ -27,7 +27,6 @@ ext/mbstring/tests/bug79149.phpt
 ext/mbstring/tests/bug79154.phpt
 ext/mbstring/tests/bug79371.phpt
 ext/mbstring/tests/bug79441.phpt
-ext/mbstring/tests/bug81011.phpt
 ext/mbstring/tests/bug81298.phpt
 ext/mbstring/tests/bug81693.phpt
 ext/mbstring/tests/casefolding.phpt
@@ -59,7 +58,6 @@ ext/mbstring/tests/mb_convert_encoding_array.phpt
 ext/mbstring/tests/mb_convert_encoding_array2.phpt
 ext/mbstring/tests/mb_convert_encoding_array_error_001.phpt
 ext/mbstring/tests/mb_convert_encoding_basic.phpt
-ext/mbstring/tests/mb_convert_encoding_leak.phpt
 ext/mbstring/tests/mb_convert_encoding_stateful.phpt
 ext/mbstring/tests/mb_convert_variables_empty_encoding_list.phpt
 ext/mbstring/tests/mb_decode_numericentity.phpt

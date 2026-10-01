@@ -59,7 +59,11 @@ pub enum Zval {
     /// weakness). Never surfaces to user code — `WeakReference::get()` /
     /// `WeakMap` offsets upgrade it to an object or `null` via the internal
     /// `__weak_get` builtin, and `var_dump` special-cases the two classes.
-    WeakHandle(std::rc::Weak<RefCell<Object>>),
+    /// The weak handle and the handle id of the object it was made for:
+    /// resolved through [`crate::resolve_weak`], which follows a drop-mode
+    /// resurrection (the object moved to a new allocation for its
+    /// `__destruct`, still alive in Zend's terms).
+    WeakHandle(std::rc::Weak<RefCell<Object>>, u32),
     /// A deferred function-argument *place* (Zend's FETCH_DIM_FUNC_ARG feeding
     /// SEND_VAR_EX): an all-`Index` path rooted at a variable, passed as an
     /// argument to a call whose callee — hence whether the parameter is
@@ -94,7 +98,7 @@ impl Clone for Zval {
             Zval::Object(o) => Zval::Object(Rc::clone(o)),
             Zval::Generator(g) => Zval::Generator(Rc::clone(g)),
             Zval::Resource(r) => Zval::Resource(Rc::clone(r)),
-            Zval::WeakHandle(w) => Zval::WeakHandle(w.clone()),
+            Zval::WeakHandle(w, id) => Zval::WeakHandle(w.clone(), *id),
             Zval::ArgPlace(p) => Zval::ArgPlace(Rc::clone(p)),
         }
     }
@@ -294,7 +298,7 @@ impl Zval {
             | Zval::Bool(_)
             | Zval::Long(_)
             | Zval::Double(_)
-            | Zval::WeakHandle(_)
+            | Zval::WeakHandle(..)
             | Zval::ArgPlace(_) => false,
         }
     }
@@ -334,7 +338,7 @@ impl Zval {
             | Zval::Generator(_)
             | Zval::Resource(_) => false,
             // Explicit, not lumped: a Weak decrement is still drop glue.
-            Zval::WeakHandle(_) => false,
+            Zval::WeakHandle(..) => false,
             // Explicit: the place holds an Rc<ArgPlace>.
             Zval::ArgPlace(_) => false,
         }
@@ -366,7 +370,7 @@ impl Zval {
             Zval::Str(_) => "string",
             Zval::Array(_) => "array",
             Zval::Ref(cell) => cell.borrow().gettype(),
-            Zval::Closure(_) | Zval::Object(_) | Zval::Generator(_) | Zval::WeakHandle(_) => "object",
+            Zval::Closure(_) | Zval::Object(_) | Zval::Generator(_) | Zval::WeakHandle(..) => "object",
             // "resource" while open, "resource (closed)" after fclose (D-51.1).
             Zval::Resource(r) => r.borrow().type_name(),
         }
@@ -386,7 +390,7 @@ impl Zval {
             Zval::Generator(_) => "Generator",
             // A user object: the generic name. Use [`Self::type_name_for_error`]
             // where PHP names it by class (operand / type errors).
-            Zval::Object(_) | Zval::WeakHandle(_) => "object",
+            Zval::Object(_) | Zval::WeakHandle(..) => "object",
             Zval::Resource(r) => r.borrow().type_name(),
         }
     }

@@ -27,7 +27,6 @@ ext/reflection/tests/ReflectionClass_CannotClone_basic.phpt
 ext/reflection/tests/ReflectionClass_constructor_002.phpt
 ext/reflection/tests/ReflectionClass_export_array_bug72222.phpt
 ext/reflection/tests/ReflectionClass_export_basic1.phpt
-ext/reflection/tests/ReflectionClass_export_basic2.phpt
 ext/reflection/tests/ReflectionClass_getConstant_basic.phpt
 ext/reflection/tests/ReflectionClass_getConstant_error.phpt
 ext/reflection/tests/ReflectionClass_getConstant_typed.phpt
@@ -65,6 +64,7 @@ ext/reflection/tests/ReflectionClass_newInstanceArgs_002.phpt
 ext/reflection/tests/ReflectionClass_newInstanceWithoutConstructor.phpt
 ext/reflection/tests/ReflectionClass_newInstance_001.phpt
 ext/reflection/tests/ReflectionClass_setStaticPropertyValue_002.phpt
+ext/reflection/tests/ReflectionClass_setStaticPropertyValue_003.phpt
 ext/reflection/tests/ReflectionClass_toString_001.phpt
 ext/reflection/tests/ReflectionClass_toString_004.phpt
 ext/reflection/tests/ReflectionClass_toString_005.phpt
@@ -177,6 +177,7 @@ ext/reflection/tests/ReflectionProperty_isInitialized.phpt
 ext/reflection/tests/ReflectionProperty_setAccessible.phpt
 ext/reflection/tests/ReflectionProperty_setValue_readonly.phpt
 ext/reflection/tests/ReflectionProperty_toString_001.phpt
+ext/reflection/tests/ReflectionProperty_typed_static.phpt
 ext/reflection/tests/ReflectionReference.phpt
 ext/reflection/tests/ReflectionReference_bug78263.phpt
 ext/reflection/tests/ReflectionReference_errors.phpt
@@ -186,7 +187,6 @@ ext/reflection/tests/bug26695.phpt
 ext/reflection/tests/bug29268.phpt
 ext/reflection/tests/bug29986.phpt
 ext/reflection/tests/bug30146.phpt
-ext/reflection/tests/bug30856.phpt
 ext/reflection/tests/bug31651.phpt
 ext/reflection/tests/bug33389.phpt
 ext/reflection/tests/bug36434.phpt

@@ -1635,7 +1635,7 @@ pub fn s145_clone_note(v: &crate::Zval) {
         Zval::Closure(_)
         | Zval::Generator(_)
         | Zval::Resource(_)
-        | Zval::WeakHandle(_)
+        | Zval::WeakHandle(..)
         | Zval::ArgPlace(_) => (&S145_CLONE_RCOTHER, 5),
     };
     c.fetch_add(1, Relaxed);

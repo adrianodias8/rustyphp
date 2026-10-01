@@ -2271,7 +2271,7 @@ impl<'m> super::Vm<'m> {
             Zval::Generator(_) => "Generator".to_string(),
             Zval::Object(o) => String::from_utf8_lossy(o.borrow().class_name.as_bytes()).into_owned(),
             // An internal weak handle never surfaces to user code as a value.
-            Zval::WeakHandle(_) => "object".to_string(),
+            Zval::WeakHandle(..) => "object".to_string(),
             Zval::Resource(r) => {
                 let rb = r.borrow();
                 if rb.is_open() {
@@ -2306,7 +2306,10 @@ impl<'m> super::Vm<'m> {
     pub(super) fn ho_weak_create(&mut self, args: Vec<Zval>) -> Result<Zval, PhpError> {
         let v = args.into_iter().next().unwrap_or(Zval::Null).deref_clone();
         Ok(match v {
-            Zval::Object(rc) => Zval::WeakHandle(Rc::downgrade(&rc)),
+            Zval::Object(rc) => {
+                let id = rc.borrow().id;
+                Zval::WeakHandle(Rc::downgrade(&rc), id)
+            }
             other => other,
         })
     }
@@ -2316,7 +2319,7 @@ impl<'m> super::Vm<'m> {
     pub(super) fn ho_weak_get(&mut self, args: Vec<Zval>) -> Result<Zval, PhpError> {
         let v = args.into_iter().next().unwrap_or(Zval::Null).deref_clone();
         Ok(match v {
-            Zval::WeakHandle(w) => w.upgrade().map(Zval::Object).unwrap_or(Zval::Null),
+            Zval::WeakHandle(w, id) => php_types::resolve_weak(&w, id).map(Zval::Object).unwrap_or(Zval::Null),
             other => other,
         })
     }
@@ -2942,7 +2945,7 @@ impl<'m> super::Vm<'m> {
         // constants come from `alloc_object`, non-constant defaults (arrays, `1+2`,
         // …) from the prop-init thunk. The instance is untracked for `__destruct`.
         // Ids after this mark belong to the throwaway allocation below.
-        let created_mark = self.created.last_key_value().map(|(id, _)| *id);
+        let created_mark = self.last_object_id();
         let temp = self.alloc_object(cid)?;
         let cc = self.classes[cid];
         // L-OL1-F1: a complete template already seeded the evaluated defaults.
@@ -2968,10 +2971,7 @@ impl<'m> super::Vm<'m> {
             _ => Vec::new(),
         };
         // Discard the throwaway (and anything its prop-init minted), no __destruct.
-        match created_mark {
-            Some(m) => drop(self.created.split_off(&(m + 1))),
-            None => self.created.clear(),
-        }
+        self.discard_objects_after(created_mark);
         // Inheritance chain, most-derived first.
         let mut chain: Vec<usize> = Vec::new();
         let mut c = Some(cid);

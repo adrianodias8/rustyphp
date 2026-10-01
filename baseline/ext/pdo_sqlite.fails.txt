@@ -29,9 +29,7 @@ ext/pdo_sqlite/tests/subclasses/pdo_sqlite_createaggregate.phpt
 ext/pdo_sqlite/tests/subclasses/pdo_sqlite_createaggregate_002.phpt
 ext/pdo_sqlite/tests/subclasses/pdo_sqlite_createaggregate_arg_error.phpt
 ext/pdo_sqlite/tests/subclasses/pdo_sqlite_createaggregate_trampoline.phpt
-ext/pdo_sqlite/tests/subclasses/pdo_sqlite_createcollation.phpt
 ext/pdo_sqlite/tests/subclasses/pdo_sqlite_createcollation_arg_error.phpt
-ext/pdo_sqlite/tests/subclasses/pdo_sqlite_createcollation_trampoline.phpt
 ext/pdo_sqlite/tests/subclasses/pdo_sqlite_createcollation_wrong_callback.phpt
 ext/pdo_sqlite/tests/subclasses/pdo_sqlite_getattr_busy.phpt
 ext/pdo_sqlite/tests/subclasses/pdo_sqlite_transaction_mode.phpt
