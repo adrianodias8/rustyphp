@@ -123,6 +123,26 @@ Tried and reverted this pass:
   php-src `__destruct` tests shows a new under-note (`magic_methods/bug29368_3`: an operand-stack
   temp dying in an unwind is no longer seen by the current sweep) — the WP-21 window. Reverted.
 
+**Fifth pass — can safe Rust get there? (owner: "do things better the safe way before deciding a
+rewrite or unsafe").** `bench/proto/` runs the same tiny bytecode (ferro-style fused ops, 16-byte
+`Zval`) under two layouts, no `unsafe` (`CARGO_TARGET_DIR=/target/proto cargo build --release`):
+
+| per iteration | ferro | proto A (ferro's layout) | proto B (contiguous stack, locals) | B3 (B + unchecked, info) | PHP |
+|---|---:|---:|---:|---:|---:|
+| empty `for` | 8.5 ns | 4.7 | 3.7 | 3.5–4.3 | 2.1 |
+| `$x = f($x)` | 74 ns | 35 | 18 | 19 | 10 |
+
+The layout alone halves a call in safe Rust; unchecked indexing buys nothing measurable. The real
+engine costs ~2× prototype A on top (GC notes and per-statement `Sweep`, frame flags/ext, the
+600-arm `match`'s spills).
+
+Drupal phases (`bench/drupal/phases.php`, warm, ms): PHP (no opcache) autoload 0.06, boot 1.2,
+**handle 3.9**, send+terminate 3.7–7.5; ferro 0.27, 1.9, **18.7**, 3.1–7.9. Bootstrap is small on
+both: worker mode or engine-level request scoping (the "structured state" idea of the PHP
+Structured Concurrency series, hook-dev-alter.com, Sep 2026 — boot once, process-wide state
+shared, request state in a per-request store that starts clean) saves ~2 ms at most here. The gap
+is execution inside `handle()`, 4.8×.
+
 Profile now (frame pointers, warm request): `run_loop` self 16 %, `Zval` drop/clone 7 %, allocator
 5 %, `resolve_method_runtime` 1.8 % (half from `dispatch_instance_call`), property resolution
 (`resolve_prop_access` + `PropInfo` map) ~3 %, `unserialize` 11 % inclusive (two allocations
