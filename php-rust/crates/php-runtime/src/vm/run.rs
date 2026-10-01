@@ -69,7 +69,7 @@ fn static_is_value(cell: Option<Rc<RefCell<Zval>>>) -> Zval {
 
 /// A file op that a userland stream wrapper (`stream_wrapper_register`) can
 /// service via its `stream_*` methods, if its first argument is a `UserStream`.
-fn is_user_stream_op(name: &[u8]) -> bool {
+pub(super) fn is_user_stream_op(name: &[u8]) -> bool {
     matches!(
         name,
         b"fread"
@@ -3829,7 +3829,7 @@ impl<'m> super::Vm<'m> {
                                 trace: String::from_utf8_lossy(&self.capture_trace().1).into_owned(),
                             });
                         }
-                        self.seed_traits.push((key.clone(), lt.clone()));
+                        self.seed_traits.push((key.clone(), Rc::new(lt.clone())));
                     }
                 }
                 Op::DeclareClass { class } => {
@@ -6924,56 +6924,7 @@ impl<'m> super::Vm<'m> {
                     self.frames[top].stack.push(if *pre { newv } else { old });
                 }
                 Op::FieldIsset { base, steps } => {
-                    let keys = self.pop_field_keys(top, &steps);
-                    // Magic protocol at ANY property step along the path
-                    // (`isset($o->magic['k'])`, gh18038 / bug40833; and a magic
-                    // leaf one hop in: `isset($block->block_type->uses_context)`,
-                    // WP_Block_Type) — see field_magic_probe.
-                    if let Some(set) = self.field_magic_probe(*base, top, &steps, &keys, false)? {
-                        self.frames[top].stack.push(Zval::Bool(set));
-                        continue;
-                    }
-                    // A final Index on an ArrayAccess object is the protocol:
-                    // `isset($this->coll[0])` = offsetExists (no offsetGet),
-                    // mirroring Op::IssetPath's single-step arm.
-                    if let Some((recv, key)) = self.field_aa_leaf(*base, top, &steps, &keys) {
-                        let r = self.call_method_sync(recv, b"offsetExists", vec![key])?;
-                        let set = convert::is_true_silent(&r.deref_clone());
-                        self.frames[top].stack.push(Zval::Bool(set));
-                        continue;
-                    }
-                    // Nested Index run on an ArrayAccess property
-                    // (`isset($this->data['a']['b'])`): BP_VAR_IS walk.
-                    if let Some(res) =
-                        self.field_aa_walk(*base, top, &steps, &keys, super::IsMode::Exists)?
-                    {
-                        let set = match res {
-                            super::DimIsLeaf::Missing => false,
-                            super::DimIsLeaf::Aa(recv, key) => {
-                                let r =
-                                    self.call_method_sync(recv, b"offsetExists", vec![key])?;
-                                convert::is_true_silent(&r.deref_clone())
-                            }
-                            super::DimIsLeaf::Verdict(set) => set,
-                        };
-                        self.frames[top].stack.push(Zval::Bool(set));
-                        continue;
-                    }
-                    // A lazy base initializes and the walk roots at the realized
-                    // object (isset through a wrapper reads the instance).
-                    if let Some(root) = self.field_lazy_root(*base, top, &steps, &keys, false)? {
-                        let fs = FieldScope { classes: &self.classes, scope: self.frames[top].class };
-                        let set = matches!(
-                            field_get(&root, &steps, &mut keys.into_iter(), fs),
-                            Some(v) if !matches!(v, Zval::Null | Zval::Undef)
-                        );
-                        self.frames[top].stack.push(Zval::Bool(set));
-                        continue;
-                    }
-                    let set = matches!(
-                        self.field_value(*base, top, &steps, keys),
-                        Some(v) if !matches!(v, Zval::Null | Zval::Undef)
-                    );
+                    let set = self.field_isset_op(top, *base, steps)?;
                     self.frames[top].stack.push(Zval::Bool(set));
                 }
                 Op::FieldEmpty { base, steps } => {

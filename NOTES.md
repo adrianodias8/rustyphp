@@ -143,6 +143,30 @@ Structured Concurrency series, hook-dev-alter.com, Sep 2026 — boot once, proce
 shared, request state in a per-request store that starts clean) saves ~2 ms at most here. The gap
 is execution inside `handle()`, 4.8×.
 
+**Sixth pass — measure per op, fix the handlers (owner: "Go").** The op census gained a timing
+mode (`PHPR_OP_CENSUS_TIME`: ns from each dispatch to the next, net of the clock floor, plus per
+callee for the named call ops; `bench/drupal/optime.sh`). Warm Drupal request, before this pass:
+`CallNsFallback` 3.4 ms (343 ns × 9.9k), `Ret` 2.2 ms (127 ns × 17k), `FieldIsset` 2.1 ms
+(322 ns × 6.4k), `Include` 1.9 ms (2.5 µs × 747 hits), `CallHostBuiltin` 1.4 ms, `Sweep` 0.8 ms,
+`MethodCall` 0.7 ms, `PropSetPop` 0.7 ms. By callee: `unserialize` 1.35 ms, `file_exists`
+0.93 ms (668 stats from Composer's PSR-4 probes — PHP makes the same calls), trivial builtins
+~70 ns of call machinery each. That made the frame-layout rewrite a ~3 % lever on Drupal (17k
+calls), so this pass went after the handlers instead:
+- `isset()` on a field path: one walk with the magic probe's per-step semantics, bailing to the
+  unchanged five-walk sequence on any protocol (`vm/fieldfast.rs`) — 322 → 166 ns. First wired
+  into the `run_loop` arm: unrelated ops 3–8 % slower (zend_bench 1.06–1.15, arrays 1.08,
+  reproduced; bisected to that arm). The whole handler is now one out-of-line call and the arm
+  is smaller than before: A/B flat (geomeans 0.978–0.996).
+- Include hits: a per-thread include index by the bytes `include` was given (path, canonical key,
+  unit key, and the memoized cache hit), the negative-lowering map probed by reference, an
+  absolute-path realpath cache, `CachedUnit`'s remap vectors as `Rc<[_]>`, seed traits as
+  `Rc<LoweredTrait>`, and no `format!` for a disabled log.
+- Pure value builtins (`vm/builtinfast.rs`): no pending diagnostic, not a special-cased name,
+  scalar/string arguments (arrays too unless the builtin string-coerces) → call directly; output
+  or diagnostics it produced take the usual flush/write. `bench` bcall.php 127 → 97.5 ns/iter.
+
+Drupal warm one-shot, 6 interleaved rounds vs 364c861b: median 21.01 → 19.41 ms (−7.6 %).
+
 Profile now (frame pointers, warm request): `run_loop` self 16 %, `Zval` drop/clone 7 %, allocator
 5 %, `resolve_method_runtime` 1.8 % (half from `dispatch_instance_call`), property resolution
 (`resolve_prop_access` + `PropInfo` map) ~3 %, `unserialize` 11 % inclusive (two allocations

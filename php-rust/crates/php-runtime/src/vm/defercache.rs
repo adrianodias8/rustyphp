@@ -29,8 +29,8 @@ impl<'m> super::Vm<'m> {
         };
         if cu.static_off != remap_base.1
             || cu.reserved_base != remap_base.0
-            || remap != cu.class_remap
-            || locals != cu.new_locals
+            || remap[..] != cu.class_remap[..]
+            || locals[..] != cu.new_locals[..]
         {
             return None;
         }
@@ -78,8 +78,8 @@ impl<'m> super::Vm<'m> {
                 fp,
                 static_off,
                 reserved_base,
-                class_remap,
-                new_locals: new_locals.clone(),
+                class_remap: class_remap.into(),
+                new_locals: new_locals.as_slice().into(),
                 seed_delta,
                 module: Rc::clone(&rc),
                 owner_epoch: VM_EPOCH.with(|e| e.get()),
@@ -100,23 +100,31 @@ thread_local! {
     /// Lowerings (deferred declarations and include units) that stopped on a
     /// missing name under a fingerprint: (key, fp) -> the UndefinedClass it
     /// raised. Deterministic, so the next load autoloads it up front.
-    static LOWER_NEG: RefCell<HashMap<(UnitKey, u64), (Box<[u8]>, crate::MissingSym, Line)>> =
+    static LOWER_NEG: RefCell<HashMap<UnitKey, HashMap<u64, NegEntry>>> =
         RefCell::new(HashMap::default());
 }
 
-pub(super) fn lower_neg_get(dk: &UnitKey, fp: u64) -> Option<(Box<[u8]>, crate::MissingSym, Line)> {
-    LOWER_NEG.with(|m| m.borrow().get(&(dk.clone(), fp)).cloned())
+type NegEntry = (Box<[u8]>, crate::MissingSym, Line);
+
+/// Probed on every include and deferred declaration: by reference, no key
+/// copy (the `(UnitKey, fp)` tuple key cloned the whole path per probe).
+pub(super) fn lower_neg_get(dk: &UnitKey, fp: u64) -> Option<NegEntry> {
+    LOWER_NEG.with(|m| m.borrow().get(dk)?.get(&fp).cloned())
 }
 
-pub(super) fn lower_neg_put(dk: &UnitKey, fp: u64, e: (Box<[u8]>, crate::MissingSym, Line)) {
+pub(super) fn lower_neg_put(dk: &UnitKey, fp: u64, e: NegEntry) {
     LOWER_NEG.with(|m| {
         let mut m = m.borrow_mut();
         // Bounded like the unit cache's ways: a run that keeps minting new
-        // fingerprints starts over rather than growing without limit.
-        if m.len() >= 1 << 16 {
+        // keys or fingerprints starts over rather than growing without limit.
+        if m.len() >= 1 << 14 {
             m.clear();
         }
-        m.insert((dk.clone(), fp), e);
+        let per = m.entry(dk.clone()).or_default();
+        if per.len() >= 16 {
+            per.clear();
+        }
+        per.insert(fp, e);
     })
 }
 
@@ -176,4 +184,106 @@ pub(super) fn revalidated_unit_key(real: &std::path::Path, key: &[u8]) -> Option
         });
     }
     Some(uk)
+}
+
+/// Per-thread include index (server mode, absolute include paths): one
+/// lookup by the bytes `include` was given replaces the realpath cache, the
+/// stat cache and the unit-cache probe of a warm include — each a separate
+/// cold hash-map walk (op-time census: ~1.3 µs of map probes per include,
+/// 747 includes per Drupal request). Valid for `revalidate_freq`, like the
+/// stat it holds; the memoized hit is the unit cache's own entry for that
+/// fingerprint (an entry stays valid for its fingerprint even if the cache
+/// later supersedes or evicts it).
+struct IncEntry {
+    real: std::path::PathBuf,
+    key: Rc<[u8]>,
+    uk: UnitKey,
+    t: std::time::Instant,
+    memo: Option<(u64, CachedUnit)>,
+}
+
+thread_local! {
+    static INC_INDEX: RefCell<HashMap<Box<[u8]>, IncEntry>> = RefCell::new(HashMap::default());
+}
+
+/// `(real path, canonical key, unit key)` of `path` if indexed and fresh.
+pub(super) fn inc_index_get(path: &[u8]) -> Option<(std::path::PathBuf, Vec<u8>, UnitKey)> {
+    let freq = revalidate_freq();
+    if freq.is_zero() || path.first() != Some(&b'/') {
+        return None;
+    }
+    INC_INDEX.with(|m| {
+        let m = m.borrow();
+        let e = m.get(path)?;
+        (e.t.elapsed() < freq).then(|| (e.real.clone(), e.key.to_vec(), e.uk.clone()))
+    })
+}
+
+pub(super) fn inc_index_put(path: &[u8], real: &std::path::Path, key: &[u8], uk: &UnitKey) {
+    if revalidate_freq().is_zero() || path.first() != Some(&b'/') {
+        return;
+    }
+    INC_INDEX.with(|m| {
+        let mut m = m.borrow_mut();
+        if m.len() >= 1 << 16 {
+            m.clear();
+        }
+        m.insert(
+            path.into(),
+            IncEntry { real: real.to_path_buf(), key: key.into(), uk: uk.clone(), t: std::time::Instant::now(), memo: None },
+        );
+    })
+}
+
+/// The memoized unit-cache hit for `path` at fingerprint `fp`.
+pub(super) fn inc_memo_get(path: &[u8], uk: &UnitKey, fp: u64) -> Option<CachedUnit> {
+    INC_INDEX.with(|m| {
+        let m = m.borrow();
+        let e = m.get(path)?;
+        match &e.memo {
+            Some((f, cu)) if *f == fp && e.uk == *uk => Some(cu.clone()),
+            _ => None,
+        }
+    })
+}
+
+pub(super) fn inc_memo_put(path: &[u8], fp: u64, cu: &CachedUnit) {
+    INC_INDEX.with(|m| {
+        if let Some(e) = m.borrow_mut().get_mut(path) {
+            e.memo = Some((fp, cu.clone()));
+        }
+    })
+}
+
+/// `include` resolution of an absolute path through a per-thread cache keyed
+/// by its bytes (`realpath_cache_ttl`, 120 s): no candidate `PathBuf`, no
+/// component-wise path hashing (~330 ns per include before). `None`: no
+/// readable file.
+pub(super) fn resolve_absolute_include(path: &[u8]) -> Option<std::path::PathBuf> {
+    use std::os::unix::ffi::OsStrExt;
+    thread_local! {
+        static ABS: RefCell<HashMap<Box<[u8]>, (std::path::PathBuf, std::time::Instant)>> =
+            RefCell::new(HashMap::default());
+    }
+    const ABS_TTL: std::time::Duration = std::time::Duration::from_secs(120);
+    let now = std::time::Instant::now();
+    let hit = ABS.with(|m| {
+        m.borrow().get(path).filter(|(_, t)| now.duration_since(*t) < ABS_TTL).map(|(r, _)| r.clone())
+    });
+    if hit.is_some() {
+        return hit;
+    }
+    let p = std::path::Path::new(std::ffi::OsStr::from_bytes(path));
+    if !p.is_file() {
+        return None;
+    }
+    let r = std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    ABS.with(|m| {
+        let mut m = m.borrow_mut();
+        if m.len() >= 1 << 16 {
+            m.clear();
+        }
+        m.insert(path.into(), (r.clone(), now));
+    });
+    Some(r)
 }

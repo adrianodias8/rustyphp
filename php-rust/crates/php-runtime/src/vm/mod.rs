@@ -47,9 +47,11 @@ use crate::hir::{
 
 mod arrays;
 mod calls;
+mod builtinfast;
 mod defercache;
+mod fieldfast;
 mod unser;
-use defercache::{defer_unit_key, lower_neg_get, lower_neg_put, revalidated_unit_key};
+use defercache::{defer_unit_key, inc_index_get, resolve_absolute_include, inc_index_put, inc_memo_get, inc_memo_put, lower_neg_get, lower_neg_put, revalidated_unit_key};
 // Without `op-census` only the arm/dump stubs and the unit tests use the
 // module — the counters are compiled out of run_loop.
 #[cfg_attr(not(feature = "op-census"), allow(dead_code))]
@@ -732,7 +734,9 @@ pub fn vm_new<'m>(
                     .collect()
             })
             .unwrap_or_default(),
-        seed_traits: main_hir.map(|p| p.traits.clone()).unwrap_or_default(),
+        seed_traits: main_hir
+            .map(|p| p.traits.iter().map(|(k, t)| (k.clone(), Rc::new(t.clone()))).collect())
+            .unwrap_or_default(),
         seed_static: main_hir.map_or(0, |p| p.static_count),
         seed_globals: main_hir.map(|p| p.slots.clone()).unwrap_or_default(),
         fp_traits: Cell::new(PrefixDigest::default()),
@@ -3153,7 +3157,7 @@ pub struct Vm<'m> {
     /// every loaded unit's declared traits, keyed by bare lowercase name, so a
     /// later (e.g. autoloaded) unit's `use T` resolves a trait an earlier unit
     /// declared. Traits never enter the class table, hence a separate image.
-    seed_traits: Vec<(Vec<u8>, crate::hir::LoweredTrait)>,
+    seed_traits: Vec<(Vec<u8>, Rc<crate::hir::LoweredTrait>)>,
     /// The static-cell id high-water mark carried into a seeded unit's lowering, so
     /// its `static $x` cells get ids past every already-loaded unit's (Phase 3).
     seed_static: usize,
@@ -7147,7 +7151,7 @@ impl<'m> Vm<'m> {
             new_classes,
             static_count: program.static_count,
             new_slots: program.slots.get(g..).unwrap_or(&[]).to_vec(),
-            traits: program.traits.clone(),
+            traits: program.traits.iter().map(|(k, t)| (k.clone(), Rc::new(t.clone()))).collect(),
             conditional_names,
         }
     }
@@ -7182,7 +7186,7 @@ impl<'m> Vm<'m> {
         // loaded via autoload makes its trait available to the unit that needed it).
         for (k, t) in &delta.traits {
             if !self.seed_traits.iter().any(|(ek, _)| ek == k) {
-                self.seed_traits.push((k.clone(), t.clone()));
+                self.seed_traits.push((k.clone(), Rc::clone(t)));
             }
         }
         // H-65.2: seed-only growth, verified.
@@ -7399,6 +7403,9 @@ impl<'m> Vm<'m> {
     /// path, or `None` if no readable file matches.
     fn resolve_include_path(&self, path: &[u8]) -> Option<std::path::PathBuf> {
         use std::os::unix::ffi::OsStrExt;
+        if path.first() == Some(&b'/') {
+            return resolve_absolute_include(path);
+        }
         let p = std::path::Path::new(std::ffi::OsStr::from_bytes(path));
         let mut candidates: Vec<std::path::PathBuf> = Vec::new();
         if p.is_absolute() {
@@ -7449,10 +7456,17 @@ impl<'m> Vm<'m> {
         use std::os::unix::ffi::OsStrExt;
         let pstr = convert::to_zstr(&path_val, &mut self.diags);
         let path = pstr.as_bytes().to_vec();
-        let Some(real) = self.resolve_include_path(&path) else {
-            return self.include_open_failed(&path, mode);
+        let indexed = inc_index_get(&path);
+        let (real, key) = match &indexed {
+            Some((real, key, _)) => (real.clone(), key.clone()),
+            None => {
+                let Some(real) = self.resolve_include_path(&path) else {
+                    return self.include_open_failed(&path, mode);
+                };
+                let key = real.as_os_str().as_bytes().to_vec();
+                (real, key)
+            }
         };
-        let key = real.as_os_str().as_bytes().to_vec();
         // WP-64 M1'' (council debt, the deferred M2): the provenance puns
         // (`b"prelude"` on shared functions, `b"seed-stub"` on interned
         // stubs) are load-bearing in relocation/elision classification — a
@@ -7483,7 +7497,16 @@ impl<'m> Vm<'m> {
         // any re-link cache) are counted apart from the rest in tag=lcsum.
         #[cfg(feature = "mem-census")]
         let mut census_fp_miss = false;
-        let unit_key = revalidated_unit_key(&real, &key);
+        let unit_key = match indexed {
+            Some((_, _, uk)) => Some(uk),
+            None => {
+                let uk = revalidated_unit_key(&real, &key);
+                if let Some(uk) = &uk {
+                    inc_index_put(&path, &real, &key, uk);
+                }
+                uk
+            }
+        };
         let mut fp = self.unit_fp();
         // A lowering of these bytes at this fingerprint is known to stop on a
         // missing name (a trait using a trait): autoload it first, as that
@@ -7503,7 +7526,9 @@ impl<'m> Vm<'m> {
         // VM-visible state — identical pre/post elision ⇒ the runtime tables
         // are identical even though the Modules differ. Emitted only with
         // logging active (zero cost otherwise).
-        uc_log(&format!("fp {fp:016x}"), &key);
+        if uc_log_path().is_some() {
+            uc_log(&format!("fp {fp:016x}"), &key);
+        }
         if let Some(uk) = &unit_key {
             // A-MS18 (Council WP-83): the main/include fp domains are
             // disjoint by construction AND the structural double-check
@@ -7513,7 +7538,9 @@ impl<'m> Vm<'m> {
             // include-hit path EXPLICITLY, with its own counter: one
             // observed crossover = STOP (KS-MS-83-1); a dc refactor can no
             // longer silently reopen this door.
-            let cached = unit_cache_get(uk, fp).filter(|cu| {
+            let memo = inc_memo_get(&path, uk, fp);
+            let memoized = memo.is_some();
+            let cached = memo.or_else(|| unit_cache_get(uk, fp)).filter(|cu| {
                 if cu.main_program.is_some() {
                     uc_stat(|s| s.include_hit_main_reject += 1);
                     uc_log("include_hit_main_reject", &key);
@@ -7541,14 +7568,17 @@ impl<'m> Vm<'m> {
                 // an earlier `miss fp`, never by this double-check.
                 if cu.static_off == self.statics.len()
                     && cu.reserved_base == self.classes.len()
-                    && remap == cu.class_remap
-                    && locals == cu.new_locals
+                    && remap[..] == cu.class_remap[..]
+                    && locals[..] == cu.new_locals[..]
                 {
                     // WP-62 M1: the two hit boundaries have different
                     // contracts (Pedersen P1-i/ii) — count them apart.
                     let intra = VM_EPOCH.with(|e| e.get()) == cu.owner_epoch;
                     uc_stat(|s| if intra { s.hit_intra += 1 } else { s.hit_cross += 1 });
                     uc_log(if intra { "hit intra" } else { "hit cross" }, &key);
+                    if !memoized {
+                        inc_memo_put(&path, fp, &cu);
+                    }
                     self.included_files.insert(key.clone());
                     self.unit_chain_fp = fp_mix_key(self.unit_chain_fp, uk);
                     log::debug!(
@@ -7580,7 +7610,7 @@ impl<'m> Vm<'m> {
                 // (`lower_unit` may include supertypes between fp and publish).
                 let dc_base = cu.static_off != self.statics.len()
                     || cu.reserved_base != self.classes.len();
-                let dc_remap = remap != cu.class_remap;
+                let dc_remap = remap[..] != cu.class_remap[..];
                 uc_stat(|s| {
                     s.miss_dc += 1;
                     if dc_base {
@@ -7781,8 +7811,8 @@ impl<'m> Vm<'m> {
                         fp,
                         static_off,
                         reserved_base,
-                        class_remap,
-                        new_locals: new_locals.clone(),
+                        class_remap: class_remap.into(),
+                        new_locals: new_locals.as_slice().into(),
                         seed_delta: Rc::clone(&seed_delta),
                         module: Rc::clone(&rc),
                         owner_epoch: VM_EPOCH.with(|e| e.get()),
@@ -16416,8 +16446,10 @@ struct CachedUnit {
     /// trivially, so a moved append base would otherwise be covered only by
     /// the fingerprint (as a `miss fp`, never `miss dc`).
     reserved_base: usize,
-    class_remap: Vec<ClassId>,
-    new_locals: Vec<usize>,
+    /// `Rc`: a hit clones the entry out of the cache (K-M67.2), and these
+    /// were its only deep copies.
+    class_remap: Rc<[ClassId]>,
+    new_locals: Rc<[usize]>,
     seed_delta: Rc<SeedDelta>,
     /// WP-67 P-2: the cache OWNS the module. A superseded (fp_replaced) or
     /// ways-evicted entry drops it for real — the running request stays
@@ -16473,7 +16505,9 @@ struct SeedDelta {
     new_classes: Vec<Rc<crate::hir::ClassDecl>>,
     static_count: usize,
     new_slots: Vec<Box<[u8]>>,
-    traits: Vec<(Vec<u8>, crate::hir::LoweredTrait)>,
+    /// `Rc`: a cache hit folds these into `seed_traits` by pointer (the
+    /// deep trait-HIR copy per hit was ~2 % of a warm Drupal request).
+    traits: Vec<(Vec<u8>, Rc<crate::hir::LoweredTrait>)>,
     /// WP-70 S-70.2: lowercase names of the unit's tail classes that are
     /// CONDITIONAL — folded into `Vm::seed_conditional` on apply.
     conditional_names: Vec<Vec<u8>>,
@@ -17503,8 +17537,8 @@ fn main_publish_ticket(t: MainPublishTicket, module: &Rc<Module>, program: &Rc<P
             fp: t.fp,
             static_off: 0,
             reserved_base: 0,
-            class_remap: Vec::new(),
-            new_locals: Vec::new(),
+            class_remap: std::rc::Rc::from([]),
+            new_locals: std::rc::Rc::from([]),
             seed_delta: Rc::new(SeedDelta {
                 new_classes: Vec::new(),
                 static_count: 0,
@@ -20639,8 +20673,8 @@ mod tests {
             fp,
             static_off: 0,
             reserved_base: 0,
-            class_remap: Vec::new(),
-            new_locals: Vec::new(),
+            class_remap: std::rc::Rc::from([]),
+            new_locals: std::rc::Rc::from([]),
             seed_delta: std::rc::Rc::clone(&seed),
             module: std::rc::Rc::clone(&m),
             owner_epoch: 0,
@@ -20777,8 +20811,8 @@ mod tests {
             fp,
             static_off: 0,
             reserved_base: 0,
-            class_remap: Vec::new(),
-            new_locals: Vec::new(),
+            class_remap: std::rc::Rc::from([]),
+            new_locals: std::rc::Rc::from([]),
             seed_delta: std::rc::Rc::clone(&seed),
             module: std::rc::Rc::clone(&m),
             owner_epoch: 0,
@@ -21258,8 +21292,8 @@ mod tests {
             fp,
             static_off: 0,
             reserved_base: 0,
-            class_remap: Vec::new(),
-            new_locals: Vec::new(),
+            class_remap: std::rc::Rc::from([]),
+            new_locals: std::rc::Rc::from([]),
             seed_delta: std::rc::Rc::clone(&seed),
             module: std::rc::Rc::clone(&m),
             owner_epoch: 0,

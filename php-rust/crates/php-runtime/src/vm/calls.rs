@@ -1460,6 +1460,12 @@ impl<'m> Vm<'m> {
         match target {
             NsTarget::FallbackValue(f) => {
                 let fb = fallback.strip_prefix(b"\\").unwrap_or(fallback);
+                if let Some(result) = self.value_builtin_lean(top, f, fb, args) {
+                    let result = result?;
+                    let top = self.frames.len() - 1;
+                    self.frames[top].stack.push(result);
+                    return Ok(());
+                }
                 let result = self.value_builtin_call(top, f, fb, args)?;
                 let top = self.frames.len() - 1;
                 self.frames[top].stack.push(result);

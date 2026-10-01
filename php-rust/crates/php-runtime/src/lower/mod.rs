@@ -139,7 +139,7 @@ pub fn lower_source_seeded(
     source: &[u8],
     seed_classes: &[std::rc::Rc<crate::hir::ClassDecl>],
     seed_static: usize,
-    seed_traits: &[(Vec<u8>, LoweredTrait)],
+    seed_traits: &[(Vec<u8>, std::rc::Rc<LoweredTrait>)],
     seed_globals: &[Box<[u8]>],
     seed_aliases: &[(Vec<u8>, Vec<u8>)],
     declared: &dyn Fn(&[u8]) -> Option<usize>,
@@ -167,7 +167,7 @@ pub fn lower_source_seeded(
 type Seed<'a> = (
     &'a [std::rc::Rc<crate::hir::ClassDecl>],
     usize,
-    &'a [(Vec<u8>, LoweredTrait)],
+    &'a [(Vec<u8>, std::rc::Rc<LoweredTrait>)],
     &'a [Box<[u8]>],
     &'a [(Vec<u8>, Vec<u8>)],
     &'a dyn Fn(&[u8]) -> Option<usize>,
@@ -491,7 +491,7 @@ fn lower_source_impl(
             low.traits = straits
                 .iter()
                 .map(|(k, t)| {
-                    let mut t = t.clone();
+                    let mut t = LoweredTrait::clone(t);
                     // Seeded from another unit: its closures aren't in this unit's
                     // table, so flatten must re-append and shift them.
                     t.external = true;

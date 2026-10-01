@@ -401,6 +401,15 @@ pub struct OpCensus {
     /// them.
     pending_prop_concat: Option<(u64, u64)>,
     last: usize,
+    /// Wall time from each op's dispatch to the next dispatch, summed per
+    /// op (`PHPR_OP_CENSUS_TIME`): the handler's own work, including any
+    /// builtin it calls up to the first op a nested run executes. Inflated
+    /// by one clock read per op (calibrated out in the report).
+    time_ns: Box<[u64; N_OPS]>,
+    last_t: Option<std::time::Instant>,
+    /// Per callee name for the named call ops: (count, ns).
+    callee_ns: std::collections::HashMap<Vec<u8>, (u64, u64)>,
+    last_callee: Option<Vec<u8>>,
 }
 
 impl OpCensus {
@@ -417,6 +426,10 @@ impl OpCensus {
             concat_hist: [[0; N_CONCAT_BUCKETS]; N_CONCAT_SITES],
             pending_prop_concat: None,
             last: N_OPS - 1, // Nop: harmless first-bigram seed
+            time_ns: vec![0u64; N_OPS].into_boxed_slice().try_into().unwrap(),
+            last_t: None,
+            callee_ns: std::collections::HashMap::new(),
+            last_callee: None,
         }
     }
 
@@ -443,6 +456,25 @@ impl OpCensus {
     /// stack (peeked defensively), `slots` its locals.
     pub fn record(&mut self, op: &Op, stack: &[Zval], slots: &[Zval]) {
         let i = op_index(op);
+        if op_time_enabled() {
+            let now = std::time::Instant::now();
+            if let Some(t) = self.last_t {
+                let d = now.duration_since(t).as_nanos() as u64;
+                self.time_ns[self.last] += d;
+                if let Some(n) = self.last_callee.take() {
+                    let e = self.callee_ns.entry(n).or_insert((0, 0));
+                    e.0 += 1;
+                    e.1 += d;
+                }
+            }
+            self.last_t = Some(now);
+            self.last_callee = match op {
+                Op::CallNsFallback { fallback, .. } => Some([b"ns:".as_slice(), fallback].concat()),
+                Op::CallBuiltin { name, .. } => Some([b"b:".as_slice(), name].concat()),
+                Op::CallHostBuiltin { name, .. } => Some([b"h:".as_slice(), name].concat()),
+                _ => None,
+            };
+        }
         // S-147 census unico ORM: nota il sito al census dei MOVIMENTI
         // (mem-census) PRIMA dell'esecuzione dell'handler — i cloni fatti
         // dall'handler si attribuiscono a quest'op.
@@ -510,6 +542,46 @@ impl OpCensus {
                 self.ops[i] as f64 * 100.0 / total as f64,
                 OP_NAMES[i]
             );
+        }
+        if op_time_enabled() {
+            // The clock read inflates every op equally: take the cheapest
+            // op family's mean as that floor.
+            let mean = |i: usize| self.time_ns[i] as f64 / self.ops[i].max(1) as f64;
+            let floor = (0..N_OPS)
+                .filter(|&i| self.ops[i] > 1000)
+                .map(mean)
+                .fold(f64::INFINITY, f64::min);
+            let net = |i: usize| (mean(i) - floor).max(0.0) * self.ops[i] as f64;
+            let tot: f64 = (0..N_OPS).map(net).sum();
+            let mut ti: Vec<usize> = (0..N_OPS).filter(|&i| self.ops[i] > 0).collect();
+            ti.sort_by(|&a, &b| net(b).partial_cmp(&net(a)).unwrap());
+            let _ = writeln!(o, "-- op time, net of a {floor:.1} ns/op clock floor (top 40) --");
+            for &i in ti.iter().take(40) {
+                let _ = writeln!(
+                    o,
+                    "{:>8.3} ms  {:5.2}%  {:>8.1} ns/op  {:>10}  {}",
+                    net(i) / 1e6,
+                    net(i) * 100.0 / tot,
+                    mean(i) - floor,
+                    self.ops[i],
+                    OP_NAMES[i]
+                );
+            }
+        }
+        if op_time_enabled() {
+            let mut cv: Vec<_> = self.callee_ns.iter().collect();
+            cv.sort_by_key(|(_, &(_, ns))| std::cmp::Reverse(ns));
+            let _ = writeln!(o, "-- call ops by callee (gross ns, top 40) --");
+            for (n, &(c, ns)) in cv.iter().take(40) {
+                let _ = writeln!(
+                    o,
+                    "{:>8.3} ms  {:>8} calls  {:>8.1} ns/call  {}",
+                    ns as f64 / 1e6,
+                    c,
+                    ns as f64 / c as f64,
+                    String::from_utf8_lossy(n)
+                );
+            }
         }
         let _ = writeln!(o, "-- bigrams (top 40) --");
         let mut bi: Vec<(u64, usize)> = self
@@ -695,6 +767,11 @@ pub fn census_prop_set(counter: &std::sync::atomic::AtomicU64) {
 /// workload spawns phpr subprocesses that inherit the env (a stderr dump
 /// from a child would pollute output a test harness captures and asserts
 /// on, e.g. PHPUnit separate-process tests).
+fn op_time_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("PHPR_OP_CENSUS_TIME").is_some())
+}
+
 pub fn census_dump() {
     let report = match CENSUS.with(|c| c.borrow_mut().take()) {
         Some(census) => census.render(),
@@ -918,3 +995,4 @@ mod tests {
         assert_eq!(c.binary[cell], 1);
     }
 }
+
