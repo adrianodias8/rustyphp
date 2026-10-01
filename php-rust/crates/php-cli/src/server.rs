@@ -787,6 +787,7 @@ pub fn serve(addr: &str, mut rest: std::iter::Peekable<impl Iterator<Item = std:
     let mut router: Option<PathBuf> = None;
     let mut worker: Option<PathBuf> = None;
     let mut workers: usize = 0;
+    let mut max_requests: u64 = 0;
     while let Some(arg) = rest.next() {
         let bytes = arg.as_os_str().as_bytes();
         if bytes == b"-t" {
@@ -795,6 +796,11 @@ pub fn serve(addr: &str, mut rest: std::iter::Peekable<impl Iterator<Item = std:
             worker = rest.next().map(PathBuf::from);
         } else if bytes == b"--workers" {
             workers = rest
+                .next()
+                .and_then(|n| n.to_string_lossy().parse().ok())
+                .unwrap_or(0);
+        } else if bytes == b"--max-requests" {
+            max_requests = rest
                 .next()
                 .and_then(|n| n.to_string_lossy().parse().ok())
                 .unwrap_or(0);
@@ -833,7 +839,7 @@ pub fn serve(addr: &str, mut rest: std::iter::Peekable<impl Iterator<Item = std:
         } else {
             workers
         };
-        return serve_workers(listener, cfg, script, n);
+        return serve_workers(listener, cfg, script, n, max_requests);
     }
     log_line(&format!(
         "PHP 8.5.7 Development Server (http://{host}:{port}) started"
@@ -865,6 +871,10 @@ pub fn serve(addr: &str, mut rest: std::iter::Peekable<impl Iterator<Item = std:
 // php-fpm behind nginx or of FrankenPHP's Go front end, without the extra
 // process. Every request goes to the worker script — no static files, no
 // router (PHP only). A worker whose script returns (or dies) is restarted.
+// `--max-requests N` (0 = never) recycles a worker after N requests: its
+// N+1-th `ferro_handle_request()` returns false, the script returns, and the
+// thread starts over on a fresh `Vm` (FrankenPHP's and php-fpm's
+// `max_requests`, a bound on whatever a request leaks into the worker).
 // ---------------------------------------------------------------------------
 
 /// One request queued for a worker, with the channel its response goes to.
@@ -884,7 +894,13 @@ struct PendingRequest {
 
 type JobQueue = std::sync::Arc<std::sync::Mutex<std::sync::mpsc::Receiver<WorkerJob>>>;
 
-fn serve_workers(listener: TcpListener, cfg: ServerConfig, script: PathBuf, n: usize) -> u8 {
+fn serve_workers(
+    listener: TcpListener,
+    cfg: ServerConfig,
+    script: PathBuf,
+    n: usize,
+    max_requests: u64,
+) -> u8 {
     let source = match std::fs::read(&script) {
         Ok(s) => s,
         Err(e) => {
@@ -896,16 +912,17 @@ fn serve_workers(listener: TcpListener, cfg: ServerConfig, script: PathBuf, n: u
     let script = std::sync::Arc::new(script);
     let source = std::sync::Arc::new(source);
     log_line(&format!(
-        "phpr worker server (http://{}:{}) started: {n} workers running {}",
+        "ferro worker server (http://{}:{}) started: {n} workers running {}{}",
         cfg.host,
         cfg.port,
-        script.display()
+        script.display(),
+        if max_requests > 0 { format!(", recycled every {max_requests} requests") } else { String::new() }
     ));
     let (tx, rx) = std::sync::mpsc::sync_channel::<WorkerJob>(1024);
     let rx: JobQueue = std::sync::Arc::new(std::sync::Mutex::new(rx));
     for i in 0..n {
         let (rx, script, source) = (rx.clone(), script.clone(), source.clone());
-        std::thread::spawn(move || worker_thread(i, rx, script, source));
+        std::thread::spawn(move || worker_thread(i, rx, script, source, max_requests));
     }
     for stream in listener.incoming() {
         let Ok(stream) = stream else { continue };
@@ -1034,6 +1051,7 @@ fn worker_thread(
     rx: JobQueue,
     script: std::sync::Arc<PathBuf>,
     source: std::sync::Arc<Vec<u8>>,
+    max_requests: u64,
 ) {
     php_types::sapi::set_sapi_name("cli-server");
     let registry = php_builtins::registry();
@@ -1044,7 +1062,12 @@ fn worker_thread(
             Rc::new(std::cell::RefCell::new(None));
         let next_request = {
             let (rx, reply) = (rx.clone(), reply.clone());
+            let mut served: u64 = 0;
             Box::new(move || -> Option<WebRequest> {
+                if max_requests > 0 && served >= max_requests {
+                    return None;
+                }
+                served += 1;
                 let job = rx.lock().ok()?.recv().ok()?;
                 *reply.borrow_mut() = Some(job.reply);
                 Some(job.web)

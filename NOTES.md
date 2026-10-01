@@ -5,6 +5,26 @@ this session unless it is explicitly labelled "upstream's claim".
 
 ---
 
+# Session 6 — 2026-10-01 — Ferrophant rebrand; worker recycling and the soak test
+
+1. **Rebrand** (`4583e8f1`): binary `ferro`, builtin `ferro_handle_request`, comments in English,
+   new README / CLAUDE.md / NOTICE.md, `tests/loc_cap.rs`. Gate: 3,048 = baseline, 0 pass→fail.
+2. **`--max-requests N`** for `ferro -S --worker`: after N requests `ferro_handle_request()`
+   returns false, the script returns and the thread restarts on a fresh `Vm`.
+3. **Soak test** `bench/worker/soak.sh` — numbers in `bench/results/2026-10-01-soak.md`. No
+   per-request leak (hello 8.7 M requests, Symfony 1.58 M; RSS flat after warm-up).
+4. **Bug found and fixed**: the first recycling run panicked on every request after a restart —
+   the GC walk epoch was per-`Vm` while unit-cache arrays outlive the `Vm`. Now thread-local.
+   No `.phpt` (it needs two `Vm`s on one thread); the soak run with `MAXREQ` is the regression check.
+5. Gates: `cargo test --release` 1,749 passed / 1 failed (root-only logging test); gate PASS
+   (3,048, repro 14/14, divergences 12 failing + 2 skipped); isolation diffs = the three
+   documented in session 5 §2.
+
+Not done: a memory ceiling. The soak shows no growth to bound; with all workers in one process an
+RSS ceiling could only recycle blindly. Revisit if a real application grows.
+
+---
+
 # Session 5 — 2026-09-30/10-01 — fork published, divergence register, worker mode, wrk
 
 ## 1. Housekeeping

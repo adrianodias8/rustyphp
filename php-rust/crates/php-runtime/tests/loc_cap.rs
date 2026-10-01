@@ -28,7 +28,7 @@ fn rs_files(dir: &Path, out: &mut Vec<PathBuf>) {
 fn no_source_file_over_cap() {
     const CAP_NEW: usize = 2000;
     const SLACK_MAX: usize = 200;
-    const CAP_VM_MOD: usize = 26387;
+    const CAP_VM_MOD: usize = 26392;
     const CAP_VM_HOST: usize = 7726;
     const CAP_VM_RUN: usize = 7557;
     const CAP_T_EVAL: usize = 4773;

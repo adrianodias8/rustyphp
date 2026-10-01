@@ -783,7 +783,6 @@ pub fn vm_new<'m>(
         gc_cycle_roots: HashSet::default(),
         gc_ctr_roots: Vec::new(),
         gc_classify_last_nodes: Cell::new(0),
-        gc_walk_epoch: Cell::new(0),
         gc_fullscan_mark: 0,
         gc_enabled: true,
         gc_collecting: false,
@@ -3031,6 +3030,17 @@ impl GcWhites {
     }
 }
 
+thread_local! {
+    /// The classify-walk epoch stamped into every discovered node's
+    /// `WalkMark`, bumped at each [`Vm::gc_classify`] entry (never 0 — the
+    /// value every mark is born with), so stale marks from earlier walks read
+    /// as "not discovered" with no reset pass. Per THREAD, not per `Vm`:
+    /// arrays outlive a `Vm` in the thread's unit cache, and a fresh `Vm`
+    /// restarting at 0 would read their old marks as its own (worker
+    /// recycling panicked on exactly that).
+    static GC_WALK_EPOCH: Cell<u32> = const { Cell::new(0) };
+}
+
 /// The virtual machine: the module under execution plus the explicit call stack.
 /// PHP function calls grow `frames` rather than the Rust stack, so deep PHP
 /// recursion cannot overflow the host stack, and a frame is suspendable.
@@ -3423,11 +3433,6 @@ pub struct Vm<'m> {
     /// full-size table, nor clobber the estimate). `Cell`: [`Vm::gc_classify`]
     /// takes `&self`. No standing footprint — the map itself stays call-local.
     gc_classify_last_nodes: Cell<usize>,
-    /// WP-52 in-node marks: the classify-walk epoch stamped into every
-    /// discovered node's `WalkMark`. Bumped at each [`Vm::gc_classify`]
-    /// entry (never 0 — the value every mark is born with), so stale marks
-    /// from earlier walks read as "not discovered" with no reset pass.
-    gc_walk_epoch: Cell<u32>,
     /// WP-51 Fase 1.4: `created.len()` right after the last full-scan-seeded
     /// collect. When the registry has grown [`Vm::GC_FULLSCAN_GROWTH`] past
     /// this, the next collect seeds every tracked object (see
@@ -4894,11 +4899,11 @@ impl<'m> Vm<'m> {
         // is no reset pass and no growth-rehash cascade at all (the record
         // table is a Vec; big calls still pre-reserve the last walk's size).
         let epoch = {
-            let e = match self.gc_walk_epoch.get().wrapping_add(1) {
+            let e = match GC_WALK_EPOCH.get().wrapping_add(1) {
                 0 => 1, // skip the born-with value on u32 wrap
                 e => e,
             };
-            self.gc_walk_epoch.set(e);
+            GC_WALK_EPOCH.set(e);
             e
         };
         let big_call = roots.len() + ctr_roots.len() >= 1024;

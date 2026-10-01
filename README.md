@@ -105,6 +105,9 @@ while ($handle(static function () use ($kernel) {
 Globals, statics, static properties and boot-time objects persist across
 requests; output, headers, superglobals, handlers and ini values are reset
 per request. `bench/worker/isolation.sh` is the gate for that contract.
+`--max-requests N` recycles a worker onto a fresh VM after N requests, like
+php-fpm's `pm.max_requests`; `bench/worker/soak.sh` is the long-run leak
+test (RSS sampled under `wrk`).
 
 ## How the work is done
 
@@ -146,8 +149,9 @@ NOTES.md               the session log
 1. Slice 6, the dispatch loop (34 % of a Symfony request) — on bare metal
    with hardware counters, not in the VM.
 2. An on-disk bytecode cache for the CLI (the 15.8 ms startup floor).
-3. Worker recycling (`max_requests`, memory ceiling) and a long-run leak test.
-4. Laravel and Drupal under the worker mode.
+3. Laravel and Drupal under the worker mode.
+4. A memory ceiling for workers, if a real application shows growth (the
+   soak test does not, on Symfony).
 
 ## License
 
