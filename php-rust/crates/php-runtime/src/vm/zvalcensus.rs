@@ -1,88 +1,83 @@
-//! S-95.0 leva A-ZV1 — i contatori del MECCANISMO per «il clone che muore
-//! subito».
+//! MECHANISM counters for "the clone that dies immediately" lever.
 //!
-//! Perché esiste: la predizione di `wp95-harness/design95-leva-zval.md` è
-//! firmata su un MECCANISMO (quanti valori con `Rc` vengono materializzati da
-//! uno slot), non su un cronometro. Bak, consulenza S-95.0: *«il contatore del
-//! meccanismo prima dell'orologio — se la taglia non si muove, la leva non ha
-//! agito, e qualunque Δ tempo viene da altro»*. Senza questi numeri il
-//! confronto prima/dopo non è difendibile.
+//! Why it exists: the lever's prediction is signed on a MECHANISM (how many
+//! `Rc`-carrying values get materialized from a slot), not on a stopwatch.
+//! The mechanism counter comes before the clock — if the count does not
+//! move, the lever did not act, and any Δ time comes from something else.
+//! Without these numbers the before/after comparison is not defensible.
 //!
-//! Convenzione identica a `op-census`/`gc-census`: compilato SOLO dietro la
-//! feature `zval-census`, che nessuna build di parità accende. Il binario di
-//! release non contiene questo modulo.
+//! Same convention as `op-census`/`gc-census`: compiled ONLY behind the
+//! `zval-census` feature, which no parity build enables. The release binary
+//! does not contain this module.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use php_types::Zval;
 
-/// Materializzazioni totali da uno slot (`read_slot`), qualunque variante.
+/// Total materializations from a slot (`read_slot`), any variant.
 pub static SLOT_READS: AtomicU64 = AtomicU64::new(0);
-/// Quelle che hanno clonato una variante che porta un `Rc`: sono le uniche
-/// che pagano refcount++ seguito da refcount-- quando la copia muore subito.
+/// Those that cloned an `Rc`-carrying variant: the only ones that pay a
+/// refcount++ followed by refcount-- when the copy dies immediately.
 pub static SLOT_READS_RC: AtomicU64 = AtomicU64::new(0);
-/// Materializzazioni evitate dalla leva (fast path servito per riferimento).
-/// Prima della leva vale 0 per costruzione: è il controllo positivo che
-/// distingue «la leva ha agito» da «il tempo è cambiato per altro».
+/// Materializations avoided by the lever (fast path served by reference).
+/// Before the lever it is 0 by construction: the positive control that
+/// tells "the lever acted" from "the time changed for another reason".
 pub static SLOT_READS_AVOIDED: AtomicU64 = AtomicU64::new(0);
 
-// ----- S-95.0 A-ZV2 fase F1 (design95-liveness.md) -----
-/// Esecuzioni di `LoadSlot`/`LoadVar` il cui sito è un ULTIMO USO secondo
-/// l'analisi di [`super::liveness`]: letture che la leva `TakeSlot` potrebbe
-/// spostare invece di clonare. SOLA MISURA: nessuna emissione cambia.
+// ----- Liveness, phase F1 -----
+/// Executions of `LoadSlot`/`LoadVar` whose site is a LAST USE according to
+/// the [`super::liveness`] analysis: reads that a `TakeSlot` lever could
+/// move instead of cloning. MEASUREMENT ONLY: no emission changes.
 pub static WOULD_TAKE: AtomicU64 = AtomicU64::new(0);
-/// Il sottoinsieme di [`WOULD_TAKE`] il cui valore porta un `Rc`: il
-/// NUMERATORE della regola a tre bande di design95-liveness.md §P1
-/// (il confronto è con `slot_reads_rc`, stessa esecuzione).
+/// The subset of [`WOULD_TAKE`] whose value carries an `Rc`: the NUMERATOR
+/// of the three-band rule (compared against `slot_reads_rc`, same run).
 pub static WOULD_TAKE_RC: AtomicU64 = AtomicU64::new(0);
-/// Siti statici `LoadSlot`/`LoadVar` visti dall'analisi (una volta per
-/// funzione analizzata, per processo). Advisory: pesa i siti, non le esecuzioni.
+/// Static `LoadSlot`/`LoadVar` sites seen by the analysis (once per
+/// analyzed function, per process). Advisory: weighs sites, not executions.
 pub static SITES_TOTAL: AtomicU64 = AtomicU64::new(0);
-/// Quanti di quei siti sono ultimi usi.
+/// How many of those sites are last uses.
 pub static SITES_MOVABLE: AtomicU64 = AtomicU64::new(0);
-// ----- F2: il perimetro conservativo (design95-liveness.md, predizione P2) -----
-/// Esecuzioni movibili che SOPRAVVIVONO ai predicati di rinuncia F2.
+// ----- F2: the conservative perimeter (prediction P2) -----
+/// Movable executions that SURVIVE the F2 give-up predicates.
 pub static WOULD_TAKE_SAFE: AtomicU64 = AtomicU64::new(0);
-/// Il sottoinsieme rc di [`WOULD_TAKE_SAFE`]: il numeratore di P2 contro
-/// `would_take_rc` (≥60% o la leva vale meno della sua complessità).
+/// The rc subset of [`WOULD_TAKE_SAFE`]: the P2 numerator against
+/// `would_take_rc` (≥60% or the lever is worth less than its complexity).
 pub static WOULD_TAKE_SAFE_RC: AtomicU64 = AtomicU64::new(0);
-/// Il sottoinsieme di [`WOULD_TAKE_SAFE`] il cui valore è una STRINGA: le
-/// stringhe non hanno distruttori osservabili, quindi è la parte del canale
-/// che un eventuale `TakeSlot` ristretto per tipo (F3) prenderebbe senza
-/// toccare l'ordine dei `__destruct` — il rischio più insidioso dell'elenco.
+/// The subset of [`WOULD_TAKE_SAFE`] whose value is a STRING: strings have
+/// no observable destructors, so this is the part of the channel that a
+/// type-restricted `TakeSlot` (F3) would take without touching the order of
+/// the `__destruct` calls — the most insidious risk on the list.
 pub static WOULD_TAKE_SAFE_STR: AtomicU64 = AtomicU64::new(0);
-/// A-MS-97-1 (Concilio WP-97): il sottoinsieme di [`WOULD_TAKE_SAFE`] che a
-/// RUNTIME regge un [`Zval::Ref`]. La lezione di S-95.0 è che la rinuncia
-/// STATICA non vede il tipo a runtime: uno slot sul lato INTERNO di una
-/// closure by-ref porta un `Ref` che `param_by_ref` non copre. Questo
-/// contatore misura quanto grande è quel buco PRIMA di scrivere l'opcode: un
-/// `TakeSlot` col guard di tipo lo pagherebbe come fallback, e senza il numero
-/// il controllo positivo di F4 (takes + fallback = safe predetto) sarebbe
-/// vacuo per costruzione.
+/// The subset of [`WOULD_TAKE_SAFE`] that at RUNTIME holds a [`Zval::Ref`].
+/// The lesson is that the STATIC give-up does not see the runtime type: a
+/// slot on the INNER side of a by-ref closure carries a `Ref` that
+/// `param_by_ref` does not cover. This counter measures how big that hole
+/// is BEFORE writing the opcode: a `TakeSlot` with a type guard would pay it
+/// as a fallback, and without the number the F4 positive control (takes +
+/// fallback = predicted safe) would be vacuous by construction.
 pub static WOULD_TAKE_SAFE_REF: AtomicU64 = AtomicU64::new(0);
-/// Siti che restano movibili sotto il perimetro F2.
+/// Sites that remain movable under the F2 perimeter.
 pub static SITES_SAFE: AtomicU64 = AtomicU64::new(0);
-/// S-147 take-per-tipo (concilio S-146, sintesi §Ordine p.1-iii): i
-/// sottoinsiemi ARRAY e OBJECT di [`WOULD_TAKE_SAFE`] — con `_STR`/`_REF`
-/// completano la separazione per tipo di ciò che un take eviterebbe
-/// (scioglie il conflitto 0,21 vs 0,4 s sul take-str; il veto semantico
-/// KS-146-4 sui container resta: questi sono SOLI conteggi).
+/// Take-per-type: the ARRAY and OBJECT subsets of [`WOULD_TAKE_SAFE`] —
+/// together with `_STR`/`_REF` they complete the per-type split of what a
+/// take would avoid (resolves the 0.21 vs 0.4 s conflict on take-str; the
+/// semantic veto on containers stands: these are counts ONLY).
 pub static WOULD_TAKE_SAFE_ARR: AtomicU64 = AtomicU64::new(0);
 pub static WOULD_TAKE_SAFE_OBJ: AtomicU64 = AtomicU64::new(0);
 
 std::thread_local! {
-    /// Cache per-funzione dell'analisi di ultimo uso. Chiave: (indirizzo della
-    /// `Func`, indirizzo del suo `ops`, lunghezza) — il doppio ancoraggio rende
-    /// una collisione da riuso d'indirizzo un evento da coincidenza doppia,
-    /// accettabile in una build di sola misura.
+    /// Per-function cache of the last-use analysis. Key: (address of the
+    /// `Func`, address of its `ops`, length) — the double anchor turns an
+    /// address-reuse collision into a double-coincidence event, acceptable
+    /// in a measurement-only build.
     static LIVENESS: std::cell::RefCell<
         std::collections::HashMap<(usize, usize, usize), std::rc::Rc<super::liveness::Analysis>>,
     > = std::cell::RefCell::new(std::collections::HashMap::new());
 }
 
-/// Nota una esecuzione di `LoadSlot`/`LoadVar` all'op `ip` di `func`, PRIMA
-/// della materializzazione (la cella è ancora nello slot). Analizza la
-/// funzione alla prima visita e conta se questo sito è un ultimo uso.
+/// Note an execution of `LoadSlot`/`LoadVar` at op `ip` of `func`, BEFORE
+/// the materialization (the cell is still in the slot). Analyzes the
+/// function on first visit and counts whether this site is a last use.
 #[inline]
 pub fn note_slot_load_site(func: &crate::bytecode::Func, ip: usize, cell: &Zval) {
     let key = (
@@ -113,11 +108,11 @@ pub fn note_slot_load_site(func: &crate::bytecode::Func, ip: usize, cell: &Zval)
             if matches!(cell, Zval::Str(_)) {
                 WOULD_TAKE_SAFE_STR.fetch_add(1, Ordering::Relaxed);
             }
-            // A-MS-97-1: il buco che la rinuncia statica non vede.
+            // The hole the static give-up does not see.
             if matches!(cell, Zval::Ref(_)) {
                 WOULD_TAKE_SAFE_REF.fetch_add(1, Ordering::Relaxed);
             }
-            // S-147 take-per-tipo: container, SOLI conteggi (KS-146-4).
+            // Take-per-type: containers, counts ONLY.
             if matches!(cell, Zval::Array(_)) {
                 WOULD_TAKE_SAFE_ARR.fetch_add(1, Ordering::Relaxed);
             }
@@ -128,72 +123,71 @@ pub fn note_slot_load_site(func: &crate::bytecode::Func, ip: usize, cell: &Zval)
     }
 }
 
-/// Il valore porta un `Rc`? Solo per queste varianti clone/drop costano un
-/// aggiornamento di refcount; sulle altre sono una copia di parola. Discrimina
-/// i numeratori `slot_reads_rc` e `would_take_rc`.
+/// Does the value carry an `Rc`? Only for these variants do clone/drop cost
+/// a refcount update; on the others they are a word copy. Discriminates the
+/// `slot_reads_rc` and `would_take_rc` numerators.
 pub(super) fn zval_holds_rc(v: &Zval) -> bool {
     match v {
         Zval::Undef | Zval::Null | Zval::Bool(_) | Zval::Long(_) | Zval::Double(_) => false,
-        // `Ref` clona il valore INTERNO: il costo sta lì, non nel wrapper.
+        // `Ref` clones the INNER value: the cost is there, not in the wrapper.
         Zval::Ref(r) => zval_holds_rc(&r.borrow()),
         _ => true,
     }
 }
 
-// ----- S-101 punto 2 (ordine WP-102 §2): census dinamico specie×sito×canale
-// sul percorso PROPRIETÀ. Arbitra le TRE predizioni pre-registrate di
-// `wp101-harness/hc-census-predizioni.out` (P1 specie dei valori, P2 canale
-// ricevitore, P3 attribuzione gc_note) — scritte PRIMA di questi contatori.
-// Stessa convenzione del resto del modulo: SOLO build di strumentazione.
+// ----- Dynamic species×site×channel census on the PROPERTY path. It
+// arbitrates THREE pre-registered predictions (P1 value species, P2
+// receiver channel, P3 gc_note attribution) — written BEFORE these
+// counters. Same convention as the rest of the module: instrumentation
+// builds ONLY.
 
-/// Valori transitati dal canale di LETTURA proprietà (`PropGet`/`ThisPropGet`,
-/// IC-hit + fallback + fast-path WP-25 + lettura generale). P1.
+/// Values that went through the property READ channel (`PropGet`/
+/// `ThisPropGet`, IC-hit + fallback + fast-path + general read). P1.
 pub static PROPGET_VAL: AtomicU64 = AtomicU64::new(0);
-/// Il sottoinsieme refcounted ([`zval_holds_rc`]) di [`PROPGET_VAL`].
+/// The refcounted subset ([`zval_holds_rc`]) of [`PROPGET_VAL`].
 pub static PROPGET_VAL_RC: AtomicU64 = AtomicU64::new(0);
-/// Valori transitati dal canale di SCRITTURA proprietà (`PropSet`, IC-hit +
-/// fast-path WP-25 + prop_init). P1.
+/// Values that went through the property WRITE channel (`PropSet`, IC-hit +
+/// fast-path + prop_init). P1.
 pub static PROPSET_VAL: AtomicU64 = AtomicU64::new(0);
-/// Il sottoinsieme refcounted di [`PROPSET_VAL`].
+/// The refcounted subset of [`PROPSET_VAL`].
 pub static PROPSET_VAL_RC: AtomicU64 = AtomicU64::new(0);
-/// Operandi (lhs+rhs) transitati da `BinaryDst`. P1.
+/// Operands (lhs+rhs) that went through `BinaryDst`. P1.
 pub static BINDST_OPND: AtomicU64 = AtomicU64::new(0);
-/// Il sottoinsieme refcounted di [`BINDST_OPND`].
+/// The refcounted subset of [`BINDST_OPND`].
 pub static BINDST_OPND_RC: AtomicU64 = AtomicU64::new(0);
 
-/// Canale RICEVITORE (P2): clone di un handle `Rc<Object>` fatti da
-/// `LoadVar`/`LoadSlot` (il push di `$o` in pila via `read_slot`).
+/// RECEIVER channel (P2): clones of an `Rc<Object>` handle made by
+/// `LoadVar`/`LoadSlot` (the push of `$o` onto the stack via `read_slot`).
 pub static RECV_CLONE_LOAD: AtomicU64 = AtomicU64::new(0);
-/// Canale RICEVITORE (P2): `obj.deref_clone()` dentro `PropGet`/`PropSet`/
-/// fallback quando il target è un `Object` (bump Rc del ricevitore).
-/// I DROP corrispondenti non hanno un sito contabile (fine-arm): per
-/// conservazione drop_handle = clone_handle su un micro stazionario.
+/// RECEIVER channel (P2): `obj.deref_clone()` inside `PropGet`/`PropSet`/
+/// fallback when the target is an `Object` (Rc bump of the receiver).
+/// The matching DROPs have no countable site (end of arm): by conservation
+/// drop_handle = clone_handle on a stationary micro-benchmark.
 pub static RECV_CLONE_PROP: AtomicU64 = AtomicU64::new(0);
-/// `Op::Pop` che droppa un handle `Object` (la parte del traffico ricevitore
-/// che muore esplicitamente in pila, con la sua `gc_note`).
+/// `Op::Pop` dropping an `Object` handle (the part of the receiver traffic
+/// that dies explicitly on the stack, with its `gc_note`).
 pub static RECV_DROP_POP: AtomicU64 = AtomicU64::new(0);
 
-/// Ogni chiamata a `Vm::gc_note` (contata NEL corpo: cattura tutti i siti). P3.
+/// Every call to `Vm::gc_note` (counted IN the body: catches all sites). P3.
 pub static GCNOTE_TOTAL: AtomicU64 = AtomicU64::new(0);
-/// Chiamate a `gc_note` con argomento NON-refcounted (braccio `_ => {}`:
-/// il costo è la chiamata+match, non il bookkeeping). Predizione Stogov.
+/// Calls to `gc_note` with a NON-refcounted argument (the `_ => {}` arm:
+/// the cost is the call+match, not the bookkeeping).
 pub static GCNOTE_SCALAR: AtomicU64 = AtomicU64::new(0);
-/// Chiamate a `gc_note` con argomento `Object` (borrow + flag DESTRUCTED +
-/// eventuale insert nel gc_buf). Predizione Matsakis.
+/// Calls to `gc_note` with an `Object` argument (borrow + DESTRUCTED flag +
+/// possible insert into gc_buf).
 pub static GCNOTE_OBJ: AtomicU64 = AtomicU64::new(0);
-/// S-145 sonda-B: chiamate a `gc_note` con `is_gc_container()` VERO (pagano
-/// `gc_note_slow`); il complemento a `GCNOTE_TOTAL` paga la sola guard
-/// inline. Alimenta il canale `nota` della partizione (modello
-/// wp145-harness/s145-sonda-b-modello.md).
+/// Calls to `gc_note` with `is_gc_container()` TRUE (they pay
+/// `gc_note_slow`); the complement to `GCNOTE_TOTAL` pays only the inline
+/// guard. Feeds the `note` channel of the movement partition.
 pub static GCNOTE_CONT: AtomicU64 = AtomicU64::new(0);
-/// Le chiamate taggate al sito `Op::Pop` (una per pop riuscito).
+/// The calls tagged at the `Op::Pop` site (one per successful pop).
 pub static GCNOTE_SITE_POP: AtomicU64 = AtomicU64::new(0);
-/// Le chiamate taggate al sito `PropSet` sul VECCHIO valore sovrascritto.
-/// Il residuo `total - pop - propset_old` = altri siti (Sweep, teardown, …).
+/// The calls tagged at the `PropSet` site on the OLD overwritten value.
+/// The residual `total - pop - propset_old` = other sites (Sweep, teardown, …).
 pub static GCNOTE_SITE_PROPSET_OLD: AtomicU64 = AtomicU64::new(0);
 
-/// Specie×canale sul percorso proprietà: `chan` 0=PropGet, 1=PropSet,
-/// 2=BinaryDst (operando).
+/// Species×channel on the property path: `chan` 0=PropGet, 1=PropSet,
+/// 2=BinaryDst (operand).
 #[inline]
 pub fn note_prop_val(chan: u8, v: &Zval) {
     REGISTERED.call_once(|| unsafe {
@@ -211,7 +205,7 @@ pub fn note_prop_val(chan: u8, v: &Zval) {
     }
 }
 
-/// `LoadVar`/`LoadSlot`: la cella che sta per essere clonata in pila.
+/// `LoadVar`/`LoadSlot`: the cell about to be cloned onto the stack.
 #[inline]
 pub fn note_recv_load(cell: &Zval) {
     if matches!(cell, Zval::Object(_)) {
@@ -219,7 +213,7 @@ pub fn note_recv_load(cell: &Zval) {
     }
 }
 
-/// `PropGet`/`PropSet`/fallback: il target APPENA clonato con `deref_clone`.
+/// `PropGet`/`PropSet`/fallback: the target JUST cloned with `deref_clone`.
 #[inline]
 pub fn note_recv_clone_prop(target: &Zval) {
     if matches!(target, Zval::Object(_)) {
@@ -227,7 +221,7 @@ pub fn note_recv_clone_prop(target: &Zval) {
     }
 }
 
-/// `Op::Pop`: il valore appena poppato (che sta per essere `gc_note`'d).
+/// `Op::Pop`: the value just popped (about to be `gc_note`'d).
 #[inline]
 pub fn note_pop(v: &Zval) {
     GCNOTE_SITE_POP.fetch_add(1, Ordering::Relaxed);
@@ -236,7 +230,7 @@ pub fn note_pop(v: &Zval) {
     }
 }
 
-/// Corpo di `Vm::gc_note`: ogni chiamata, con la specie dell'argomento.
+/// Body of `Vm::gc_note`: every call, with the species of the argument.
 #[inline]
 pub fn note_gcnote(v: &Zval) {
     REGISTERED.call_once(|| unsafe {
@@ -257,14 +251,14 @@ pub fn note_gcnote(v: &Zval) {
     }
 }
 
-/// Sito `PropSet`: la `gc_note` sul vecchio valore sovrascritto.
+/// `PropSet` site: the `gc_note` on the old overwritten value.
 #[inline]
 pub fn note_gcnote_site_propset_old() {
     GCNOTE_SITE_PROPSET_OLD.fetch_add(1, Ordering::Relaxed);
 }
 
-/// Riga S-101 SEPARATA (il formato della riga storica resta intatto: il
-/// gate cifre la parsa così com'è).
+/// SEPARATE property-path line (the historical line's format stays intact:
+/// the figures gate parses it as is).
 pub fn dump_line_s101() -> String {
     format!(
         "zvalcensus_s101 propget_val={} propget_val_rc={} propset_val={} propset_val_rc={} bindst_opnd={} bindst_opnd_rc={} recv_clone_load={} recv_clone_prop={} recv_drop_pop={} gcnote_total={} gcnote_scalar={} gcnote_obj={} gcnote_site_pop={} gcnote_site_propset_old={}",
@@ -293,9 +287,9 @@ extern "C" fn dump_at_exit() {
 
 #[inline]
 pub fn note_slot_read(is_rc: bool) {
-    // La stampa si registra alla prima nota, così il modulo è auto-contenuto e
-    // non serve toccare il `main` di ogni binario. Il costo del `Once` esiste
-    // solo nelle build di strumentazione.
+    // The dump registers itself at the first note, so the module is
+    // self-contained and no binary's `main` needs touching. The cost of the
+    // `Once` exists only in instrumentation builds.
     REGISTERED.call_once(|| unsafe {
         libc::atexit(dump_at_exit);
     });
@@ -310,8 +304,8 @@ pub fn note_avoided() {
     SLOT_READS_AVOIDED.fetch_add(1, Ordering::Relaxed);
 }
 
-/// Riga unica, formato ascii-nudo (A-BG66: nessun separatore di migliaia),
-/// così il raw entra nel corpus del gate cifre senza post-elaborazione.
+/// Single line, bare-ascii format (no thousands separators), so the raw
+/// enters the figures gate's corpus without post-processing.
 pub fn dump_line() -> String {
     format!(
         "zvalcensus slot_reads={} slot_reads_rc={} slot_reads_avoided={} would_take={} would_take_rc={} would_take_safe={} would_take_safe_rc={} would_take_safe_str={} would_take_safe_ref={} sites_total={} sites_movable={} sites_safe={}",
@@ -330,31 +324,19 @@ pub fn dump_line() -> String {
     )
 }
 
-/// Scrive i contatori a fine processo. `PHPR_ZVAL_CENSUS` è un **path**: la
-/// riga viene APPESA a quel file.
-///
-/// Perché non su stderr (misurato, non temuto): il workload reale lancia
-/// processi figli e i test ne catturano lo stderr — la riga di census del
-/// figlio diventava `PHPUnit\Framework\Exception` e la prima misura è uscita
-/// con 15 errori spuri. Uno strumento che parla sul canale che il misurato
-/// legge non misura: partecipa. L'append da più processi è voluto: la somma
-/// del workload include i figli, che eseguono PHP quanto il padre.
-///
-/// La env si legge QUI, a fine processo, mai nel percorso caldo (lezione
-/// A-TH-73 di S-94.0).
-/// S-140 leva HC1 «hint-check senza clone» — contatori del MECCANISMO
-/// (convenzione A-ZV1: il controllo positivo distingue «la leva ha agito»
-/// da «il tempo è cambiato per altro»).
-/// Chiamate a `coerce_or_check_hint` (qualunque esito).
+/// "Hint-check without clone" lever — MECHANISM counters (same convention
+/// as the slot-read counters: the positive control tells "the lever acted"
+/// from "the time changed for another reason").
+/// Calls to `coerce_or_check_hint` (any outcome).
 pub static HINT_CHECKS: AtomicU64 = AtomicU64::new(0);
-/// Il sottoinsieme il cui valore porta un `Rc` ([`zval_holds_rc`]): prima
-/// della leva OGNUNA paga un `deref_clone` che muore a fine check.
+/// The subset whose value carries an `Rc` ([`zval_holds_rc`]): before the
+/// lever EACH of them pays a `deref_clone` that dies at the end of the check.
 pub static HINT_CHECKS_RC: AtomicU64 = AtomicU64::new(0);
-/// Check serviti dal cammino borrow-first SENZA clone (leva HC1). Prima
-/// della leva vale 0 per costruzione.
+/// Checks served by the borrow-first path WITHOUT a clone. Before the lever
+/// it is 0 by construction.
 pub static HINT_AVOIDED: AtomicU64 = AtomicU64::new(0);
 
-/// Nota una chiamata a `coerce_or_check_hint` col valore in ingresso.
+/// Note a call to `coerce_or_check_hint` with the incoming value.
 #[inline]
 pub fn note_hint_check(v: &Zval) {
     REGISTERED.call_once(|| unsafe {
@@ -366,13 +348,14 @@ pub fn note_hint_check(v: &Zval) {
     }
 }
 
-/// Nota un check servito senza clone (solo la build con la leva lo tocca).
+/// Note a check served without a clone (only the build with the lever
+/// touches it).
 #[inline]
 pub fn note_hint_avoided() {
     HINT_AVOIDED.fetch_add(1, Ordering::Relaxed);
 }
 
-/// Riga S-140 SEPARATA (le righe storiche restano byte-identiche).
+/// SEPARATE hint-check line (the historical lines stay byte-identical).
 pub fn dump_line_s140() -> String {
     format!(
         "zvalcensus_s140 hint_checks={} hint_checks_rc={} hint_avoided={}",
@@ -382,6 +365,18 @@ pub fn dump_line_s140() -> String {
     )
 }
 
+/// Writes the counters at process end. `PHPR_ZVAL_CENSUS` is a **path**: the
+/// line is APPENDED to that file.
+///
+/// Why not stderr (measured, not feared): the real workload spawns child
+/// processes and the tests capture their stderr — the child's census line
+/// turned into a `PHPUnit\Framework\Exception` and the first measurement
+/// came out with 15 spurious errors. An instrument that talks on the channel
+/// the measured system reads does not measure: it participates. Appending
+/// from several processes is intended: the workload sum includes the
+/// children, which execute as much PHP as the parent.
+///
+/// The env is read HERE, at process end, never on the hot path.
 pub fn dump_exit() {
     use std::io::Write;
     let Some(path) = std::env::var_os("PHPR_ZVAL_CENSUS") else { return };
@@ -391,45 +386,45 @@ pub fn dump_exit() {
     if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
         let _ = writeln!(f, "{}", dump_line());
         let _ = writeln!(f, "{}", dump_line_s101());
-        // S-145 sonda-B: note su container (riga NUOVA, la riga storica
-        // S-101 resta byte-identica).
+        // Container notes (NEW line, the historical property-path line stays
+        // byte-identical).
         let _ = writeln!(
             f,
             "zvalcensus_s145 gcnote_cont={}",
             GCNOTE_CONT.load(Ordering::Relaxed)
         );
-        // S-140: riga contatori hint-check (leva HC1) — riga NUOVA.
+        // Hint-check counter line — NEW line.
         let _ = writeln!(f, "{}", dump_line_s140());
-        // S-147: take-per-tipo (riga NUOVA; le righe storiche restano
-        // byte-identiche — arr/obj accanto a str/ref della riga storica).
+        // Take-per-type (NEW line; the historical lines stay byte-identical
+        // — arr/obj next to the historical line's str/ref).
         let _ = writeln!(
             f,
             "zvalcensus_s147 would_take_safe_arr={} would_take_safe_obj={}",
             WOULD_TAKE_SAFE_ARR.load(Ordering::Relaxed),
             WOULD_TAKE_SAFE_OBJ.load(Ordering::Relaxed),
         );
-        // S-142: contatori del meccanismo L-RD1 — riga NUOVA, SOLO quando la
-        // build monta anche mem-census (i simboli non esistono altrimenti).
+        // Inline array-teardown mechanism counters — NEW line, ONLY when the
+        // build also mounts mem-census (the symbols do not exist otherwise).
         #[cfg(feature = "mem-census")]
         {
             let (ra, re_, rt) = php_types::memcensus::rd1_counters();
             let _ =
                 writeln!(f, "zvalcensus_s142 rd1_arrays={ra} rd1_elems={re_} rd1_tombs={rt}");
         }
-        // S-102: righe del census pila operandi (modulo separato).
+        // Operand-stack census lines (separate module).
         let _ = writeln!(f, "{}", super::stackcensus::dump_lines());
-        // S-102 (A-LE-103-1): gamba alloc a mem-census DIRETTO — byte e
-        // CONTEGGI dal global_allocator contante (0/0 se questa build non
-        // monta CountingMi: il campo dice anche QUALE build ha scritto).
+        // Alloc leg by DIRECT mem-census — bytes and COUNTS from the counting
+        // global_allocator (0/0 if this build does not mount CountingMi: the
+        // field also says WHICH build wrote it).
         let (ab, fb) = php_types::memcensus::alloc_counters();
         let (an, fn_) = php_types::memcensus::alloc_event_counters();
         let _ = writeln!(
             f,
             "alloccensus galloc_bytes={ab} gfree_bytes={fb} galloc_n={an} gfree_n={fn_}"
         );
-        // S-103 H-D (A-LE-104-1): realloc DISAGGREGATO + istogramma
-        // size-class degli alloc puri — righe NUOVE, la riga storica resta
-        // byte-identica (da S-103 galloc/gfree NON includono più i realloc).
+        // Realloc DISAGGREGATED + size-class histogram of the pure allocs —
+        // NEW lines, the historical line stays byte-identical (galloc/gfree
+        // NO LONGER include reallocs).
         let (rn, ro, rnew) = php_types::memcensus::realloc_counters();
         let _ = writeln!(f, "realloccensus n={rn} old_bytes={ro} new_bytes={rnew}");
         let h = php_types::memcensus::alloc_histogram();
@@ -438,16 +433,16 @@ pub fn dump_exit() {
             "allochist le16={} le32={} le48={} le64={} le96={} le128={} le256={} le512={} le1k={} le4k={} gt4k={}",
             h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7], h[8], h[9], h[10]
         );
-        // S-104 H-D (A-LE-105-1): il free-hist misurato — riga NUOVA, le
-        // righe storiche restano byte-identiche.
+        // The measured free histogram — NEW line, the historical lines stay
+        // byte-identical.
         let fh = php_types::memcensus::free_histogram();
         let _ = writeln!(
             f,
             "freehist le16={} le32={} le48={} le64={} le96={} le128={} le256={} le512={} le1k={} le4k={} gt4k={}",
             fh[0], fh[1], fh[2], fh[3], fh[4], fh[5], fh[6], fh[7], fh[8], fh[9], fh[10]
         );
-        // S-105 H-D gate G2: l'arità vista da bind_params — riga NUOVA, le
-        // righe storiche restano byte-identiche.
+        // The arity seen by bind_params — NEW line, the historical lines
+        // stay byte-identical.
         let ar = php_types::memcensus::arity_histogram();
         let _ = writeln!(
             f,

@@ -2307,9 +2307,9 @@ pub fn chmod(argv: &[Zval], ctx: &mut Ctx) -> Result<Zval, PhpError> {
     }
 }
 
-/// Corpo comune di chown/chgrp/lchown/lchgrp (WP-16, filestat.c): `$user` è
-/// nome o id — un nome ignoto warna "Unable to find uid/gid for X" e torna
-/// false; il fallimento della syscall warna con strerror ("Operation not
+/// Shared body of chown/chgrp/lchown/lchgrp (filestat.c): `$user` is a name
+/// or an id — an unknown name warns "Unable to find uid/gid for X" and
+/// returns false; a failed syscall warns with strerror ("Operation not
 /// permitted", "No such file or directory" — oracle-pinned).
 fn chown_like(
     argv: &[Zval],

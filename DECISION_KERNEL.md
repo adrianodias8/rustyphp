@@ -197,8 +197,8 @@ identical pass/fail lists by name; differential at 0; `bench/run.sh` recorded be
 
 ## 5. One page: worker mode
 
-> **Status (session 5): implemented as designed** — `phpr -S host:port --worker worker.php
-> --workers N`, `phpr_handle_request(callable): bool`, the reset table below (a subset of
+> **Status (session 5): implemented as designed** — `ferro -S host:port --worker worker.php
+> --workers N`, `ferro_handle_request(callable): bool`, the reset table below (a subset of
 > `request_end()` against a post-boot snapshot), `bench/worker/isolation.sh` as the gate. Not yet:
 > `max_requests` recycling and the memory ceiling (5.). Numbers: NOTES.md session 5 §3.
 
@@ -230,11 +230,11 @@ table, which die with the `Vm`.
    ```php
    // worker.php — run once per worker
    $app = require __DIR__ . '/bootstrap.php';
-   while (phpr_handle_request(function () use ($app) { $app->handle(); })) {
+   while (ferro_handle_request(function () use ($app) { $app->handle(); })) {
        gc_collect_cycles();
    }
    ```
-   `phpr_handle_request(callable): bool` blocks until a request arrives, performs the per-request
+   `ferro_handle_request(callable): bool` blocks until a request arrives, performs the per-request
    reset, seeds the superglobals, runs the callable, flushes the response, runs the request's
    shutdown steps, and returns `true` — or `false` when the worker should exit (shutdown, or
    `max_requests` reached). The `Vm`, the class table, loaded units and everything the boot script
@@ -258,7 +258,7 @@ table, which die with the `Vm`.
 
    The last row contradicts today's `request_end()`, which resets `next_object_id` to 1. With live
    boot-time objects that would hand out duplicate ids. Worker mode therefore needs a reset that is
-   a *subset* of `request_end()`, taken against a snapshot made when `phpr_handle_request` is first
+   a *subset* of `request_end()`, taken against a snapshot made when `ferro_handle_request` is first
    called — not `request_end()` itself.
 4. **Static-cache implications — to document for application authors.** Statics and static
    properties persist across requests. Code that memoises per-request data in a `static` (the
@@ -293,7 +293,7 @@ Ordered by measured size ÷ estimated risk. None touches `php-types`' public API
 | 5 | ~~Remove the per-array-write and per-call allocation~~ **done, session 4** — array write, typed call and `foreach` all at 0 allocations; only concat allocates | typed `function_call_1m` 0.883; `packed_index_write_1m` 0.948 | path machinery, call binder |
 | 6 | Dispatch loop: current frame held outside the `Vec`, cached stack/ops slices | up to 20.6 % | `run_loop` |
 | 7 | Bytecode cache, steps 2 and 3 of §4 — step 2 is what the unit cache already gives a worker (nothing compiles after boot); step 3 (on disk) not done, see NOTES.md session 5 §4 | 36 % of a short Symfony run; the 15.8 ms CLI floor | new module |
-| 8 | ~~Worker mode~~ **done, session 5** (`phpr -S --worker`, `phpr_handle_request()`; NOTES.md session 5 §2–3): Symfony under wrk 1.08× php-fpm+opcache and 0.63× FrankenPHP at 4 workers, 1.27× / 1.13× at 8 | removes boot per request | `php-cli` server, `vm/worker.rs` |
+| 8 | ~~Worker mode~~ **done, session 5** (`ferro -S --worker`, `ferro_handle_request()`; NOTES.md session 5 §2–3): Symfony under wrk 1.08× php-fpm+opcache and 0.63× FrankenPHP at 4 workers, 1.27× / 1.13× at 8 | removes boot per request | `php-cli` server, `vm/worker.rs` |
 | 9 | **Re-profile.** Only then ask whether arrays need a new representation (C-lite) — **done once, session 4** (NOTES.md session 4 §2c): `Rc` + `RefCell` + alloc 11–31 %, still under every PLAN threshold; dispatch and compilation are what is left | — | — |
 
 Two correctness bugs found on the way blocked the target frameworks; **both fixed in session 2**

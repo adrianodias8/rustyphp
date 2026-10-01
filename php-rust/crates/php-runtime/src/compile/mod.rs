@@ -82,10 +82,9 @@ struct ProgramCtx<'a> {
     classes: &'a [std::rc::Rc<ClassDecl>],
     class_index: &'a rustc_hash::FxHashMap<Vec<u8>, ClassId>,
     /// Whether the register-lowering pass runs on every `compile_body` of this
-    /// compile (S-100: il MODO è un input ESPLICITO del funnel, stampato una
-    /// volta dall'entry di produzione via `reg_lower::enabled()`; i test di
-    /// emissione lo passano a mano nei due valori — niente premesse ambientali
-    /// nella batteria, KS-HO-101-3).
+    /// compile (the MODE is an EXPLICIT input of the funnel, read once by the
+    /// production entry via `reg_lower::enabled()`; the emission tests pass it
+    /// by hand in both values — no environmental premises in the battery).
     reg_lower: bool,
 }
 
@@ -224,12 +223,12 @@ fn compile_program_impl(
     compile_program_impl_mode(program, registry, stub_mask, prelude, link, reg_lower::enabled())
 }
 
-/// Come [`compile_program_impl`] ma col modo register-lowering ESPLICITO:
-/// l'entry per i test di emissione (i due modi senza toccare l'ambiente del
-/// processo). La produzione passa sempre da `reg_lower::enabled()`.
-/// SOLO test per costruzione (unico riferimento: reg_lower tests) — il
-/// cfg(test) è il fix del dead-code svelato dal primo run vivo della corsia
-/// census in CI (S-139).
+/// Like [`compile_program_impl`] but with an EXPLICIT register-lowering mode:
+/// the entry for the emission tests (both modes without touching the process
+/// environment). Production always goes through `reg_lower::enabled()`.
+/// Test-ONLY by construction (sole reference: the reg_lower tests) — the
+/// cfg(test) fixes the dead-code warning revealed by the first live run of
+/// the census lane in CI.
 #[cfg(test)]
 pub(crate) fn compile_program_with_mode(
     program: &Program,
@@ -782,13 +781,13 @@ impl<'a> FnCompiler<'a> {
     }
 
     /// Emit a binary operator, specializing `+` into [`Op::BinaryAdd`]
-    /// (H-B2, S-98.0) — but ONLY when the register-lowering pass is off:
+    /// — but ONLY when the register-lowering pass is off:
     /// its windows match `Op::Binary(Add)` and must keep fusing it (the
     /// mode already keys the unit cache, so the two emissions never mix).
-    /// A-HO-102-1 (Concilio WP-102): il modo si legge da `ctx.reg_lower`,
-    /// MAI da `enabled()` — questo era l'ultimo sito ambientale residuo e
-    /// falsificava «il modo è un INPUT del funnel» per il braccio OFF
-    /// in-process dei test (che emetteva Binary(Add) sotto default ON).
+    /// The mode is read from `ctx.reg_lower`, NEVER from `enabled()` — this
+    /// was the last residual environmental site and it falsified "the mode
+    /// is an INPUT of the funnel" for the in-process OFF arm of the tests
+    /// (which emitted Binary(Add) under the default ON).
     fn emit_binary(&mut self, op: crate::hir::BinOp) -> Addr {
         if op == crate::hir::BinOp::Add && !self.ctx.reg_lower {
             self.emit(Op::BinaryAdd)
@@ -974,38 +973,38 @@ impl<'a> FnCompiler<'a> {
             // removed after — no address ever shifts, WP-33) for a statement
             // that provably cannot feed the note buffer nor release an
             // object's last reference — see `sweep_elidable`.
-            // S-97.0 H-A2: il Sweep di un BLOCCO FRA GRAFFE il cui ultimo
-            // statement ha appena emesso il proprio Sweep dello stesso grado e'
-            // un no-op PER COSTRUZIONE — fra i due non viene eseguito NESSUN
-            // opcode, quindi lo stato del GC non puo' essere cambiato: il primo
-            // ha drenato il buffer (anche riprendendo attraverso i distruttori
-            // che schedula), e il secondo troverebbe `gc_buf_head >=
-            // gc_buf.len()` e prenderebbe il ramo `noop`.
+            // The Sweep of a BRACED BLOCK whose last statement has just
+            // emitted its own Sweep of the same grade is a no-op BY
+            // CONSTRUCTION — NO opcode runs between the two, so the GC state
+            // cannot have changed: the first one drained the buffer (even
+            // resuming through the destructors it schedules), and the second
+            // would find `gc_buf_head >= gc_buf.len()` and take the `noop`
+            // arm.
             //
-            // Non e' un caso di laboratorio: OGNI corpo fra graffe lo paga. Il
-            // lowering rende `for (...) { ... }` come UNO `StmtKind::Block`
-            // (mago restituisce il blocco come singolo statement), quindi il
-            // `block_of` interno emette il Sweep dell'ultimo statement e quello
-            // esterno ne emette subito un altro per il blocco. Misurato sul
-            // ciclo aritmetico: DUE Sweep per iterazione, il 10% degli opcode
-            // dispatchati, di cui META' e' questo doppione.
+            // This is not a laboratory case: EVERY braced body pays it. The
+            // lowering renders `for (...) { ... }` as ONE `StmtKind::Block`
+            // (mago returns the block as a single statement), so the inner
+            // `block_of` emits the last statement's Sweep and the outer one
+            // immediately emits another for the block. Measured on the
+            // arithmetic loop: TWO Sweeps per iteration, 10% of the
+            // dispatched opcodes, HALF of which is this duplicate.
             //
-            // ⚠️ LA REGOLA VALE SOLO PER `Block`, e la restrizione e'
-            // SOSTANZIALE, non prudenza. La versione generale «elidi qualunque
-            // Sweep preceduto da un Sweep» e' SCORRETTA: in
-            // `if (c) { ... }` il `JumpIfFalse` viene rattoppato ESATTAMENTE
-            // alla posizione del Sweep dell'`if`, quindi il ramo FALSO ci
-            // atterra sopra senza aver eseguito quello del corpo — eliderlo gli
-            // toglierebbe il suo unico sweep, e la condizione puo' aver chiamato
-            // una funzione che ha annotato oggetti. Un `Block` invece non
-            // rattoppa nulla alla propria coda, e i costrutti che lo contengono
-            // prendono `here()` DOPO l'intero blocco (il `continue` di un `for`
-            // salta al passo, oltre entrambi i sweep, prima come dopo).
+            // ⚠️ THE RULE HOLDS ONLY FOR `Block`, and the restriction is
+            // SUBSTANTIVE, not caution. The general version "elide any Sweep
+            // preceded by a Sweep" is WRONG: in `if (c) { ... }` the
+            // `JumpIfFalse` is patched EXACTLY to the position of the `if`'s
+            // Sweep, so the FALSE arm lands on it without having run the
+            // body's — eliding it would take away its only sweep, and the
+            // condition may have called a function that noted objects. A
+            // `Block`, by contrast, patches nothing at its own tail, and the
+            // constructs containing it take `here()` AFTER the whole block
+            // (a `for`'s `continue` jumps to the step, past both sweeps,
+            // before as after).
             //
-            // Come per WP-53, l'elisione e' AL MOMENTO DELL'EMISSIONE e mai un
-            // peephole a valle: nessun indirizzo si sposta. Il grado (`main`)
-            // deve coincidere: un `main: true` fa anche il re-seed delle
-            // demozioni leggere, che un `main: false` non farebbe.
+            // As with the earlier sweep elision, this happens AT EMIT TIME and
+            // is never a downstream peephole: no address moves. The grade
+            // (`main`) must match: a `main: true` also re-seeds the light
+            // demotions, which a `main: false` would not.
             let dup_block_sweep = matches!(s.kind, StmtKind::Block(_))
                 && matches!(self.ops.last(), Some(Op::Sweep { main }) if *main == self.is_main);
             if !dup_block_sweep && !self.sweep_elidable(&s.kind, start) {

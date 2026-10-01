@@ -147,10 +147,10 @@ fn oracle_stdout(php: &str, code: &str) -> Vec<u8> {
 #[test]
 fn evaluator_matches_oracle() {
     let Some(php) = oracle_path() else {
-        // Audit Sol 2026-07-30 P1.2: senza oracle questo test era un
-        // FALSO VERDE (return = "ok" senza confronti). Ora fallisce
-        // forte; PHPR_ALLOW_MISSING_ORACLE=1 e' l'escape ESPLICITO
-        // per ambienti senza oracle (CI job non-differential).
+        // Without an oracle this test used to be a FALSE GREEN (returned
+        // "ok" with no comparison). Now it fails loudly;
+        // PHPR_ALLOW_MISSING_ORACLE=1 is the EXPLICIT escape for
+        // environments without an oracle (non-differential CI job).
         if std::env::var_os("PHPR_ALLOW_MISSING_ORACLE").is_some() {
             eprintln!("SKIPPED-BY-ENV: differential senza oracle");
             return;

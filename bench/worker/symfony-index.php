@@ -1,6 +1,6 @@
 <?php
 // One-shot front controller for the Symfony benchmark app (php-fpm, the
-// FrankenPHP classic mode, `phpr -S` without --worker): boots per request.
+// FrankenPHP classic mode, `ferro -S` without --worker): boots per request.
 require __DIR__ . '/symfony-kernel.php';
 
 use Symfony\Component\HttpFoundation\Request;

@@ -778,9 +778,8 @@ impl Props {
     #[inline]
     pub(crate) fn census_sync_props(&self) {
         let cb = self.census_bytes_props();
-        // S-143: prima transizione 0→>0 = creazione del buffer props (evento
-        // raw dell'allocatore attribuibile a obj; slots+dyn contati UNA volta,
-        // banda dichiarata).
+        // First 0→>0 transition = creation of the props buffer (raw allocator
+        // event attributable to obj; slots+dyn counted ONCE, stated band).
         if self.accounted.get() == 0 && cb > 0 {
             crate::memcensus::s143_propsbuf_note();
         }

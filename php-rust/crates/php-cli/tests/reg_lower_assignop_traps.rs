@@ -1,18 +1,16 @@
-//! A-ST-101-3 / KS-ST-101-1 (Concilio WP-101): le SETTE fixture-trappola
-//! AssignOp (A-ST-99-3 a–g) come GATE della promozione flag-on — VIETATO il
-//! flip del default finché non esistono e non passano BYTE-IDENTICHE nei
-//! DUE modi. Fixture IN-TREE (A-ST-100-3) condivise col gate oracle di
-//! harness: `wp100-harness/assignop-traps/*.php`.
+//! The SEVEN AssignOp trap fixtures (a–g) as the GATE for the flag-on
+//! promotion — flipping the default is FORBIDDEN until they exist and pass
+//! BYTE-IDENTICAL in BOTH modes. Fixtures live IN-TREE.
 //!
-//! Il giudice QUI è il confronto per-modo (off↔on, valori ESPLICITI della
-//! lista chiusa del contratto S-100). La gamba a DUE MOTORI (KS-ST-100-2)
-//! vive in `wp100-harness/s100-assignop-oracle.sh` con la lista NOMINATA
-//! delle divergenze oracle pre-esistenti (catalogo S-100: undef-lhs senza
-//! warning; typed-ref azzerato da Zend dopo AssignOp fallito).
+//! The judge HERE is the per-mode comparison (off↔on, EXPLICIT values from
+//! the closed list of the mode contract). The TWO-ENGINE leg (against the
+//! PHP oracle) lives outside this test, with a NAMED list of pre-existing
+//! oracle divergences (undef-lhs without warning; typed-ref zeroed by Zend
+//! after a failed AssignOp).
 use std::process::Command;
 
-/// (fixture, marker di controllo positivo: la fixture DEVE stamparlo — una
-/// fixture muta che passa per parità è una forgia silenziosa).
+/// (fixture, positive-control marker: the fixture MUST print it — a mute
+/// fixture that passes on parity is a silent forgery).
 const TRAPS: &[(&str, &str)] = &[
     ("a-rhs-first.php", "byref:"),
     ("b-typed-ref.php", "coerced:"),
@@ -31,7 +29,7 @@ fn traps_dir() -> std::path::PathBuf {
 }
 
 fn run_mode(reg: &str, file: &std::path::Path) -> (String, String, bool) {
-    let mut c = Command::new(env!("CARGO_BIN_EXE_phpr"));
+    let mut c = Command::new(env!("CARGO_BIN_EXE_ferro"));
     c.env_remove("PHPR_REG_LOWER");
     c.env_remove("PHPR_DUMP_OPS");
     c.env("PHPR_REG_LOWER", reg);
@@ -46,13 +44,13 @@ fn run_mode(reg: &str, file: &std::path::Path) -> (String, String, bool) {
 #[test]
 fn the_seven_assignop_traps_are_byte_identical_across_modes() {
     let dir = traps_dir();
-    // Il dente conta le trappole: una fixture rimossa/rinominata non
-    // sparisce in silenzio dal gate (KS-ST-101-1 esige tutte e sette).
+    // The test counts the traps: a removed/renamed fixture does not
+    // silently vanish from the gate (all seven are required).
     let mut found: Vec<String> = std::fs::read_dir(&dir)
         .expect("read traps dir")
         .filter_map(|e| e.ok())
         .map(|e| e.file_name().to_string_lossy().into_owned())
-        // I resource-fork AppleDouble (`._*.php`) del volume non sono fixture.
+        // The volume's AppleDouble resource forks (`._*.php`) are not fixtures.
         .filter(|n| n.ends_with(".php") && !n.starts_with("._"))
         .collect();
     found.sort();

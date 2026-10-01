@@ -11,7 +11,7 @@
 # nothing is reused between runs. Order is ABBA (oracle, phpr, phpr, oracle) so a
 # warmer network path does not favour one engine.
 set -euo pipefail
-PHPR="${PHPR:-/target/release/phpr}"
+PHPR="${PHPR:-/target/release/ferro}"
 PHP="${PHP_ORACLE:-$(command -v php)}"
 S="${SCRATCH:-/scratch}/smoke-composer"
 OUT="${OUT:-$S/result.tsv}"

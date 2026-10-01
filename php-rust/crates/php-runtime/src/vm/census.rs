@@ -245,13 +245,13 @@ pub fn op_index(op: &Op) -> usize {
         Op::BinaryDst { .. } => 182,
         Op::CmpJmpSS { .. } => 183,
         Op::CmpJmpSC { .. } => 184,
-        // S-106 H-A1: dentro il blocco forme-registro, PRIMA di BinaryAdd —
-        // l'invariante «BinaryAdd chiude la tabella» resta vero.
+        // Inside the register-form block, BEFORE BinaryAdd — the invariant
+        // "BinaryAdd closes the table" still holds.
         Op::BinarySTDst { .. } => 185,
-        // S-107 lotto superistruzioni (census-driven): come sopra, il blocco
-        // nuovo entra PRIMA di BinaryAdd; nessuna di queste forme porta
-        // operandi in pila per la matrice type-pair (stessa nota di
-        // CmpJmpConst / forme-registro).
+        // Superinstruction batch (census-driven): as above, the new block
+        // goes in BEFORE BinaryAdd; none of these forms carries operands on
+        // the stack for the type-pair matrix (same note as CmpJmpConst /
+        // register forms).
         Op::BinaryTC { .. } => 186,
         Op::BinarySCSC { .. } => 187,
         Op::IncDecSlotPop { .. } => 188,
@@ -259,20 +259,20 @@ pub fn op_index(op: &Op) -> usize {
         Op::PropGetSlot { .. } => 190,
         Op::PropSetPop { .. } => 191,
         Op::StringifySlot { .. } => 192,
-        // S-108 lotto-2 (census secondo giro): il blocco nuovo entra PRIMA
-        // di BinaryAdd — l'invariante «BinaryAdd chiude la tabella» resta
-        // vero; nessuna di queste forme porta operandi in pila per la
-        // matrice type-pair (stessa nota delle forme-registro).
+        // Second superinstruction batch (second census round): the new block
+        // goes in BEFORE BinaryAdd — the invariant "BinaryAdd closes the
+        // table" still holds; none of these forms carries operands on the
+        // stack for the type-pair matrix (same note as the register forms).
         Op::PropGetSlotRecv { .. } => 193,
         Op::BinaryTCPropSetPop { .. } => 194,
         Op::BinarySCSCDst { .. } => 195,
         Op::LoadVarPushConst { .. } => 196,
-        // S-109 lotto-3 (census terzo giro): ConcatNConst entra PRIMA di
-        // BinaryAdd — l'invariante «BinaryAdd chiude la tabella» resta vero.
-        // EMENDAMENTO DICHIARATO S-109: offset +1 (N_OPS 198→199).
+        // Third batch (third census round): ConcatNConst goes in BEFORE
+        // BinaryAdd — the invariant "BinaryAdd closes the table" still holds
+        // (offset +1, N_OPS 198→199).
         Op::ConcatNConst { .. } => 197,
         Op::BinaryAdd => 198,
-        // S-145 FR1: dim-read fuso a chiave costante.
+        // Fused dim-read at a constant key.
         Op::PropDimGetConst { .. } => 199,
         // Fork: gate of the in-place `$o->p .= rhs` (appended; N_OPS 200→201).
         Op::PropConcatGate { .. } => 200,
@@ -636,8 +636,8 @@ pub fn census_arm() -> bool {
         let mut c = c.borrow_mut();
         if c.is_none() {
             *c = Some(Box::new(OpCensus::new()));
-            // S-147: dà i NOMI ai siti del census movimenti (OnceLock:
-            // registrazioni successive sono no-op).
+            // Gives NAMES to the movement-census sites (OnceLock: later
+            // registrations are no-ops).
             #[cfg(feature = "mem-census")]
             php_types::memcensus::s147_register_names(&OP_NAMES);
         }
@@ -670,9 +670,9 @@ pub fn census_concat_site(site: usize, lhs: &Zval, rhs: &Zval) {
     });
 }
 
-/// S-176 census «typed» (wp176-harness/s176-criterio-census-typed.md p.2):
-/// `prop_set_entry` outcome counters — IC hit on a plain class, IC hit on a
-/// typed class (TY bit: coercion inside the IC arm, S-134), full-path miss.
+/// "Typed" census: `prop_set_entry` outcome counters — IC hit on a plain
+/// class, IC hit on a typed class (TY bit: coercion inside the IC arm),
+/// full-path miss.
 /// Call sites are `#[cfg(feature = "op-census")]`-gated in run.rs; the
 /// counters are read (and reset) by the census dump of this process.
 pub static PROP_SET_IC_PLAIN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -706,11 +706,10 @@ pub fn census_dump() {
     }
 }
 
-/// S-139 ic-stats (criterio s139-criterio-rmw-collaudo.md p.3): contatori
-/// fill/hit della cella IC RMW (FieldAssignOp / FieldIncDec). Stessa
-/// convenzione delle census: SOLO build diagnostiche — mai nel pin; la
-/// fedeltà si giudica sempre sul pin, mai su questa build. Dump su stderr
-/// a fine run se `PHPR_IC_STATS` è settata.
+/// ic-stats: fill/hit counters of the RMW IC cell (FieldAssignOp /
+/// FieldIncDec). Same convention as the censuses: diagnostic builds ONLY —
+/// never in the pin; fidelity is always judged on the pin, never on this
+/// build. Dumped to stderr at end of run if `PHPR_IC_STATS` is set.
 #[cfg(feature = "ic-stats")]
 pub mod ic_stats {
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -760,18 +759,15 @@ mod tests {
             assert!(i < N_OPS, "{name} index {i} out of range");
             assert_eq!(OP_NAMES[i], *name, "OP_NAMES row mismatch for {name}");
         }
-        // BinaryAdd (H-B2, S-98.0) closes the table; the register-form block
-        // (S-97.1, esteso da BinarySTDst in S-106 H-A1, dal lotto S-107,
-        // dal LOTTO-2 S-108: PropGetSlotRecv/BinaryTCPropSetPop/
-        // BinarySCSCDst/LoadVarPushConst, e dal LOTTO-3 S-109:
-        // ConcatNConst) sits just before it, with ConcatAssignSlot (WP-55)
-        // ahead of that block. EMENDAMENTO DICHIARATO S-107: offset +7
-        // (N_OPS 187→194). EMENDAMENTO DICHIARATO S-108: offset +4
-        // (N_OPS 194→198). EMENDAMENTO DICHIARATO S-109: offset +1
-        // (N_OPS 198→199).
-        // S-145 FR1: PropDimGetConst chiude ora la tabella (append in coda,
-        // nessun indice esistente rinumerato) — ogni distanza dal fondo
-        // cresce di 1, emendata QUI in blocco.
+        // BinaryAdd closes the original table; the register-form block
+        // (extended by BinarySTDst, by the superinstruction batch, by the
+        // second batch: PropGetSlotRecv/BinaryTCPropSetPop/BinarySCSCDst/
+        // LoadVarPushConst, and by the third batch: ConcatNConst) sits just
+        // before it, with ConcatAssignSlot ahead of that block. Each batch
+        // shifted the offsets (N_OPS 187→194, 194→198, 198→199).
+        // PropDimGetConst now closes the table (appended at the tail, no
+        // existing index renumbered) — every distance from the bottom grows
+        // by 1, amended HERE as a block.
         assert_eq!(op_index(&Op::ConcatAssignSlot(0)), N_OPS - 26);
         assert_eq!(
             op_index(&Op::CmpJmpSC {

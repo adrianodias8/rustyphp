@@ -1,9 +1,9 @@
-//! BIG-5 <-> Unicode: port meccanico di unicode_table_big5.h (libmbfl) con
-//! l'aritmetica di mb_big5_to_wchar / mb_wchar_to_big5 (mbfilter_cjk.c).
-//! Tabelle VERBATIM (0 = cella non mappata); range validi lead 0xA1-0xF9,
-//! trail 0x40-0x7E | 0xA1-0xFE; stride 157 per lead. Il caso speciale del
-//! lead 0xC8 su cella vuota (il trail si ri-processa come byte successivo)
-//! vive nel chiamante, come nel C.
+//! BIG-5 <-> Unicode: mechanical port of unicode_table_big5.h (libmbfl) with
+//! the arithmetic of mb_big5_to_wchar / mb_wchar_to_big5 (mbfilter_cjk.c).
+//! Tables are VERBATIM (0 = unmapped cell); valid ranges are lead 0xA1-0xF9,
+//! trail 0x40-0x7E | 0xA1-0xFE; stride 157 per lead. The special case of
+//! lead 0xC8 on an empty cell (the trail is reprocessed as the next byte)
+//! lives in the caller, as in the C code.
 
 static BIG5_UCS: [u16; 13973] = [
     0x3000, 0xFF0C, 0x3001, 0x3002, 0xFF0E, 0x2022, 0xFF1B, 0xFF1A, 0xFF1F, 0xFF01, 0xFE30, 0x2026,
@@ -3340,9 +3340,9 @@ pub fn big5_pair_to_ucs(lead: u8, trail: u8) -> Option<u16> {
     }
 }
 
-/// codepoint -> codice big5 (<=0x80 singolo byte, altrimenti doppio byte),
-/// `None` = non rappresentabile. w==0 (NUL) sta a 0 in tabella: lo gestisce
-/// il chiamante, come nel C.
+/// codepoint -> big5 code (<=0x80 single byte, otherwise double byte),
+/// `None` = not representable. w==0 (NUL) sits at 0 in the table: the
+/// caller handles it, as in the C.
 pub fn ucs_to_big5(w: u32) -> Option<u16> {
     if (0x0..0x452).contains(&w) {
         let s = UCS_A1[(w - 0x0) as usize];

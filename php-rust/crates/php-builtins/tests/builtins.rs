@@ -1018,7 +1018,7 @@ fn gc_id_reuse_and_collect_sentinels() {
     // acyclic leftover candidate survives a collect. RE-PINNED in WP-72
     // (S-72.4 mass-teardown): the end-of-script tail is now Zend's
     // reverse-symtab-apply order `[c][b]` (oracle-verified — the old
-    // `[b][c]` was phpr's priced divergence, closed by the leva). The
+    // `[b][c]` was phpr's priced divergence, closed by that refactor). The
     // explicit-collect order `[c1][c2]` still intentionally differs from
     // Zend's `[c2][c1]` (PHPR_DIVERGENCES §sweep-driven, unchanged).
     assert_eq!(

@@ -1111,14 +1111,13 @@ fn lower_prelude_uncached() -> LoweredPrelude {
             low.hoist_function(func).expect("fileinfo prelude function must lower");
         }
     }
-    // S-93.0 B1/B3 (contatore del canale, predizione-misurata WP-48): con
-    // PHPR_PRELUDE_STATS=1 stampa il consumo dell'arena del preludio.
-    // allocated_bytes INCLUDE le copie morte dei buffer che raddoppiano
-    // dentro i chunk (è il touched fisico, non il live): è il numeratore
-    // della leva per-file-arena (i sei chunk huge di
-    // wp92-harness/huge-worker.out sono i raddoppi di QUESTA arena,
-    // liberati al ritorno di questa funzione — trace S-93.0). Una lettura
-    // env per init per-thread, zero costo a regime.
+    // Channel counter: with PHPR_PRELUDE_STATS=1 print the prelude arena's
+    // consumption. allocated_bytes INCLUDES the dead copies of the buffers
+    // that double inside the chunks (it is the physical touched size, not
+    // the live one): it is the numerator of the per-file-arena change (the
+    // six huge chunks seen in the worker traces are the doublings of THIS
+    // arena, freed when this function returns). One env read per
+    // per-thread init, zero steady-state cost.
     if std::env::var_os("PHPR_PRELUDE_STATS").is_some_and(|v| v == "1") {
         eprintln!(
             "prelude-arena allocated_bytes={} chunk_capacity={}",
@@ -2549,8 +2548,8 @@ pub(crate) fn resolve_constant(name: &[u8]) -> Option<ExprKind> {
         b"FILTER_VALIDATE_MAC" => ExprKind::Int(276),
         b"FILTER_CALLBACK" => ExprKind::Int(1024),
         b"FILTER_NULL_ON_FAILURE" => ExprKind::Int(134217728),
-        // ext/iconv (§3.19 catena composer, S-127): valori dell'oracle 8.5.7
-        // (PlatformRepository legge ICONV_VERSION per la versione dell'ext).
+        // ext/iconv (composer chain): values from the 8.5.7 oracle
+        // (PlatformRepository reads ICONV_VERSION for the ext's version).
         b"ICONV_VERSION" => ExprKind::Str(b"1.11".to_vec().into_boxed_slice()),
         b"ICONV_IMPL" => ExprKind::Str(b"libiconv".to_vec().into_boxed_slice()),
         b"ICONV_MIME_DECODE_STRICT" => ExprKind::Int(1),
@@ -2585,9 +2584,9 @@ pub(crate) fn resolve_constant(name: &[u8]) -> Option<ExprKind> {
         b"FILTER_FLAG_SCHEME_REQUIRED" => ExprKind::Int(65536),
         b"FILTER_FLAG_HOST_REQUIRED" => ExprKind::Int(131072),
         b"FILTER_FLAG_HOSTNAME" => ExprKind::Int(1048576),
-        // §3.19 catena composer (S-127): json-schema valida le email degli
-        // authors con questo flag (local-part unicode); il valore CONDIVIDE
-        // 1048576 con HOSTNAME (filtri diversi, spazi di flag diversi).
+        // Composer chain: json-schema validates the authors' emails with
+        // this flag (unicode local-part); the value SHARES 1048576 with
+        // HOSTNAME (different filters, different flag spaces).
         b"FILTER_FLAG_EMAIL_UNICODE" => ExprKind::Int(1048576),
         // FILTER_VALIDATE_IP flags (+ the aggregate GLOBAL_RANGE, 8.2).
         b"FILTER_FLAG_IPV4" => ExprKind::Int(1048576),
@@ -2887,8 +2886,8 @@ pub(crate) fn resolve_constant(name: &[u8]) -> Option<ExprKind> {
         b"IDNA_ERROR_INVALID_ACE_LABEL" => ExprKind::Int(1024),
         b"IDNA_ERROR_BIDI" => ExprKind::Int(2048),
         b"IDNA_ERROR_CONTEXTJ" => ExprKind::Int(4096),
-        // preg_last_error() (WP-16): phpr produce solo 0/1/4, ma le costanti
-        // esistono tutte come in ext/pcre.
+        // preg_last_error(): phpr only produces 0/1/4, but all the constants
+        // exist as in ext/pcre.
         b"PREG_NO_ERROR" => ExprKind::Int(0),
         b"PREG_INTERNAL_ERROR" => ExprKind::Int(1),
         b"PREG_BACKTRACK_LIMIT_ERROR" => ExprKind::Int(2),

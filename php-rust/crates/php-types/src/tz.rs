@@ -290,7 +290,7 @@ mod tests {
     use super::*;
 
     // Every pinned value below comes from the PHP 8.5.7 oracle running with
-    // the named zone as its default (probe p7_tz1.php, sessione 7).
+    // the named zone as its default.
 
     #[test]
     fn toronto_summer_winter() {

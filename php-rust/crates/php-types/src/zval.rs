@@ -71,12 +71,11 @@ pub enum Zval {
     ArgPlace(Rc<ArgPlace>),
 }
 
-/// S-145 sonda-B (modello wp145-harness/s145-sonda-b-modello.md): sotto
-/// `mem-census` la derive lascia il posto a questo impl MANUALE che conta
-/// ogni movimento per CLASSE prima di clonare — il denominatore della
-/// partizione memcpy/inc-dec/nota. Variante per variante il corpo è la
-/// stessa copia della derive (Rc::clone / copy); senza feature la derive
-/// resta e la forma di parità non cambia di un byte.
+/// Under `mem-census` the derive gives way to this MANUAL impl that counts
+/// every movement per CLASS before cloning — the denominator of the
+/// memcpy/inc-dec/note partition. Variant by variant the body is the same
+/// copy the derive would make (Rc::clone / copy); without the feature the
+/// derive stays and the parity form does not change by a byte.
 #[cfg(feature = "mem-census")]
 impl Clone for Zval {
     #[inline]
@@ -101,13 +100,12 @@ impl Clone for Zval {
     }
 }
 
-/// S-144 tranche-2 (census, revisione S-143 az.1): funnel di nascita dei box
-/// condivisi `Rc<RefCell<Zval>>` (classe `rczval` del criterio S-143 p.2).
-/// Senza la feature `mem-census` è testualmente `Rc::new(RefCell::new(v))`
-/// (`#[inline]`, nessun simbolo census nel binario di parità). Il tipo del
-/// parametro è il classificatore: un sito il cui payload non è `Zval`
-/// (Object/Resource/GenState) NON compila qui — l'enumerazione dei siti è
-/// chiusa dal compilatore, non dalla diligenza.
+/// Census birth funnel of the shared `Rc<RefCell<Zval>>` boxes (class
+/// `rczval`). Without the `mem-census` feature it is textually
+/// `Rc::new(RefCell::new(v))` (`#[inline]`, no census symbol in the parity
+/// binary). The parameter type is the classifier: a site whose payload is
+/// not `Zval` (Object/Resource/GenState) does NOT compile here — the
+/// enumeration of sites is closed by the compiler, not by diligence.
 #[inline]
 pub fn zcell(v: Zval) -> Rc<RefCell<Zval>> {
     #[cfg(feature = "mem-census")]
@@ -115,9 +113,9 @@ pub fn zcell(v: Zval) -> Rc<RefCell<Zval>> {
     Rc::new(RefCell::new(v))
 }
 
-/// [`zcell`] per i SOLI siti inequivocabilmente di macchineria-proprietà
-/// (prop_ref_cell, makeref magic, radici lazy dei field-set): alimenta
-/// `rczval_prop_n`, il lato STRETTO del bracket del criterio S-144.
+/// [`zcell`] for ONLY the sites that are unambiguously property machinery
+/// (prop_ref_cell, makeref magic, lazy roots of the field-sets): feeds
+/// `rczval_prop_n`, the STRICT side of the census bracket.
 #[inline]
 pub fn zcell_prop(v: Zval) -> Rc<RefCell<Zval>> {
     #[cfg(feature = "mem-census")]
@@ -314,7 +312,7 @@ impl Zval {
     /// A-HO-106-2 (Council WP-106): the H-C2 lever this predicate was born
     /// for was MEASURED AND FELL in S-104 — Δ=−10,33/−11,33 ns/iter, 5/5,
     /// channel refuted (run_loop is icache-bound; the 1101 outlined
-    /// drop-glue calls were nearly free — wp104-harness/hc2-ab-verdetto.out).
+    /// drop-glue calls were nearly free).
     /// Do NOT re-propose a drop fast-out keyed on this predicate in the
     /// dispatch loop; the predicate stays as documentation of the channel
     /// and for its unit tooth.

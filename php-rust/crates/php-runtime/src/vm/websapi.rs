@@ -1,4 +1,4 @@
-//! Web-SAPI request plumbing (phpr -S, the cli-server work-alike): the
+//! Web-SAPI request plumbing (ferro -S, the cli-server work-alike): the
 //! request superglobals ($_SERVER/$_GET/$_POST/$_COOKIE/$_FILES/$_REQUEST),
 //! the rfc1867 multipart parser, and the stateful header-family helpers.
 //! Every format here is oracle-pinned against `php -S` 8.5.7 (see the

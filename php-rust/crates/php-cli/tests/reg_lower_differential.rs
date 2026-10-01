@@ -1,17 +1,17 @@
-//! A-HE-100-3 (Concilio WP-100, promosso BLOCCANTE dal WP-101): test
-//! differenziale PERMANENTE `BinaryAdd ≡ Binary(Add)`.
+//! PERMANENT differential test `BinaryAdd ≡ Binary(Add)`.
 //!
-//! Flag-OFF l'emissione specializza `+` in `Op::BinaryAdd` (H-B2); flag-ON
-//! l'emissione resta `Binary(Add)` (e le finestre fondono le forme registro).
-//! L'equivalenza dei due opcodi era «vera per costruzione» solo a commento —
-//! qui è una fixture eseguita nei DUE modi sul funnel VERO (binario
-//! spawnnato), byte-compare di stdout+stderr+exit: overflow, coercizioni
-//! numeric-string, union di array, warning Undef, fallback MISS (tipi non
-//! int-int), `+=` compreso. «Corretto per fortuna del corpus» ≠ corretto.
+//! Flag-OFF the emitter specialises `+` into `Op::BinaryAdd`; flag-ON the
+//! emission stays `Binary(Add)` (and the windows fuse the register forms).
+//! The equivalence of the two opcodes was "true by construction" only in a
+//! comment — here it is a fixture run in BOTH modes on the REAL funnel
+//! (spawned binary), byte-comparing stdout+stderr+exit: overflow,
+//! numeric-string coercions, array union, Undef warning, MISS fallback
+//! (non int-int types), `+=` included. "Correct by luck of the corpus" is
+//! not correct.
 use std::process::Command;
 
-/// I casi limite dell'ADD, uno per riga con etichetta: l'output è il
-/// giudice, quindi ogni caso stampa qualcosa (valore o eccezione).
+/// The edge cases of ADD, one per line with a label: the output is the
+/// judge, so every case prints something (value or exception).
 const CASES: &[u8] = br#"<?php
 function show($label, $fn) {
   try { $v = $fn(); echo $label, "=", var_export($v, true), "\n"; }
@@ -42,7 +42,7 @@ $x = 3; $x += "4"; echo "pluseq_coerce=", var_export($x, true), "\n";
 "#;
 
 fn run_mode(reg: &str, file: &std::path::Path) -> (String, String, bool) {
-    let mut c = Command::new(env!("CARGO_BIN_EXE_phpr"));
+    let mut c = Command::new(env!("CARGO_BIN_EXE_ferro"));
     c.env_remove("PHPR_REG_LOWER");
     c.env_remove("PHPR_DUMP_OPS");
     c.env("PHPR_REG_LOWER", reg);
@@ -63,8 +63,8 @@ fn binary_add_and_generic_add_are_byte_equivalent_across_modes() {
     let (on_out, on_err, on_ok) = run_mode("1", &file);
     let _ = std::fs::remove_file(&file);
 
-    // Controllo positivo: la fixture produce davvero i suoi casi (non è un
-    // file vuoto che passa per parità — forgia silenziosa).
+    // Positive control: the fixture really produces its cases (it is not
+    // an empty file passing on parity — a silent forgery).
     for label in ["overflow_pos", "arr_union", "str_throws", "pluseq_overflow"] {
         assert!(
             off_out.contains(label),

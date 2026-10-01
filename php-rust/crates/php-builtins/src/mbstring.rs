@@ -971,9 +971,9 @@ enum Codec {
     /// bytes are Latin-1 code points, `&…;` references decode to their
     /// character; encoding entitifies everything ≥ U+0080.
     HtmlEnt,
-    /// mbstring's BIG-5 (mbfilter_cjk.c + unicode_table_big5.h, port verbatim
-    /// in `php_types::big5`): encoding_rs' WHATWG Big5 diverge (lead 0x81-0xA0
-    /// HKSCS, 260 celle simbolo diverse, U+FFFD al posto del sostituto `?`).
+    /// mbstring's BIG-5 (mbfilter_cjk.c + unicode_table_big5.h, ported verbatim
+    /// in `php_types::big5`): encoding_rs' WHATWG Big5 diverges (lead 0x81-0xA0
+    /// HKSCS, 260 different symbol cells, U+FFFD instead of the `?` substitute).
     Big5,
     Rs(&'static RsEncoding),
 }
@@ -1027,27 +1027,27 @@ thread_local! {
 }
 
 thread_local! {
-    /// `mb_substitute_character`: come mbstring sostituisce input illegale
-    /// (decode) e caratteri non rappresentabili (encode). >= 0 = codepoint,
-    /// -1 = "none" (drop), -2 = "long" (`U+XXXX` solo lato encode),
-    /// -3 = "entity" (`&#xX;` solo lato encode); lato decode long/entity
-    /// degradano a `?` (probe WP-16). Default 63 (`?`).
+    /// `mb_substitute_character`: how mbstring substitutes illegal input
+    /// (decode) and unrepresentable characters (encode). >= 0 = codepoint,
+    /// -1 = "none" (drop), -2 = "long" (`U+XXXX`, encode side only),
+    /// -3 = "entity" (`&#xX;`, encode side only); on the decode side
+    /// long/entity degrade to `?` (oracle-probed). Default 63 (`?`).
     static MB_SUBST: std::cell::Cell<i64> = const { std::cell::Cell::new(63) };
 }
 
-/// Appende al risultato di un DECODE la sostituzione corrente per una
-/// sequenza malformata.
+/// Appends to a DECODE result the current substitution for a malformed
+/// sequence.
 fn push_subst_decode(out: &mut String) {
     match MB_SUBST.with(|c| c.get()) {
         -1 => {}
         cp if cp >= 0 => out.push(char::from_u32(cp as u32).unwrap_or('?')),
-        _ => out.push('?'), // long/entity: lato decode il filtro emette '?'
+        _ => out.push('?'), // long/entity: on the decode side the filter emits '?'
     }
 }
 
-/// I byte sostitutivi per un CODEPOINT non rappresentabile in encode:
-/// `encode_one` prova a codificare un codepoint nel target (None =
-/// non rappresentabile); il sostituto stesso non codificabile degrada a `?`.
+/// The substitute bytes for a CODEPOINT unrepresentable in encode:
+/// `encode_one` tries to encode a codepoint in the target (None =
+/// unrepresentable); a substitute that is itself unencodable degrades to `?`.
 fn subst_encode_bytes(w: u32, mut encode_one: impl FnMut(u32) -> Option<Vec<u8>>) -> Vec<u8> {
     match MB_SUBST.with(|c| c.get()) {
         -1 => Vec::new(),
@@ -1058,9 +1058,10 @@ fn subst_encode_bytes(w: u32, mut encode_one: impl FnMut(u32) -> Option<Vec<u8>>
 }
 
 /// `mb_substitute_character(?string|int|null $substitute_character = null)`:
-/// senza argomento riporta lo stato (int, o "none"/"long"/"entity"); con
-/// argomento lo imposta e torna true. Codepoint fuori range → ValueError
-/// "is not a valid codepoint"; stringa ignota → ValueError con l'unione.
+/// without an argument reports the state (int, or "none"/"long"/"entity");
+/// with an argument sets it and returns true. Out-of-range codepoint →
+/// ValueError "is not a valid codepoint"; unknown string → ValueError
+/// listing the union.
 pub fn mb_substitute_character(args: &[Zval], ctx: &mut Ctx) -> Result<Zval, PhpError> {
     let arg = args.first().map(|v| v.deref_clone());
     match arg {
@@ -1100,8 +1101,8 @@ pub fn mb_substitute_character(args: &[Zval], ctx: &mut Ctx) -> Result<Zval, Php
 }
 
 /// `mb_scrub(string $string, ?string $encoding = null): string` — round-trip
-/// decode+encode nello stesso encoding: le sequenze malformate diventano il
-/// sostituto corrente (mb_substitute_character), il resto passa invariato.
+/// decode+encode in the same encoding: malformed sequences become the current
+/// substitute (mb_substitute_character), everything else passes unchanged.
 pub fn mb_scrub(args: &[Zval], ctx: &mut Ctx) -> Result<Zval, PhpError> {
     let s = arg_str(args, "mb_scrub", ctx)?;
     let enc = match args.get(1).map(|v| v.deref_clone()) {
@@ -1581,8 +1582,8 @@ fn html_ent_encode(s: &str) -> Vec<u8> {
 /// substituting U+FFFD for malformed input.
 fn decode_bytes(codec: &Codec, bytes: &[u8]) -> String {
     match codec {
-        // Granularità WHATWG per le sequenze malformate (error_len =
-        // maximal-subpart, la stessa di mbstring 8.1+), sostituto onorato.
+        // WHATWG granularity for malformed sequences (error_len =
+        // maximal-subpart, the same as mbstring 8.1+), substitute honoured.
         Codec::Utf8 => {
             let mut out = String::with_capacity(bytes.len());
             let mut rest = bytes;
@@ -1594,7 +1595,7 @@ fn decode_bytes(codec: &Codec, bytes: &[u8]) -> String {
                     }
                     Err(e) => {
                         let (valid, after) = rest.split_at(e.valid_up_to());
-                        // SAFETY: `valid` è il prefisso validato da from_utf8.
+                        // SAFETY: `valid` is the prefix validated by from_utf8.
                         out.push_str(unsafe { std::str::from_utf8_unchecked(valid) });
                         push_subst_decode(&mut out);
                         let skip = e.error_len().unwrap_or(after.len());
@@ -1624,11 +1625,11 @@ fn decode_bytes(codec: &Codec, bytes: &[u8]) -> String {
     }
 }
 
-/// BIG-5 → UTF-8 con la semantica esatta di mb_big5_to_wchar: lead 0xA1-0xF9,
-/// trail 0x40-0x7E | 0xA1-0xFE; ogni BAD_INPUT emette il sostituto corrente
-/// (mb_substitute_character, default `?`). Lead 0xC8 su cella vuota: solo il
-/// lead è consumato, il trail si ri-processa come byte successivo (oddity del
-/// filtro C).
+/// BIG-5 → UTF-8 with the exact semantics of mb_big5_to_wchar: lead 0xA1-0xF9,
+/// trail 0x40-0x7E | 0xA1-0xFE; every BAD_INPUT emits the current substitute
+/// (mb_substitute_character, default `?`). Lead 0xC8 on an empty cell: only
+/// the lead is consumed, the trail is re-processed as the next byte (an
+/// oddity of the C filter).
 fn big5_decode(bytes: &[u8]) -> String {
     let mut out = String::with_capacity(bytes.len());
     let mut i = 0;
@@ -1654,8 +1655,8 @@ fn big5_decode(bytes: &[u8]) -> String {
                 push_subst_decode(&mut out);
             }
         } else {
-            // Lead fuori range, oppure lead valido come ULTIMO byte (il filtro
-            // C processa l'ultimo byte da solo: ASCII o BAD_INPUT).
+            // Lead out of range, or a valid lead as the LAST byte (the C
+            // filter processes the last byte on its own: ASCII or BAD_INPUT).
             push_subst_decode(&mut out);
         }
     }
@@ -1663,8 +1664,8 @@ fn big5_decode(bytes: &[u8]) -> String {
 }
 
 
-/// UTF-8 → BIG-5 (mb_wchar_to_big5): NUL passa come byte 0 (la tabella lo
-/// tiene a 0), unmappable → `?`.
+/// UTF-8 → BIG-5 (mb_wchar_to_big5): NUL passes through as byte 0 (the table
+/// keeps it at 0), unmappable → `?`.
 fn big5_encode(s: &str) -> Vec<u8> {
     let mut out = Vec::with_capacity(s.len());
     for ch in s.chars() {
@@ -1692,8 +1693,8 @@ fn big5_encode(s: &str) -> Vec<u8> {
     out
 }
 
-/// Scan di validità BIG-5 (mb_check_encoding / mb_detect_encoding): ogni
-/// sequenza deve essere ASCII o una coppia valida E mappata.
+/// BIG-5 validity scan (mb_check_encoding / mb_detect_encoding): every
+/// sequence must be ASCII or a valid AND mapped pair.
 fn big5_validates(bytes: &[u8]) -> bool {
     let mut i = 0;
     while i < bytes.len() {

@@ -1,8 +1,8 @@
 //! Worker mode (fork, DECISION_KERNEL.md §5): the application boots once per
-//! worker, then `phpr_handle_request(callable)` serves requests in a loop on
+//! worker, then `ferro_handle_request(callable)` serves requests in a loop on
 //! the same `Vm` — the class table, loaded units, statics and every object
 //! the boot script created stay alive across requests, as in FrankenPHP's
-//! worker mode. The host (the `phpr -S … --worker` front end) owns the
+//! worker mode. The host (the `ferro -S … --worker` front end) owns the
 //! socket: it installs [`php_types::sapi::WorkerHooks`] on the worker's
 //! thread, and this module only asks for the next request and hands back
 //! the response.
@@ -18,7 +18,7 @@
 
 use super::*;
 
-/// The post-boot snapshot, taken on the first `phpr_handle_request()`.
+/// The post-boot snapshot, taken on the first `ferro_handle_request()`.
 pub(super) struct WorkerState {
     exception_handlers: Vec<Zval>,
     error_handlers: Vec<(Zval, i64)>,
@@ -28,19 +28,19 @@ pub(super) struct WorkerState {
 }
 
 impl<'m> Vm<'m> {
-    /// `phpr_handle_request(callable $handler): bool` — block until the host
+    /// `ferro_handle_request(callable $handler): bool` — block until the host
     /// has a request, run `$handler` for it, send the response; `false` when
     /// the host is shutting down (the worker script then returns).
-    pub(super) fn ho_phpr_handle_request(&mut self, args: Vec<Zval>) -> Result<Zval, PhpError> {
+    pub(super) fn ho_ferro_handle_request(&mut self, args: Vec<Zval>) -> Result<Zval, PhpError> {
         let Some(cb) = args.into_iter().next() else {
             return Err(PhpError::ArgumentCountError(
-                "phpr_handle_request() expects exactly 1 argument, 0 given".to_string(),
+                "ferro_handle_request() expects exactly 1 argument, 0 given".to_string(),
             ));
         };
         let cb = cb.deref_clone();
         let Some(req) = php_types::sapi::worker_next_request() else {
             return Err(PhpError::Error(
-                "phpr_handle_request(): not running under a worker SAPI (phpr -S --worker)"
+                "ferro_handle_request(): not running under a worker SAPI (ferro -S --worker)"
                     .to_string(),
             ));
         };

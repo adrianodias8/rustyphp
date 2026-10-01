@@ -55,22 +55,21 @@ mod census;
 // builds only, mirror of the op-census conventions.
 #[cfg(feature = "gc-census")]
 mod gc_census;
-// S-95.0 leva A-ZV1: contatori del meccanismo per «il clone che muore subito»
-// (design95-leva-zval.md). Stessa convenzione: build di strumentazione soltanto.
+// Mechanism counters for "the clone that dies right away". Same convention:
+// instrumentation builds only.
 #[cfg(feature = "zval-census")]
 pub mod zvalcensus;
-// S-102 punto 4: census della pila operandi per sito-opcode e primitiva
-// (A-BA-103-1). Stessa convenzione: build di strumentazione soltanto.
+// Census of the operand stack by opcode site and primitive. Same
+// convention: instrumentation builds only.
 #[cfg(feature = "zval-census")]
 pub mod stackcensus;
-// S-95.0 leva A-ZV2 fase F1: analisi di ultimo uso in sola misura
-// (design95-liveness.md). Stessa convenzione: build di strumentazione soltanto.
+// Last-use analysis, measurement only. Same convention: instrumentation
+// builds only.
 #[cfg(feature = "zval-census")]
 pub mod liveness;
-// S-145 sonda-B lato PREZZI (wp145-harness/s145-sonda-b-modello.md): il
-// builtin `__phpr_sonda_b`, SOLO build probe `sonda-price` — che per
-// costruzione non monta alcuna census, così i cammini prezzati sono la
-// forma di parità.
+// Price probe: the `__phpr_sonda_b` builtin, ONLY in the `sonda-price` probe
+// build — which by construction mounts no census, so the priced paths are
+// the parity form.
 #[cfg(feature = "sonda-price")]
 mod sondaprice;
 mod coroutines;
@@ -104,7 +103,7 @@ use oop::*;
 /// final-phase samples, WP-39 attribution) is pure waste the OS reclaims
 /// anyway. Zend's fast RSHUTDOWN makes the same call.
 /// ONLY the php-cli one-shot script path sets this. It must NEVER be set by
-/// `phpr -S` (one Vm per request — leaking accumulates) or by any in-process
+/// `ferro -S` (one Vm per request — leaking accumulates) or by any in-process
 /// multi-run host (phpt-runner without --isolate, library callers, tests).
 pub static FAST_SHUTDOWN: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
@@ -1316,7 +1315,7 @@ pub fn run_module_with_hir<'m>(
         if std::env::var_os("PHPR_MI_ABAND_CHECK").is_some() {
             mc::abandoned_positive_control();
         }
-        // WP-60 P3(b): deep-size DIRETTO of the seed HIR image via the
+        // WP-60 P3(b): DIRECT deep-size of the seed HIR image via the
         // counting-allocator clone-delta (design60): per class
         // {full, bodies = MethodDecl.body+slots, doc+attributes};
         // firma = full − bodies − doc. Rc-shared subtrees are NOT counted
@@ -1723,11 +1722,11 @@ pub fn run_module_with_hir<'m>(
                 // WP-67 L-67.4: per-request standing checkpoint (opt-in
                 // PHPR_MI_COLLECT_REQ=1) — a killed server has no atexit.
                 mc::request_collect_mi();
-                // WP-63 B7: finestre ns separate lower vs compile (bordo CPU).
+                // Separate ns windows for lower vs compile (CPU boundary).
                 let (lns, cns, un) = census_compile_ns_take();
-                // WP-64 E1-64 (B2/H5''): le DUE passate O(seed) per-include,
-                // quotate separatamente — mappa eager (compile) e remap
-                // program-space (link) — mai più inferite dalle finestre.
+                // The TWO O(seed) per-include passes, quoted separately —
+                // eager map (compile) and program-space remap (link) — never
+                // again inferred from the windows.
                 let (mns, mn) = crate::compile::census_map_ns_take();
                 let (rns, rn) = REMAP_NS.with(|c| c.get());
                 // WP-65 B-65.3 (KB65-3): the lower window decomposed —
@@ -1750,16 +1749,16 @@ pub fn run_module_with_hir<'m>(
                 // WP-66 E-66.2: per-path dup cost — for a path compiled n>1
                 // times, all but one compile is duplicated work:
                 // dup_lc = (l+c)·(n−1)/n. Top rows + aggregate; the E6 quota
-                // reads dup_lc_ns here, at the cifra (KS66-1).
+                // reads dup_lc_ns here, at the figure.
                 // WP-67 E-67.1 split: fp-class recompiles (legitimate ways —
                 // NOT recoverable by any re-link cache) are attributed apart:
                 // per path, avg=(l+c)/n; dup_fp = avg·min(n_fp, n−1) (the one
                 // "legitimate" compile is the first/cold one), dup_cold the
                 // remainder. `l` is already net of nested autoload includes.
-                // E-68.3 (dichiarato): lo split è un CEILING, non una
-                // ripartizione esatta — avg assume costo omogeneo per
-                // compile e con n_fp=n il min "grazia" il primo compile;
-                // l'E6-quota legge dup_fp/dup_cold come limiti superiori.
+                // By design the split is a CEILING, not an exact partition —
+                // avg assumes a homogeneous cost per compile, and with n_fp=n
+                // the min "pardons" the first compile; the E6 quota reads
+                // dup_fp/dup_cold as upper bounds.
                 let mut lc_rows: Vec<(u64, Vec<u8>, u64, u64, u64, u64)> = Vec::new();
                 let (mut lc_paths, mut lc_compiles, mut lc_l, mut lc_c) = (0u64, 0u64, 0u64, 0u64);
                 let (mut dup_paths, mut dup_compiles, mut dup_lc) = (0u64, 0u64, 0u64);
@@ -2080,7 +2079,7 @@ pub fn run_module_with_hir<'m>(
     if vm.census_on {
         census::census_dump();
     }
-    // S-139 ic-stats: dump CLI-only a fine run (l'env-check è dentro dump()).
+    // ic-stats: CLI-only dump at end of run (the env check is inside dump()).
     #[cfg(feature = "ic-stats")]
     census::ic_stats::dump();
     #[cfg(feature = "gc-census")]
@@ -2724,8 +2723,8 @@ impl<'m> Frame<'m> {
         stack_buf: Vec<Zval>,
     ) -> Self {
         debug_assert!(slots_buf.is_empty() && stack_buf.is_empty());
-        // S-148 (census): le alloc del frame (resize slots su pool-miss)
-        // cadono nel tag `frame` della partizione galloc.
+        // Census: the frame's allocs (slot resize on a pool miss) land in
+        // the `frame` tag of the galloc partition.
         #[cfg(feature = "mem-census")]
         let _s148 = php_types::memcensus::s148_scope(php_types::memcensus::S148_FRAME);
         // Named locals plus register temps (Leva B stage 1): max_temps is 0
@@ -3179,9 +3178,9 @@ pub struct Vm<'m> {
     /// Class names (lowercased) currently mid-autoload, to break recursion if an
     /// autoloader (transitively) references the same name (step 57, Phase 3).
     autoloading: HashSet<Vec<u8>>,
-    /// L-AL1 (S-157): buffer di chiave riusati dal guard di `try_autoload` —
-    /// il miss ripetuto (autoloader registrato, classe mai definita) non deve
-    /// allocare per la chiave del guard: `take` restituisce il buffer al pool.
+    /// Key buffers reused by the `try_autoload` guard — a repeated miss
+    /// (autoloader registered, class never defined) must not allocate for the
+    /// guard key: `take` returns the buffer to the pool.
     autoload_key_pool: Vec<Vec<u8>>,
     /// Builtin registry, injected by the caller (php-runtime can't build a
     /// populated one — that lives in php-builtins, which depends on php-runtime).
@@ -3383,11 +3382,10 @@ pub struct Vm<'m> {
     /// check reads this ONE field — the first WP-50 form loaded both fields
     /// and computed the max inside the hot `Op::Sweep` arm, and the arm
     /// growth cost more I-cache than the 825M skipped entries saved
-    /// (full A/B stesso-giorno: leva-1-sola 848,1s vs old 828,9/832,7s;
+    /// (full same-day A/B: single change 848.1s vs old 828.9/832.7s;
     /// the WP-44 law again — hot-arm SIZE is the cost, not the work).
     gc_sweep_bound: usize,
-    /// S-176 «flag gc-idle» (criterio wp176-harness/s176-criterio-flag.md):
-    /// the statement-sweep idle predicate CACHED, indexed by `main`
+    /// gc-idle flag: the statement-sweep idle predicate CACHED, indexed by `main`
     /// (`[light, main]`): `gc_idle[0]` = note buffer drained ∧ collector
     /// pressure under `gc_sweep_bound`; `gc_idle[1]` = the same ∧ no light
     /// demotion pending. `sweep_idle` (run.rs) reads ONE byte instead of
@@ -3516,7 +3514,7 @@ pub struct Vm<'m> {
     ini: ini::IniTable,
     /// ext/session runtime state (`session_start` → `$_SESSION` → commit).
     session: session::SessionState,
-    /// Worker mode (fork): the post-boot snapshot `phpr_handle_request()`
+    /// Worker mode (fork): the post-boot snapshot `ferro_handle_request()`
     /// restores after every request. `None` until the first request.
     worker: Option<Box<worker::WorkerState>>,
     /// `http_response_code()` — `None` until explicitly set (CLI reports `false`
@@ -3996,7 +3994,7 @@ impl<'m> Vm<'m> {
     fn gc_note(&mut self, v: &Zval) {
         #[cfg(feature = "gc-census")]
         gc_census::note();
-        // S-101 census: ogni chiamata, con la specie dell'argomento (P3).
+        // Census: every call, with the species of the argument.
         #[cfg(feature = "zval-census")]
         zvalcensus::note_gcnote(v);
         // H-C1a (S-101): only a container species can reach the buffer — the
@@ -4041,10 +4039,9 @@ impl<'m> Vm<'m> {
                 }
             }
             Zval::Ref(r) => {
-                // A-HO-105-2 (Concilio WP-105): l'invariante «i reference
-                // non si annidano» sorveglia ENTRAMBI i sentieri — issata
-                // PRIMA del branch: nel braccio ==1 un Ref annidato
-                // ricorreva in gc_note e veniva digerito in silenzio.
+                // The invariant "references never nest" guards BOTH paths —
+                // hoisted BEFORE the branch: in the ==1 arm a nested Ref
+                // recursed into gc_note and was digested silently.
                 debug_assert!(
                     !matches!(&*r.borrow(), Zval::Ref(_)),
                     "gc_note(Ref): nested Ref — PHP references never nest (A-ST-104-4)"
@@ -4198,10 +4195,10 @@ impl<'m> Vm<'m> {
     /// statement boundaries, and every synchronous caller) first re-seeds what
     /// LIGHT sweeps demoted, so unhooked mid-statement temp deaths are caught.
     fn gc_sweep_impl(&mut self, resume: Option<(usize, usize)>, main: bool) -> Result<(), PhpError> {
-        // S-176 «flag gc-idle»: the ONE exit of every sweep body (statement
-        // handler, lazy reset/materialize, shutdown destructors) — recompute
-        // the cached idle predicate EXACTLY, on the error path too (a
-        // scheduled destructor's throw). See `gc_idle`, s176-criterio-flag.md.
+        // gc-idle flag: the ONE exit of every sweep body (statement handler,
+        // lazy reset/materialize, shutdown destructors) — recompute the
+        // cached idle predicate EXACTLY, on the error path too (a scheduled
+        // destructor's throw). See `gc_idle`.
         let r = self.gc_sweep_body(resume, main);
         self.gc_refresh_idle();
         r
@@ -5223,9 +5220,9 @@ impl<'m> Vm<'m> {
         self.gc_idle_set([false; 2]);
     }
 
-    /// S-176 «flag gc-idle»: the ONE store of `gc_idle` (dirty sites pass
-    /// `[false; 2]`, `gc_refresh_idle` passes the exact value). The M-flag
-    /// mutant (s176-criterio-flag.md p.5) neutralises this line alone.
+    /// gc-idle flag: the ONE store of `gc_idle` (dirty sites pass
+    /// `[false; 2]`, `gc_refresh_idle` passes the exact value). The flag
+    /// mutant test neutralises this line alone.
     #[inline(always)]
     fn gc_idle_set(&mut self, v: [bool; 2]) { self.gc_idle = v; }
 
@@ -5294,7 +5291,7 @@ impl<'m> Vm<'m> {
     }
 
     fn collect_cycles_inner(&mut self) -> Result<i64, PhpError> {
-        // S-148 (census): le alloc del ciclo di collect cadono nel tag `gc`.
+        // Census: the allocs of the collect cycle land in the `gc` tag.
         #[cfg(feature = "mem-census")]
         let _s148 = php_types::memcensus::s148_scope(php_types::memcensus::S148_GC);
         let mut total = 0i64;
@@ -5612,9 +5609,9 @@ impl<'m> Vm<'m> {
     /// per-request pattern cache). Returns a shared handle; `None` (also cached)
     /// means the pattern is invalid.
     fn preg_compile(&mut self, pat: &[u8]) -> Option<Rc<crate::preg::Engine>> {
-        // preg_last_error: ogni operazione preg che compila resetta a
-        // NO_ERROR; un pattern invalido (anche da cache) segna
-        // PREG_INTERNAL_ERROR — il BAD_UTF8 lo segna subject_text (WP-16).
+        // preg_last_error: every preg operation that compiles resets to
+        // NO_ERROR; an invalid pattern (even from the cache) records
+        // PREG_INTERNAL_ERROR — BAD_UTF8 is recorded by subject_text.
         let engine = if let Some(hit) = self.preg_cache.get(pat) {
             hit.clone()
         } else {
@@ -7352,10 +7349,10 @@ impl<'m> Vm<'m> {
         let mut census_fp_miss = false;
         let unit_key = std::fs::metadata(&real).ok().and_then(|m| unit_key_for(&key, &m));
         let fp = self.unit_fp();
-        // KS-S2 (Stogov, decisivo per WP-63): la sequenza dei fingerprint
-        // per-include è il digest dello stato VM-visibile — identica pre/post
-        // elisione ⇒ le tabelle runtime sono identiche benché i Module
-        // differiscano. Emessa solo a log attivo (costo zero altrimenti).
+        // The per-include fingerprint sequence is the digest of the
+        // VM-visible state — identical pre/post elision ⇒ the runtime tables
+        // are identical even though the Modules differ. Emitted only with
+        // logging active (zero cost otherwise).
         uc_log(&format!("fp {fp:016x}"), &key);
         if let Some(uk) = &unit_key {
             // A-MS18 (Council WP-83): the main/include fp domains are
@@ -9935,12 +9932,12 @@ impl<'m> Vm<'m> {
         let autoload = args.get(1).is_none_or(|v| convert::to_bool(v, &mut self.diags));
         let raw = convert::to_zstr_cast(&a.deref_clone(), &mut self.diags);
         let b = raw.as_bytes();
-        // L-CE1 (S-154): slice diretta, niente to_vec — il hit-path di
-        // class_exists non deve allocare (k=2→0 col LcKey a valle).
+        // Direct slice, no to_vec — the class_exists hit-path must not
+        // allocate (k=2→0 with the LcKey downstream).
         let name = b.strip_prefix(b"\\").unwrap_or(b);
         if autoload {
-            // L-AL1 (S-157): passa lo ZStr originale — sul miss l'arg del
-            // loader diventa un rc-clone invece di una copia.
+            // Pass the original ZStr — on a miss the loader's arg becomes an
+            // rc-clone instead of a copy.
             self.resolve_class_autoload_with(name, Some(&raw))
         } else {
             Ok(self.class_index.get(LcKey::new(name).as_slice()).copied())
@@ -10313,7 +10310,7 @@ impl<'m> Vm<'m> {
                 // Synthetic same-class carrier, registered in `memo` BEFORE the
                 // recursion so a cyclic graph terminates.
                 // id 0 = synthetic carrier: never printed, never releases a handle.
-                // S-144 az.5: box Object sintetico fuori dal mint — tick census.
+                // Synthetic Object box outside the mint — tick the census.
                 #[cfg(feature = "mem-census")]
                 php_types::memcensus::s144_objsynth_note();
                 let synth = Rc::new(RefCell::new(orc.borrow().copy_with_id(0)));
@@ -10623,9 +10620,9 @@ impl<'m> Vm<'m> {
         self.collect_backtrace_opt(0, false)
     }
 
-    /// BT1 (S-149): `limit` 0 = tutti i frame; `ignore_args` salta la
-    /// raccolta (e il clone per-arg) degli argomenti — il chiamante omette
-    /// la chiave `args` per intero (semantica 8.5.7).
+    /// `limit` 0 = all frames; `ignore_args` skips collecting (and the
+    /// per-arg clone of) the arguments — the caller omits the `args` key
+    /// entirely (8.5.7 semantics).
     fn collect_backtrace_opt(&self, limit: usize, ignore_args: bool) -> Vec<BtFrame> {
         let top = self.frames.len() - 1;
         let mut out = Vec::new();
@@ -11351,16 +11348,15 @@ impl<'m> Vm<'m> {
         hint: &TypeHint,
         strict: bool,
     ) -> Result<Zval, String> {
-        // S-140 census leva HC1: conta il check e la specie (solo probe build).
+        // Census: count the check and the species (probe build only).
         #[cfg(feature = "zval-census")]
         zvalcensus::note_hint_check(&value);
-        // S-140 leva HC1 «hint-check senza clone»: i rami check-only
-        // ispezionano il valore PER RIFERIMENTO — il clone che moriva a fine
-        // check (Rc++/-- su Object/Array/Str, due volte per chiamata
-        // tipizzata: parametro e return) resta SOLO per `Zval::Ref`, dove
-        // serve la copia del contenuto della cella (tenere il borrow della
-        // RefCell attraverso i metodi `&mut self` rischierebbe un re-borrow
-        // della stessa cella).
+        // Hint-check without clone: the check-only arms inspect the value BY
+        // REFERENCE — the clone that used to die at the end of the check
+        // (Rc++/-- on Object/Array/Str, twice per typed call: parameter and
+        // return) remains ONLY for `Zval::Ref`, where a copy of the cell's
+        // contents is needed (holding the RefCell borrow across the
+        // `&mut self` methods would risk a re-borrow of the same cell).
         let deref_tmp;
         let v: &Zval = match &value {
             Zval::Ref(cell) => {
@@ -12310,18 +12306,18 @@ impl<'m> Vm<'m> {
         self.resolve_class_autoload_with(name, None)
     }
 
-    /// L-AL1 (S-157): variante con lo ZStr originale del chiamante — quando i
-    /// byte coincidono col nome (nessun prefisso `\`), l'arg dell'autoloader
-    /// è un rc-clone della stringa del chiamante (miss a 0 alloc per l'arg).
+    /// Variant carrying the caller's original ZStr — when the bytes coincide
+    /// with the name (no `\` prefix), the autoloader's arg is an rc-clone of
+    /// the caller's string (a miss costs 0 allocs for the arg).
     fn resolve_class_autoload_with(
         &mut self,
         name: &[u8],
         name_zs: Option<&php_types::ZStr>,
     ) -> Result<Option<ClassId>, PhpError> {
         let bare = name.strip_prefix(b"\\").unwrap_or(name);
-        // L-CE1 (S-154): chiave lowercased via LcKey (SSO stack ≤64 B) — il
-        // hit-path non alloca; stessi byte di to_ascii_lowercase, stesso
-        // ordine index→trait→autoload→index.
+        // Key lowercased via LcKey (SSO on the stack ≤64 B) — the hit-path
+        // does not allocate; same bytes as to_ascii_lowercase, same order
+        // index→trait→autoload→index.
         let key = LcKey::new(bare);
         if let Some(&id) = self.class_index.get(key.as_slice()) {
             return Ok(Some(id));
@@ -12352,7 +12348,7 @@ impl<'m> Vm<'m> {
     fn resolve_name_autoload(&mut self, name: &[u8]) -> Result<bool, PhpError> {
         let bare = name.strip_prefix(b"\\").unwrap_or(name);
         let key = bare.to_ascii_lowercase();
-        // S-72.6: seed_traits e' keyed per FQN — il match e' sul nome pieno.
+        // seed_traits is keyed by FQN — the match is on the full name.
         let known = |s: &Self| {
             s.class_index.contains_key(&key)
                 || s.seed_traits.iter().any(|(_, t)| t.name.eq_ignore_ascii_case(bare))
@@ -12378,16 +12374,16 @@ impl<'m> Vm<'m> {
         if self.autoloaders.is_empty() || self.autoloading.contains(key) {
             return Ok(());
         }
-        // L-AL1 (S-157): chiave del guard dal pool — il miss ripetuto non
-        // alloca a regime (il buffer torna al pool alla rimozione).
+        // Guard key from the pool — a repeated miss does not allocate at
+        // steady state (the buffer goes back to the pool on removal).
         let mut kbuf = self.autoload_key_pool.pop().unwrap_or_default();
         kbuf.clear();
         kbuf.extend_from_slice(key);
         self.autoloading.insert(kbuf);
         log::debug!(target: "phpr::autoload", "autoload {}", String::from_utf8_lossy(name));
-        // L-AL1 (S-157): l'arg del loader condivide lo ZStr del chiamante
-        // quando i byte coincidono (stringhe PHP immutabili, rc sicuro);
-        // altrimenti una sola copia diretta dallo slice (niente to_vec).
+        // The loader's arg shares the caller's ZStr when the bytes coincide
+        // (PHP strings are immutable, rc is safe); otherwise a single direct
+        // copy from the slice (no to_vec).
         let arg = match name_zs {
             Some(z) if z.as_bytes() == name => Zval::Str(z.clone()),
             _ => Zval::Str(PhpStr::new(name)),
@@ -12410,11 +12406,11 @@ impl<'m> Vm<'m> {
             }
             let loader = self.autoloaders[cur.next].clone();
             self.autoload_cursors[ci].next += 1;
-            // L-AL2 (S-161): loader closure ANONIMA `simple_call` arità-1 —
-            // la chiamata per-miss va via call_closure_one (riuso L-AM1),
-            // senza args-Vec; ammissione PER-LOADER (lista LIVE, S-71.2:
-            // non hoistabile). Ogni altra forma di loader resta su
-            // call_callable INVARIATO (criterio s161-criterio-al2.md).
+            // ANONYMOUS `simple_call` loader closure of arity 1 — the
+            // per-miss call goes via call_closure_one (reused from
+            // array_map), without an args-Vec; admission PER LOADER (LIVE
+            // list, see below: not hoistable). Every other loader form stays
+            // on call_callable, UNCHANGED.
             let mut fast = None;
             if let Zval::Closure(cl) = &loader {
                 if cl.named.is_none() {
@@ -12427,13 +12423,13 @@ impl<'m> Vm<'m> {
                     }
                 }
             }
-            // L-AU1 (S-163): loader `[obj, metodo]` Composer-style — metodo
-            // utente PUBLIC non-static `simple_call` arità-1 senza ombra
-            // private nella catena del ricevitore (predicato IC-fill:
-            // risoluzione scope-indipendente). La chiamata per-miss va via
-            // call_method_one, senza args-Vec né elems-Vec né copia del
-            // nome. Elementi DIRETTI (non-Ref); ogni altra forma resta su
-            // call_callable INVARIATO (criterio s163-criterio-au1.md).
+            // Composer-style `[obj, method]` loader — PUBLIC non-static
+            // `simple_call` user method of arity 1 with no private shadow in
+            // the receiver's chain (the IC-fill predicate: scope-independent
+            // resolution). The per-miss call goes via call_method_one,
+            // without an args-Vec, an elems-Vec or a copy of the name. DIRECT
+            // elements (non-Ref); every other form stays on call_callable,
+            // UNCHANGED.
             let mut fastm = None;
             if fast.is_none() {
                 if let Zval::Array(a) = &loader {
@@ -14844,16 +14840,16 @@ impl<'m> Vm<'m> {
     /// is cleared because this dispatch serves a *place* context. A hook that
     /// returns a non-reference yields a detached cell (writes are lost, like
     /// PHP's temporary).
-    /// L-OL1-F4 «prelude-gate» (S-129, criterio s129-criterio-f4.md): TRUE
-    /// quando il trio per-statement [`Self::byref_hook_root`] /
-    /// [`Self::reject_indirect_hook`] / [`Self::field_lazy_root`] è no-op PER
-    /// COSTRUZIONE: primo passo `Prop`, base = `Zval::Object` diretto (un
-    /// `Ref` resta in via lenta), oggetto né lazy né proxy, classe senza
-    /// property hook (flag flattened `has_prop_hooks`). Sotto queste
-    /// condizioni: byref → hook assente ⇒ `Ok(None)`; indirect → prop_hook×2
-    /// `None`; lazy_root → `is_lazy_value` false ⇒ `Ok(None)` — e nessuno dei
-    /// tre ha effetti collaterali sul loro fast path. Ogni condizione
-    /// violata (borrow occupato incluso) ⇒ via lenta invariata.
+    /// Prelude gate: TRUE when the per-statement trio
+    /// [`Self::byref_hook_root`] / [`Self::reject_indirect_hook`] /
+    /// [`Self::field_lazy_root`] is a no-op BY CONSTRUCTION: first step
+    /// `Prop`, base = a direct `Zval::Object` (a `Ref` stays on the slow
+    /// path), object neither lazy nor proxy, class without property hooks
+    /// (flattened `has_prop_hooks` flag). Under these conditions: byref →
+    /// hook absent ⇒ `Ok(None)`; indirect → prop_hook×2 `None`; lazy_root →
+    /// `is_lazy_value` false ⇒ `Ok(None)` — and none of the three has side
+    /// effects on its fast path. Any violated condition (a busy borrow
+    /// included) ⇒ unchanged slow path.
     fn field_prelude_skip(&self, base: FieldBase, top: usize, steps: &[FieldStep]) -> bool {
         if !matches!(steps.first(), Some(FieldStep::Prop(_))) {
             return false;
@@ -15109,12 +15105,12 @@ macro_rules! host_builtins {
         pub(crate) const HOST_BUILTIN_NAMES: &[&[u8]] = &[ $( $( $slit , )+ )+ $( $( $lit , )+ )+ ];
 
         impl<'m> Vm<'m> {
-            /// HD2-hostcall (S-156): dispatch dei soli host builtin CONVERTITI
-            /// a slice — gli argomenti vivono nell'array nativo del braccio
-            /// `CallHostBuiltin` (niente args-Vec, canale H-D). `None` = nome
-            /// non convertito: il chiamante ricade sul dispatcher Vec.
-            /// Generated by [`host_builtins!`] (sezione `slice:` della stessa
-            /// tabella: nessuna doppia lista da sincronizzare).
+            /// Dispatch of only the host builtins CONVERTED to a slice — the
+            /// arguments live in the native array of the `CallHostBuiltin`
+            /// arm (no args-Vec). `None` = name not converted: the caller
+            /// falls back to the Vec dispatcher. Generated by
+            /// [`host_builtins!`] (the `slice:` section of the same table: no
+            /// second list to keep in sync).
             fn dispatch_host_builtin_slice(
                 &mut self,
                 $name: &[u8],
@@ -15131,9 +15127,9 @@ macro_rules! host_builtins {
             /// [`crate::bytecode::Op::CallHostBuiltin`]: the call-a-callable /
             /// introspection family. `name` is the canonical lowercased name from
             /// [`host_builtin_canonical`]. Generated by [`host_builtins!`].
-            /// I nomi della sezione `slice:` sono DELEGATI al dispatcher slice,
-            /// così i chiamanti che possiedono già un Vec (Spread, ref-paths)
-            /// restano corretti senza duplicare i corpi.
+            /// The names of the `slice:` section are DELEGATED to the slice
+            /// dispatcher, so callers that already own a Vec (Spread,
+            /// ref-paths) stay correct without duplicating the bodies.
             fn dispatch_host_builtin(&mut self, $name: &[u8], $args: Vec<Zval>) -> Result<Zval, PhpError> {
                 let mut $args = $args;
                 if let Some(r) = self.dispatch_host_builtin_slice($name, &mut $args[..]) {
@@ -15151,8 +15147,8 @@ macro_rules! host_builtins {
 
 host_builtins! {
     vm: vm, name: name, args: args;
-    // HD2-hostcall (S-156) — prima tranche convertita: corpi SOLO-LETTURA
-    // verificati, un solo chiamante ciascuno; firme `&[Zval]`.
+    // First converted tranche: READ-ONLY bodies, verified, a single caller
+    // each; `&[Zval]` signatures.
     slice:
     b"class_exists" => vm.ho_class_exists(args),
     b"function_exists" => vm.ho_function_exists(args),
@@ -15589,7 +15585,7 @@ host_builtins! {
     b"set_include_path" => vm.ho_set_include_path(args),
     b"restore_include_path" => vm.ho_restore_include_path(),
     b"session_status" => vm.ho_session_status(),
-    b"phpr_handle_request" => vm.ho_phpr_handle_request(args),
+    b"ferro_handle_request" => vm.ho_ferro_handle_request(args),
     b"session_id" => vm.ho_session_id(args),
     b"session_name" => vm.ho_session_name(args),
     b"session_save_path" => vm.ho_session_save_path(args),
@@ -16708,11 +16704,11 @@ fn unit_slot_pos(seed: &[Box<[u8]>], func: &crate::bytecode::Func, name: &[u8]) 
             // seed_prefix_breach): today the ceded tail is empty, so this
             // scan is O(0) on a #[cold] path; a future partial split that
             // shadows faults loudly instead of splitting one variable.
-            // H-68.4 (dichiarato): il tripwire è UNILATERALE — scatta solo
-            // su QUESTO path name-lookup; `unit_slot_name` (per indice) non
-            // può vederlo per costruzione. Il test negativo M-67.6 pinna
-            // questo ramo: un riordino che lo sposti fuori dal lookup lo fa
-            // fallire (should_panic su questo panic, non su un altro).
+            // By design the tripwire is ONE-SIDED — it fires only on THIS
+            // name-lookup path; `unit_slot_name` (by index) cannot see it by
+            // construction. The negative test pins this arm: a reordering
+            // that moves it out of the lookup makes it fail (should_panic on
+            // this panic, not on another).
             if func.slot_names.iter().any(|t| t.as_ref() == name) {
                 panic!(
                     "slot name in BOTH seed prefix and tail (tail∩seed≠∅): {}",
@@ -18559,8 +18555,8 @@ impl RetainedWalk {
         }
     }
 
-    /// The Program half of a cached MAIN (design79 §11.1: "il walk del
-    /// PROGRAM non esiste — va scritto"). Shallow: Stmt/Expr trees count by
+    /// The Program half of a cached MAIN (the design note: "the PROGRAM walk
+    /// does not exist — it must be written"). Shallow: Stmt/Expr trees count by
     /// top-level capacity only ("≥" label), Rc decls dedup by pointer.
     fn add_program(&mut self, p: &Rc<Program>) {
         if !self.first_visit(p) {
@@ -20620,8 +20616,8 @@ mod tests {
         assert!(!super::unit_cache_key_present(&key));
     }
 
-    /// A-DS17/KS-DS-83-2 (Council WP-83): `compile_program` purity at
-    /// MACHINE level — the §5 claim "pura di (Program, Registry, reg_mode)"
+    /// `compile_program` purity at MACHINE level — the design claim "pure in
+    /// (Program, Registry, reg_mode)"
     /// was a claim of READING. Double-compile of the same Program must be
     /// structurally identical, and a compile on a FRESH THREAD (fresh
     /// thread-locals: interner, epoch) of the same source must match too —

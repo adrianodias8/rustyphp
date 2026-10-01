@@ -3,7 +3,7 @@
 # apps (the Symfony HttpKernel app of bench/symfony-boot.php and a hello
 # world), run from the HOST with the docker CLI (nothing installed on it):
 #
-#   phpr-worker    phpr -S --worker (this fork's worker mode), N workers
+#   phpr-worker    ferro -S --worker (this fork's worker mode), N workers
 #   fpm            nginx -> php-fpm 8.5.7, opcache on, static pool of N
 #   frankenphp     FrankenPHP worker mode (dunglas/frankenphp), N workers
 #
@@ -42,8 +42,8 @@ MOUNTS=(-v "$ROOT":/work:ro -v rustyphp-scratch:/scratch)
 # ---- servers ----
 docker run -d --name phpr-worker --network "$NET" "${MOUNTS[@]}" -v rustyphp-target:/target:ro \
   -e SYMFONY_DIR=/scratch/symfony-app "$IMAGE" bash -c "
-    /target/release/phpr -S 0.0.0.0:8080 --worker /work/php-rust/bench/worker/symfony-worker.php --workers $WORKERS &
-    /target/release/phpr -S 0.0.0.0:8081 --worker /work/php-rust/bench/worker/hello-worker.php --workers $WORKERS &
+    /target/release/ferro -S 0.0.0.0:8080 --worker /work/php-rust/bench/worker/symfony-worker.php --workers $WORKERS &
+    /target/release/ferro -S 0.0.0.0:8081 --worker /work/php-rust/bench/worker/hello-worker.php --workers $WORKERS &
     wait" >/dev/null
 
 sed "s/^pm.max_children = .*/pm.max_children = $WORKERS/" "$HERE/fpm/zz-bench.conf" >"$TMP/zz-bench.conf"
@@ -62,7 +62,7 @@ sleep 3
 wrk_in() { docker run --rm --network "$NET" -v "$HERE/paths.lua":/paths.lua:ro "$IMAGE" wrk "$@"; }
 curl_in() { docker run --rm --network "$NET" "$IMAGE" curl -s "$@"; }
 versions() {
-  echo "- phpr: \`$(docker exec phpr-worker sh -c 'sha256sum /target/release/phpr | cut -c1-16')\` ($(git -C "$REPO" rev-parse --short HEAD))"
+  echo "- phpr: \`$(docker exec phpr-worker sh -c 'sha256sum /target/release/ferro | cut -c1-16')\` ($(git -C "$REPO" rev-parse --short HEAD))"
   echo "- php-fpm: \`$(docker exec fpm php-fpm -v 2>&1 | head -1)\`, opcache on (validate_timestamps=0, jit off), nginx \`$(docker exec nginx nginx -v 2>&1 | sed 's/.*nginx\///')\`"
   echo "- FrankenPHP: \`$(docker exec frankenphp frankenphp version 2>/dev/null | head -1)\`"
   echo "- wrk \`$(docker run --rm "$IMAGE" wrk --version 2>&1 | head -1 | cut -d' ' -f2)\`, $THREADS threads, $CONNS connections, $DURATION per run, $R runs (medians), $WARMUP warm-up; $WORKERS workers per server"

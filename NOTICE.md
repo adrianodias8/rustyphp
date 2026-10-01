@@ -33,19 +33,25 @@ Consequences that differ from MIT and that this fork must respect:
 - **Clause 6** — redistributions of any form must carry the acknowledgment
   required by the license text.
 
-The fork's working name and any published artifact name therefore need a
-decision from the project owner before anything is distributed. Nothing has
-been published from this fork.
+The fork is published as **Ferrophant** (binary `ferro`), a name chosen on
+2026-10-01 so that "PHP" does not appear in the product's name. Repository:
+https://github.com/adrianodias8/rustyphp.
 
 ## What this fork keeps and what it changes
 
-Kept from upstream, unmodified: all upstream source, documentation, diary,
-session records, harnesses and license files. Upstream documents are not
-edited or deleted; this fork's documents are added beside them.
+Kept from upstream: the engine (`php-rust/crates/`), its tests, its license
+files and the translation rulebook (`php-rust/migration/RULEBOOK.md`).
+Upstream's session harnesses, diaries, process documents and its Italian
+source comments were removed or translated in session 5 (2026-10-01); the
+last upstream commit and everything it contained stay reachable at the tag
+`upstream-9d4ef5ba`. Upstream's copyright notice and license are retained
+unchanged.
 
-Added by this fork (all at the repository root unless noted):
+Added by this fork (repository root unless noted): `README.md`, `CLAUDE.md`,
 `NOTICE.md`, `PLAN.md`, `NOTES.md`, `ARCHITECTURE_NOTES.md`, `PROFILE.md`,
-`DECISION_KERNEL.md`, `baseline/`, `bench/`, `docker/`.
+`DECISION_KERNEL.md`, `KNOWN_DIVERGENCES.md`, `baseline/`, `bench/`,
+`docker/`, the worker mode (`php-rust/crates/php-runtime/src/vm/worker.rs`,
+the `--worker` front end in `php-cli`).
 
 ## Third-party components
 

@@ -1,28 +1,26 @@
-//! A-PE-100-2 / A-PE-99-1 (Concilio WP-100): il modo register-lowering è
-//! deciso dall'AMBIENTE ALLO SPAWN e sigillato eager al bootstrap
-//! (`seal_reg_lower_mode`, primo atto dei due main) — `putenv()` da codice
-//! PHP non può flipparlo in NESSUNA direzione.
+//! The register-lowering mode is decided by the ENVIRONMENT AT SPAWN and
+//! sealed eagerly at bootstrap (`seal_reg_lower_mode`, the first act of
+//! both mains) — `putenv()` from PHP code cannot flip it in ANY direction.
 //!
-//! Bracci sul funnel VERO (binario spawnnato, come reg_lower_funnel),
-//! RI-DERIVATI sul contratto di modo S-100 (grafia value-parsed, lista
-//! chiusa: assente=>DEFAULT_ON, `=1`=>on, `=0`=>off, altro=>default+warning
-//! — KS-MA-101-1, A-PE-101-4). Ogni braccio di MODO usa un valore ESPLICITO
-//! della lista chiusa allo spawn (mai la sola assenza: un braccio scritto
-//! sull'assenza collauderebbe silenziosamente il modo NUOVO dopo il flip
-//! del default — Pedersen R2; il braccio `absent` si deriva dal contratto).
-//! putenv() deve essere impotente in TUTTE le direzioni: set, unset, e
-//! l'opt-out `=0` introdotto dal contratto.
+//! Arms run on the REAL funnel (spawned binary, like reg_lower_funnel),
+//! derived from the mode contract (value-parsed spelling, closed list:
+//! absent=>DEFAULT_ON, `=1`=>on, `=0`=>off, other=>default+warning). Every
+//! MODE arm uses an EXPLICIT value from the closed list at spawn (never
+//! absence alone: an arm written on absence would silently test the NEW
+//! mode after the default flips; the `absent` arm derives from the
+//! contract). putenv() must be impotent in ALL directions: set, unset, and
+//! the `=0` opt-out introduced by the contract.
 //!
-//! Nota onesta (verbale Pedersen R2): in CLI la prima lettura del flag
-//! avveniva comunque alla compile del `{main}`, prima di ogni putenv — il
-//! braccio CLI pinna l'INVARIANTE end-to-end come regressione; la finestra
-//! davvero aperta era il server, chiusa per COSTRUZIONE dal sigillo nel suo
-//! main (stesso `seal_reg_lower_mode`, auditabile staticamente).
+//! Honest note: in the CLI the first read of the flag happened anyway at
+//! the compile of `{main}`, before any putenv — the CLI arm pins the
+//! end-to-end INVARIANT as a regression; the window that was really open
+//! was the server, closed BY CONSTRUCTION by the seal in its main (same
+//! `seal_reg_lower_mode`, statically auditable).
 
 use std::process::Command;
 
-/// Corpo foldable: la stessa forma di reg_lower_funnel (BinarySC/CmpJmpSC/
-/// BinaryDst attese flag-on nel `{main}` dell'unità inclusa).
+/// Foldable body: the same shape as reg_lower_funnel (BinarySC/CmpJmpSC/
+/// BinaryDst expected flag-on in the `{main}` of the included unit).
 const INCLUDED: &[u8] =
     br#"<?php $s=0; for($i=0;$i<100;$i++){ $s += $i*3 - ($i>>2); } echo $s,"\n";"#;
 
@@ -40,7 +38,7 @@ fn run_case(spawn: Option<&str>, tag: &str, putenv_stmt: &str) -> (String, Strin
     )
     .expect("write main php");
 
-    let mut c = Command::new(env!("CARGO_BIN_EXE_phpr"));
+    let mut c = Command::new(env!("CARGO_BIN_EXE_ferro"));
     c.env_remove("PHPR_REG_LOWER");
     c.env_remove("PHPR_DUMP_OPS");
     c.env("PHPR_DUMP_OPS", "1");
@@ -58,14 +56,13 @@ fn run_case(spawn: Option<&str>, tag: &str, putenv_stmt: &str) -> (String, Strin
     )
 }
 
-/// Il chunk di dump dell'unità INCLUSA (compilata DOPO il putenv).
+/// The dump chunk of the INCLUDED unit (compiled AFTER the putenv).
 ///
-/// Morso Klabnik R1 (Concilio WP-101, CONFERMATO a macchina): il path
-/// dell'unità inclusa appare come COSTANTE (`cst… Str("…/inc.php")`)
-/// dentro il chunk del `{main}`, e un match a substring aggancia il chunk
-/// SBAGLIATO (first-match sul main). Il chunk giusto è quello il cui
-/// HEADER è il path: dopo `split("== unit ")` ogni chunk INIZIA col path
-/// della propria unit.
+/// Confirmed pitfall: the path of the included unit appears as a CONSTANT
+/// (`cst… Str("…/inc.php")`) inside the `{main}` chunk, so a substring
+/// match hooks the WRONG chunk (first match on main). The right chunk is
+/// the one whose HEADER is the path: after `split("== unit ")` every chunk
+/// STARTS with the path of its own unit.
 fn included_chunk<'a>(stderr: &'a str, inc_name: &str) -> &'a str {
     stderr
         .split("== unit ")
@@ -79,18 +76,18 @@ fn included_chunk<'a>(stderr: &'a str, inc_name: &str) -> &'a str {
         })
 }
 
-/// `=0` è l'opt-out del contratto — PRIMA del contratto ACCENDEVA il pass
-/// (`is_some()`). Braccio flip-proof: non dipende dal default.
+/// `=0` is the contract's opt-out — BEFORE the contract it TURNED ON the
+/// pass (`is_some()`). Flip-proof arm: it does not depend on the default.
 #[test]
 fn explicit_zero_is_off_and_putenv_set_cannot_turn_the_pass_on() {
-    // Baseline dello stesso modo senza putenv: l'output del programma non
-    // deve dipendere dal putenv (parità), e non si pinna un letterale
-    // calcolato a mano.
+    // Baseline of the same mode without putenv: the program output must
+    // not depend on the putenv (parity), and no hand-computed literal is
+    // pinned.
     let (base, _, _) = run_case(Some("0"), "zero", "");
     let (out, err, inc_name) = run_case(Some("0"), "zero", "putenv('PHPR_REG_LOWER=1')");
     assert_eq!(out, base, "putenv(set) cambia l'output del programma");
     let chunk = included_chunk(&err, &inc_name);
-    // Controllo positivo: il chunk contiene opcodi (il dump morde davvero).
+    // Positive control: the chunk contains opcodes (the dump really bites).
     assert!(
         chunk.contains("CmpJmp") || chunk.contains("Binary"),
         "dump chunk vuoto/insensato per {inc_name}:\n{chunk}"
@@ -104,10 +101,10 @@ fn explicit_zero_is_off_and_putenv_set_cannot_turn_the_pass_on() {
     }
 }
 
-/// Flag ASSENTE: l'emissione segue il DEFAULT NOMINATO del contratto
-/// (braccio derivato, si ri-deriva da solo al flip; il tripwire FORTE del
-/// flip è il test unitario `mode_contract_default_is_off_pre_flip`), e
-/// putenv verso il modo opposto resta impotente.
+/// Flag ABSENT: emission follows the contract's NAMED DEFAULT (derived
+/// arm, it re-derives itself on the flip; the STRONG flip tripwire is the
+/// unit test `mode_contract_default_is_off_pre_flip`), and putenv towards
+/// the opposite mode stays impotent.
 #[test]
 fn absent_flag_follows_the_named_default_and_putenv_cannot_move_it() {
     let (base, base_err, base_inc) = run_case(None, "absent", "");
@@ -148,8 +145,8 @@ fn putenv_unset_after_boot_cannot_turn_the_pass_off() {
     );
 }
 
-/// La direzione APERTA dal contratto: l'opt-out `=0` scritto via putenv
-/// dopo il boot deve essere impotente quanto l'unset.
+/// The direction OPENED by the contract: the `=0` opt-out written via
+/// putenv after boot must be as impotent as the unset.
 #[test]
 fn putenv_zero_after_boot_cannot_turn_the_pass_off() {
     let (base, _, _) = run_case(Some("1"), "pzero", "");
@@ -163,8 +160,8 @@ fn putenv_zero_after_boot_cannot_turn_the_pass_off() {
     );
 }
 
-/// Valore fuori grammatica: fallback al default MAI silenzioso (warning su
-/// stderr che nomina la grammatica) e stessa emissione del braccio assente.
+/// Out-of-grammar value: fallback to the default is NEVER silent (a stderr
+/// warning naming the grammar) and emission matches the absent arm.
 #[test]
 fn out_of_grammar_value_is_default_plus_loud_warning() {
     let (base, base_err, base_inc) = run_case(None, "junkbase", "");

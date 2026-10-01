@@ -20,10 +20,10 @@ use php_types::{Key, PhpArray, PhpStr, ZStr, Zval};
 /// subject (see [`subject_text`]) it holds the *original* subject bytes after
 /// [`Caps::latin1_fix`].
 ///
-/// S-124 (ridiagnosi admission): il testo è uno [`ZStr`] costruito SLICE-FED
-/// direttamente dallo span del subject — un solo blocco per gruppo. Il vecchio
-/// `Vec<u8>` (L-RE1 «move») pagava comunque 2 alloc (Vec + blocco/RcBox);
-/// consegnare il gruppo al chiamante ora è un refcount, non una copia.
+/// The text is a [`ZStr`] built SLICE-FED directly from the subject's span —
+/// a single block per group. The old `Vec<u8>` (moved into the result) still
+/// paid 2 allocations (Vec + block/RcBox); handing the group to the caller is
+/// now a refcount bump, not a copy.
 pub struct CapMatch {
     pub start: usize,
     pub end: usize,
@@ -136,10 +136,10 @@ impl SubjectText<'_> {
 // anything non-ASCII goes through the 1-byte-per-char Latin1 view.
 // (Plain comment: doc comments on macro invocations warn under -D warnings.)
 thread_local! {
-    /// `preg_last_error`: 0 = PREG_NO_ERROR, 1 = PREG_INTERNAL_ERROR (pattern
-    /// invalido), 4 = PREG_BAD_UTF8_ERROR (subject non-UTF-8 sotto `/u`).
-    /// phpr non ha backtrack/recursion limit (divergenza documentata), quindi
-    /// gli altri codici non occorrono mai.
+    /// `preg_last_error`: 0 = PREG_NO_ERROR, 1 = PREG_INTERNAL_ERROR (invalid
+    /// pattern), 4 = PREG_BAD_UTF8_ERROR (non-UTF-8 subject under `/u`).
+    /// phpr has no backtrack/recursion limit (a documented divergence), so
+    /// the other codes never occur.
     static PREG_LAST_ERROR: std::cell::Cell<i64> = const { std::cell::Cell::new(0) };
 }
 
@@ -151,7 +151,7 @@ pub fn last_error() -> i64 {
     PREG_LAST_ERROR.with(|c| c.get())
 }
 
-/// Il testo di `preg_last_error_msg()` per i codici che phpr produce.
+/// The text of `preg_last_error_msg()` for the codes phpr produces.
 pub fn last_error_msg() -> &'static str {
     match last_error() {
         0 => "No error",
@@ -175,8 +175,8 @@ pub fn subject_text(subject: &[u8], unicode: bool) -> Option<SubjectText<'_>> {
     }
 }
 
-/// L-RE1: come [`caps_from_regex`], ma da uno scratch `CaptureLocations`
-/// riusato — il testo dei gruppi si affetta dal subject per span.
+/// Like [`caps_from_regex`], but from a reused `CaptureLocations` scratch —
+/// the groups' text is sliced from the subject by span.
 fn caps_from_locations(text: &str, locs: &regex::CaptureLocations) -> Caps {
     let groups = (0..locs.len())
         .map(|i| {
@@ -255,14 +255,13 @@ fn caps_from_onig_region(text: &str, region: &onig::Region) -> Caps {
 /// blocks, recursion. Oniguruma is PHP's own mbregex backend and reads PCRE
 /// syntax under its `perl_ng` dialect. It is the LAST resort: only patterns both
 /// Rust engines reject reach it, so no existing behaviour changes.
-/// L-RE1 (S-120): il backend `regex` con uno scratch `CaptureLocations`
-/// riusato tra le chiamate — `Regex::captures_at` alloca un vettore di slot
-/// per OGNI match; su un pattern cache-ato in un ciclo stretto quella è
-/// un'alloc/iter pura. Il Deref lascia intatti tutti gli arm che chiamano
-/// metodi di `regex::Regex` sul binding. Lo scratch è per-Engine (le
-/// locations di una regex NON sono riusabili su un'altra) e il borrow vive
-/// solo dentro la singola ricerca: il matching non rientra mai in codice
-/// utente.
+/// The `regex` backend with a `CaptureLocations` scratch reused across calls
+/// — `Regex::captures_at` allocates a slot vector for EVERY match; on a
+/// cached pattern in a tight loop that is a pure alloc per iteration. The
+/// Deref leaves every arm that calls `regex::Regex` methods on the binding
+/// untouched. The scratch is per-Engine (one regex's locations are NOT
+/// reusable on another) and the borrow lives only inside the single search:
+/// matching never re-enters user code.
 pub struct CachedRegex {
     re: regex::Regex,
     scratch: std::cell::RefCell<regex::CaptureLocations>,

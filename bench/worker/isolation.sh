@@ -8,7 +8,7 @@
 #   docker/run.sh /work/php-rust/bench/worker/isolation.sh
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PHPR="${PHPR:-/target/release/phpr}"; PHP="${PHP_ORACLE:-$(command -v php)}"
+PHPR="${PHPR:-/target/release/ferro}"; PHP="${PHP_ORACLE:-$(command -v php)}"
 S="${SCRATCH:-/scratch}/isolation"; rm -rf "$S"; mkdir -p "$S"
 ROUTES="/echo?a=1&b[]=2&b[]=3 /headers /warn /exit /throw /ob /ini /ini /handler /warn /shutdown /objects /stateful /stateful /nope /echo?x=y"
 fetch() { # $1 base url  $2 out file

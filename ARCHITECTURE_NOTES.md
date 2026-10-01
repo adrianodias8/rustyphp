@@ -250,7 +250,7 @@ The value model already contains hand-written `unsafe` refcounting (`ZStr`) and 
 
 Two modes (`php-server/src/main.rs:1-12`):
 
-1. **`--cli-server` (the default, and the only complete one)** — reuses `phpr -S`
+1. **`--cli-server` (the default, and the only complete one)** — reuses `ferro -S`
    (`php-cli/src/server.rs`): a work-alike of PHP's built-in dev server. **Sequential, one
    thread**, `Connection: close` on every response. It builds a `WebRequest`, publishes it
    through a thread-local (`php_types::sapi::set_web_request`, `server.rs:647`), and
@@ -280,12 +280,12 @@ a new "handle request" entry point; the axum pool is a thread pool around one-sh
 
 - **`PHP_OS` is hard-coded.** `phpr` reports `PHP_OS = Darwin` on Linux. Anything branching on the
   OS family will take the macOS path in our container.
-- **`phpr -v` is not implemented** (`Could not open input file: -v`). Tools that probe the PHP
+- **`ferro -v` is not implemented** (`Could not open input file: -v`). Tools that probe the PHP
   version by running the binary with `-v` will fail.
 - **The axum server is not a usable SAPI yet** (§10).
 - **Upstream's corpus gate cannot be reused as-is.** `scripts/corpus-gate.sh` hard-codes
   `/Volumes/Extreme Pro/…` paths and compares against a frozen fail-set
-  (`wp109-harness/corpus-gate/*.fails`) that is git-ignored and not published. Ours is
+  (upstream's `wp109-harness/corpus-gate/*.fails`, git-ignored and never published). Ours is
   `baseline/gate.sh`.
 - **Upstream's process rules assume tools we do not have.** `php-rust/CLAUDE.md` mandates the
   Serena and Vexp MCP servers and relies on a local hook that blocks reading `.rs` files from the

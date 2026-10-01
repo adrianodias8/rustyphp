@@ -495,12 +495,12 @@ fn type_lt_true(v: &Zval) -> bool {
     matches!(v, Zval::Undef | Zval::Null | Zval::Bool(false))
 }
 
-/// Merge sort STABILE che non richiede un ordine totale: zend_sort non ha
-/// quel requisito e il confronto loose di PHP lo viola sui tipi misti — la
-/// std detecta l'incoerenza e panica ("user-provided comparison function does
-/// not correctly implement a total order", full-suite WP-16). O(n log n),
-/// stabile come zend_sort dall'8.0; il comparatore è chiamato cmp(a, b) come
-/// in PHP.
+/// STABLE merge sort that does not require a total order: zend_sort has no
+/// such requirement and PHP's loose comparison violates it on mixed types —
+/// the std detects the inconsistency and panics ("user-provided comparison
+/// function does not correctly implement a total order", seen on the full
+/// suite). O(n log n), stable like zend_sort since 8.0; the comparator is
+/// called cmp(a, b) as in PHP.
 pub fn stable_sort_by<T: Clone>(
     v: &mut [T],
     mut cmp: impl FnMut(&T, &T) -> std::cmp::Ordering,

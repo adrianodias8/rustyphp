@@ -4,9 +4,9 @@
 #
 #   docker/run.sh /work/php-rust/bench/ab.sh
 #
-#   A = $PHPR_A (default /target/base/release/phpr — the commit the change
+#   A = $PHPR_A (default /target/base/release/ferro — the commit the change
 #       started from, built from a git worktree)
-#   B = $PHPR_B (default /target/release/phpr — the working tree)
+#   B = $PHPR_B (default /target/release/ferro — the working tree)
 #
 # R rounds (default 7), A and B interleaved within each round and the order
 # alternated between rounds (ABBA), medians per section from the in-script
@@ -18,8 +18,8 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
 PHP_SRC="${PHP_SRC:-$REPO/../php-src}"
-A="${PHPR_A:-/target/base/release/phpr}"
-B="${PHPR_B:-/target/release/phpr}"
+A="${PHPR_A:-/target/base/release/ferro}"
+B="${PHPR_B:-/target/release/ferro}"
 R="${R:-7}"
 ONLY="${ONLY:-zend_bench zend_micro_bench arrays strings oop autoload symfony-boot}"
 SCRATCH="${SCRATCH:-/scratch}"

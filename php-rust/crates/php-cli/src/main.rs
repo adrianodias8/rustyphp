@@ -60,8 +60,8 @@ unsafe impl std::alloc::GlobalAlloc for CountingMi {
         std::alloc::GlobalAlloc::alloc_zeroed(&mimalloc::MiMalloc, layout)
     }
     unsafe fn realloc(&self, ptr: *mut u8, layout: std::alloc::Layout, new_size: usize) -> *mut u8 {
-        // S-103 (A-LE-104-1): realloc DISAGGREGATO — mai più contato come
-        // alloc+free pieni (un in-place appariva churn doppio).
+        // realloc is counted SEPARATELY — never again as a full alloc+free
+        // pair (an in-place realloc showed up as double churn).
         php_types::memcensus::grealloc_note(layout.size(), new_size);
         if let Some(p) = php_types::memcensus::scoped_realloc(ptr, new_size, layout.align()) {
             return p;
@@ -84,8 +84,8 @@ fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
 
 fn main() -> ExitCode {
     php_runtime::logging::init();
-    // A-PE-100-2: il modo register-lowering si sigilla QUI, prima che
-    // qualunque codice PHP (putenv incluso) possa girare.
+    // The register-lowering mode is sealed HERE, before any PHP code
+    // (putenv included) can run.
     php_runtime::seal_reg_lower_mode();
     // Leading `php`-style options before the script path. `-d key[=value]`
     // (separate or attached form) collects ini overrides — PHPUnit's
@@ -123,7 +123,7 @@ fn main() -> ExitCode {
         // `-S host:port [-t docroot] [router.php]`: the built-in web server.
         if bytes == b"-S" {
             let Some(addr) = raw.next() else {
-                eprintln!("usage: phpr -S <addr>:<port> [-t docroot] [router.php]");
+                eprintln!("usage: ferro -S <addr>:<port> [-t docroot] [router.php]");
                 return ExitCode::from(1);
             };
             return ExitCode::from(server::serve(&addr.to_string_lossy(), raw));
@@ -136,7 +136,7 @@ fn main() -> ExitCode {
         // `-r code`: run the code string (implicit `<?php ` prefix).
         if bytes == b"-r" {
             let Some(code) = raw.next() else {
-                eprintln!("usage: phpr -r <code>");
+                eprintln!("usage: ferro -r <code>");
                 return ExitCode::from(1);
             };
             let mut source = b"<?php ".to_vec();
@@ -154,7 +154,7 @@ fn main() -> ExitCode {
         let mut source = Vec::new();
         use std::io::Read as _;
         if std::io::stdin().read_to_end(&mut source).is_err() || source.is_empty() {
-            eprintln!("usage: phpr [-d key=value]... <script.php>");
+            eprintln!("usage: ferro [-d key=value]... <script.php>");
             return ExitCode::from(1);
         }
         if source.starts_with(b"#!") {

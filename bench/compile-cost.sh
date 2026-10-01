@@ -10,7 +10,7 @@
 # Also big20k.php (4×) to check the cost scales with source size.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PHPR="${PHPR:-/target/release/phpr}"
+PHPR="${PHPR:-/target/release/ferro}"
 PHP="${PHP_ORACLE:-$(command -v php)}"
 R="${R:-30}"
 D="${SCRATCH:-/scratch}/compile-cost"

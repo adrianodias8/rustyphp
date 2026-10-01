@@ -4,10 +4,10 @@
 
 use super::*;
 
-/// L-BT2 (S-153): chiavi fisse del risultato di `debug_backtrace` e i due
-/// ZStr di `type`, allocati UNA volta per thread (l'hash DJBX33A si calcola
-/// una volta nella vita della stringa); ogni insert clona solo il refcount —
-/// il cammino per-chiamata non alloca né hasha le chiavi.
+/// Fixed keys of the `debug_backtrace` result and the two `type` ZStr,
+/// allocated ONCE per thread (the DJBX33A hash is computed once in the
+/// string's lifetime); every insert only clones the refcount — the per-call
+/// path neither allocates nor hashes the keys.
 struct BtStatics {
     k_file: Key,
     k_line: Key,
@@ -1973,10 +1973,10 @@ impl<'m> super::Vm<'m> {
         if arrays.len() == 1 {
             let entries: Vec<(Key, Zval)> =
                 arrays[0].iter().map(|(k, v)| (k.clone(), v.deref_clone())).collect();
-            // L-AM1 (S-159): 1 array + closure ANONIMA `simple_call` di arità 1
-            // — ammissione UNA volta per chiamata, poi dispatch per-elemento
-            // senza args-Vec (criterio s159-criterio-am1.md). Ogni altra forma
-            // cade sul loop generico sotto, invariato.
+            // 1 array + ANONYMOUS `simple_call` closure of arity 1 —
+            // admission ONCE per call, then per-element dispatch without an
+            // args-Vec. Every other form falls to the generic loop below,
+            // unchanged.
             if !null_cb {
                 if let Zval::Closure(cl) = &cb {
                     if cl.named.is_none() {
@@ -1994,15 +1994,15 @@ impl<'m> super::Vm<'m> {
                         }
                     }
                 }
-                // L-AM2 (S-162): 1 array + STRING-callable a funzione UTENTE
-                // simple_call arità-1 — risoluzione UNA volta per chiamata
-                // (niente to_vec del nome, scan «::» né find_fn_ci
-                // per-elemento), poi dispatch per-elemento senza args-Vec via
-                // call_fn_one (stesso contratto di call_closure_one). Ogni
-                // altra forma (builtin, "Class::method", array-callable,
-                // closure non ammessa) cade sul loop generico sotto,
-                // invariato per costruzione: un nome che non risolve a
-                // funzione utente semplice arità-1 non entra qui.
+                // 1 array + STRING-callable to a USER simple_call function of
+                // arity 1 — resolution ONCE per call (no to_vec of the name,
+                // no "::" scan nor find_fn_ci per element), then per-element
+                // dispatch without an args-Vec via call_fn_one (same contract
+                // as call_closure_one). Every other form (builtin,
+                // "Class::method", array-callable, non-admitted closure) falls
+                // to the generic loop below, unchanged by construction: a name
+                // that does not resolve to a simple arity-1 user function does
+                // not enter here.
                 if let Zval::Str(s) = &cb {
                     if let Some((fm, idx)) = self.resolve_fn_one(s.as_bytes()) {
                         for (k, v) in entries {
@@ -2074,11 +2074,11 @@ impl<'m> super::Vm<'m> {
         let entries: Vec<(Key, Zval)> =
             arr.iter().map(|(k, v)| (k.clone(), v.deref_clone())).collect();
         let mut out = PhpArray::new();
-        // L-AF1 (S-160): 1 array + callback closure ANONIMA `simple_call` di
-        // arità 1, mode==0 — ammissione UNA volta per chiamata, per-elemento
-        // senza args-Vec via call_closure_one (riuso L-AM1; criterio
-        // s160-criterio-af1.md). Stesso numero di clone del pieno; ogni altra
-        // forma cade sul loop generico sotto, invariato.
+        // 1 array + ANONYMOUS `simple_call` callback closure of arity 1,
+        // mode==0 — admission ONCE per call, per-element without an args-Vec
+        // via call_closure_one (reused from array_map). Same number of clones
+        // as the full path; every other form falls to the generic loop below,
+        // unchanged.
         if mode == 0 {
             if let Some(Zval::Closure(cl)) = &cb {
                 if cl.named.is_none() {
@@ -4051,8 +4051,8 @@ impl<'m> super::Vm<'m> {
         Ok((result, Zval::Long(count)))
     }
 
-    /// `preg_last_error(): int` — lo stato registrato da preg_compile /
-    /// subject_text (0 / 1 / 4; phpr non ha backtrack limit, WP-16).
+    /// `preg_last_error(): int` — the state recorded by preg_compile /
+    /// subject_text (0 / 1 / 4; phpr has no backtrack limit).
     pub(super) fn ho_preg_last_error(&mut self) -> Result<Zval, PhpError> {
         Ok(Zval::Long(crate::preg::last_error()))
     }
@@ -4071,9 +4071,9 @@ impl<'m> super::Vm<'m> {
                 "preg_match() expects at least 2 arguments".to_string(),
             ));
         }
-        // L-RE1 (S-120): borrow pattern/subject dai loro ZStr — il to_vec qui
-        // costava 2 alloc + una memcpy O(len) per chiamata; tutto il path a
-        // valle (compile-cache, pattern_is_unicode, subject_text) legge &[u8].
+        // Borrow pattern/subject from their ZStr — the to_vec here cost 2
+        // allocs + an O(len) memcpy per call; the whole downstream path
+        // (compile-cache, pattern_is_unicode, subject_text) reads &[u8].
         let pat_z = convert::to_zstr_cast(&args[0].deref_clone(), &mut self.diags);
         let pat = pat_z.as_bytes();
         let subject_z = convert::to_zstr_cast(&args[1].deref_clone(), &mut self.diags);
@@ -4425,12 +4425,11 @@ impl<'m> super::Vm<'m> {
     }
     pub(super) fn ho_debug_backtrace(&mut self, args: &[Zval]) -> Result<Zval, PhpError> {
         // PHP 8.5: debug_backtrace(int $options = DEBUG_BACKTRACE_PROVIDE_OBJECT,
-        // int $limit = 0). BT1 (S-149): prima options/limit erano IGNORATI —
-        // pila intera con tutti gli args clonati a ogni chiamata (275,0M
-        // alloc = 81,9% del tag hostcall sulla suite ORM, census tranche-4;
-        // forma dominante Doctrine: IGNORE_ARGS + limit=2). Un argomento di
-        // specie inattesa ricade sul default (cammino pieno, mai TypeError
-        // nuovo da questa leva).
+        // int $limit = 0). Before, options/limit were IGNORED — the whole
+        // stack with all args cloned on every call (275.0M allocs = 81.9% of
+        // the hostcall tag on the ORM suite; dominant Doctrine form:
+        // IGNORE_ARGS + limit=2). An argument of unexpected kind falls back
+        // to the default (full path, never a new TypeError from this change).
         const PROVIDE_OBJECT: i64 = 1;
         const IGNORE_ARGS: i64 = 2;
         let long_at = |i: usize| -> Option<i64> {
@@ -4445,9 +4444,9 @@ impl<'m> super::Vm<'m> {
         let provide_object = options & PROVIDE_OBJECT != 0;
         let ignore_args = options & IGNORE_ARGS != 0;
         let frames = self.collect_backtrace_opt(limit, ignore_args);
-        // L-BT2 (S-153): chiavi e ZStr di `type` dal pool statico per-thread
-        // (zero alloc/hash per insert); i campi stringa del BtFrame sono ZStr
-        // e si MUOVONO in Zval::Str senza ricopiare il blocco.
+        // Keys and `type` ZStr from the per-thread static pool (zero
+        // alloc/hash per insert); the BtFrame string fields are ZStr and are
+        // MOVED into Zval::Str without copying the block.
         BT_STATICS.with(|k| {
             let mut outer = PhpArray::new();
             for bt in frames {
@@ -4465,8 +4464,8 @@ impl<'m> super::Vm<'m> {
                     let ty = if bt.is_static { k.ty_static.clone() } else { k.ty_arrow.clone() };
                     e.insert(k.k_type.clone(), Zval::Str(ty));
                 }
-                // PHP's `eval` frame carries no `args` entry; IGNORE_ARGS omette
-                // la chiave per intero (semantica 8.5.7).
+                // PHP's `eval` frame carries no `args` entry; IGNORE_ARGS omits
+                // the key entirely (8.5.7 semantics).
                 if !bt.is_eval && !ignore_args {
                     let mut argsarr = PhpArray::new();
                     for a in bt.args {
@@ -5153,8 +5152,8 @@ impl<'m> super::Vm<'m> {
         // Sort row indices by the multi-column comparison, tie-broken by the
         // original position (PHP's stable_sort_fallback).
         let mut order: Vec<usize> = (0..array_size).collect();
-        // Confronto loose SORT_REGULAR: non-totale sui tipi misti — merge
-        // sort tollerante come zend_sort (WP-16).
+        // Loose SORT_REGULAR comparison: not total over mixed types — a
+        // tolerant merge sort like zend_sort.
         php_types::ops::stable_sort_by(&mut order, |&ra, &rb| {
             for (j, a) in arrays.iter().enumerate() {
                 let c = match (&col_keys[j][ra], &col_keys[j][rb]) {

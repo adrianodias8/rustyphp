@@ -6,7 +6,7 @@
 # run on each engine. Order ABBA. `--no-progress --colors=never` keeps the
 # output comparable; PHPUnit's result cache is disabled so runs are independent.
 set -uo pipefail
-PHPR="${PHPR:-/target/release/phpr}"
+PHPR="${PHPR:-/target/release/ferro}"
 PHP="${PHP_ORACLE:-$(command -v php)}"
 S="${SCRATCH:-/scratch}/smoke-dbal"
 TAG="${DBAL_TAG:-4.5.0}"

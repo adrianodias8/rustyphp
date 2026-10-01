@@ -1,12 +1,12 @@
-//! S-145 (az.rev. S-144 #4): dente CI sul funnel `zcell`. La rettifica del
-//! revisore S-144 ha stabilito che il tipo di `zcell` vincola i SITI
-//! CONVERTITI, non impedisce a un sito nuovo di comporre `Rc::new` con
-//! `RefCell::new(zval)` direttamente — la chiusura resta ricerca
-//! esaustiva. Questo ratchet la rende meccanica: ogni occorrenza del pattern
-//! fuori da `php-types/src/zval.rs` (il funnel) sta nell'allowlist con il suo
-//! conteggio ESATTO e il payload dichiarato (Object/Resource/GenState o
-//! #[test]: mai Zval). Un sito nuovo fa fallire la batteria: o passa dal
-//! funnel (payload Zval) o entra QUI con payload dichiarato non-Zval.
+//! CI ratchet on the `zcell` funnel. Review established that the type of
+//! `zcell` constrains the CONVERTED sites but does not stop a new site from
+//! composing `Rc::new` with `RefCell::new(zval)` directly — closure remains
+//! an exhaustive search. This ratchet makes it mechanical: every occurrence
+//! of the pattern outside `php-types/src/zval.rs` (the funnel) is in the
+//! allowlist with its EXACT count and declared payload (Object/Resource/
+//! GenState or #[test]: never Zval). A new site fails the battery: it either
+//! goes through the funnel (Zval payload) or is entered HERE with a declared
+//! non-Zval payload.
 
 use std::path::{Path, PathBuf};
 
@@ -24,10 +24,10 @@ fn rs_files(dir: &Path, out: &mut Vec<PathBuf>) {
 
 #[test]
 fn rczval_pattern_resta_nel_funnel() {
-    // Pattern composto a pezzi: questo file stesso è nel perimetro della scansione.
+    // Pattern assembled from pieces: this file itself is inside the scan perimeter.
     let pat: String = ["Rc::new(", "RefCell::new"].concat();
     let crates = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    // (path relativo a crates/, conteggio esatto, payload dichiarato)
+    // (path relative to crates/, exact count, declared payload)
     let allow: &[(&str, usize, &str)] = &[
         ("php-types/src/zval.rs", usize::MAX, "IL FUNNEL (zcell/zcell_prop + doc + test)"),
         ("php-types/src/array.rs", 1, "#[test] set_returning_displaced_equals_composite"),

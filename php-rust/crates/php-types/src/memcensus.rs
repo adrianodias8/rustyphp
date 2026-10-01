@@ -70,8 +70,8 @@ pub fn alloc(ch: usize, bytes: usize) {
     CUM[ch].fetch_add(bytes as u64, Relaxed);
     CUM_N[ch].fetch_add(1, Relaxed);
     LIVE_N[ch].fetch_add(1, Relaxed);
-    // S-148 crosswalk: le nascite di canale (str/arr/obj) sono eventi già
-    // attribuiti in s144 — accreditano il tag corrente (convenzione 1:1).
+    // Crosswalk: channel births (str/arr/obj) are events already attributed
+    // in the s144 counters — they credit the current tag (1:1 convention).
     if ch != CH_UNIT {
         s148_attr_note();
     }
@@ -196,8 +196,8 @@ fn dump_line(tag: &str) {
         UNIT_SLACK.load(Relaxed),
         PROXY_PEAK.load(Relaxed),
     ));
-    // S-143 istruttoria: numeratori-evento e denominatore raw NELLA STESSA
-    // run (mai denominatori a memoria); zval_size dichiarato (Hejlsberg R3).
+    // Event numerators and the raw denominator come from THE SAME run
+    // (never denominators from memory); zval_size is stated explicitly.
     #[cfg(feature = "mem-census")]
     {
         let (arrbuf, propsbuf) = s143_counters();
@@ -210,8 +210,8 @@ fn dump_line(tag: &str) {
             gfn,
             std::mem::size_of::<crate::Zval>(),
         ));
-        // S-144 tranche-2: rczval/vecargs + realloc-eventi DICHIARATI accanto
-        // al denominatore (fuori da galloc_n per costruzione, A-LE-104-1).
+        // rczval/vecargs + realloc events reported next to the denominator
+        // (outside galloc_n by construction).
         let (rcz, rczp, vargs) = s144_counters();
         let (grn, _, _) = realloc_counters();
         line.push_str(&format!(
@@ -219,7 +219,7 @@ fn dump_line(tag: &str) {
             rcz, rczp, vargs, grn,
             s144_objsynth(),
         ));
-        // S-145 sonda-B: movimenti Zval per classe (impl Clone census-gated).
+        // Zval movements per class (census-gated `impl Clone`).
         let (csc, cst, car, cob, crf, cro) = s145_counters();
         line.push_str(&format!(
             " s145.clone_scalar_n={} s145.clone_str_n={} s145.clone_arr_n={} s145.clone_obj_n={} s145.clone_ref_n={} s145.clone_rcother_n={}",
@@ -232,13 +232,13 @@ fn dump_line(tag: &str) {
 
 extern "C" fn dump_exit() {
     dump_line("exit");
-    // S-147: righe per-sito/digramma dei movimenti (solo non-zero).
+    // Per-site/digram movement lines (non-zero only).
     #[cfg(feature = "mem-census")]
     s147_dump_lines();
-    // S-148: righe per-tag della partizione di galloc_n.
+    // Per-tag lines of the galloc_n partition.
     #[cfg(feature = "mem-census")]
     s148_dump_lines();
-    // S-149 tranche-4: righe per-NOME-builtin della partizione di hostcall.n.
+    // Per-builtin-NAME lines of the hostcall.n partition.
     #[cfg(feature = "mem-census")]
     s149_dump_lines();
     // WP-59 Ob.1: exit snapshot (win=0) — the cleanest fragmentation read:
@@ -263,12 +263,11 @@ fn collect_mi_standing() {
     phys_window_dump(0, phys_footprint(), "exit_collect_mi");
 }
 
-/// S-93.0 B3 (LEVER-2, arm A/B del probe): force-collect ON-THREAD,
-/// pubblico per il worker del server. I sei blocchi huge del preludio
-/// (wp92-harness/huge-worker.out) sono LIBERATI dal drop dell'arena
-/// bumpalo alla prima richiesta (provato col trace S-93.0), ma il theap
-/// li tiene committed — questo collect li decommitta sul thread che li
-/// possiede. Census builds only (il modulo è feature-gated), mai parity.
+/// Force-collect ON-THREAD, public for the server worker. The six huge
+/// blocks of the prelude are FREED by the drop of the bumpalo arena at the
+/// first request (proven by trace), but the thread heap keeps them
+/// committed — this collect decommits them on the thread that owns them.
+/// Census builds only (the module is feature-gated), never parity.
 pub fn mi_collect_on_thread() {
     unsafe { mi_collect(true) }
 }
@@ -288,8 +287,8 @@ pub fn peak_census_dump(phase: &str) {
     // `phase` names the campaign checkpoint by NAME (A-BG54/KG-91-2:
     // extractors select per ckpt, never positionally): ckpt=peak_inreq
     // for the peak proper, ckpt=peak_inreq_p<phase> for the Δcommitted
-    // phase ladder (A-DL50 braccio 2 — the commit counter is monotone on
-    // macOS, so per-phase deltas are exact, WP-88 lesson).
+    // phase ladder (the commit counter is monotone on macOS, so per-phase
+    // deltas are exact).
     if phase.is_empty() {
         phys_window_dump(9, phys_footprint(), "peak_inreq");
     } else {
@@ -305,27 +304,27 @@ pub fn peak_census_dump(phase: &str) {
 pub fn request_collect_mi() {
     if std::env::var_os("PHPR_MI_COLLECT_REQ").is_some_and(|v| v == "1") {
         collect_mi_standing();
-        // KL71-2 (WP-71, escalation pre-registrata): block-CONTENT dump ai
-        // checkpoint dichiarati — dopo il drain (standing only).
+        // Block-CONTENT dump at the configured checkpoints — after the drain
+        // (standing only).
         blockdump_maybe();
     }
 }
 
 // ---------------------------------------------------------------------------
-// KL71-2 (WP-71): ispezione CONTENUTO dei blocchi vivi nei bin della firma.
-// Armata da PHPR_MI_BLOCKDUMP=<base> (+ PHPR_MI_BLOCKDUMP_AT="500,1000");
-// al checkpoint per-richiesta n ∈ AT scrive <base>.r<n> con una riga per
-// blocco vivo dei bin {32,64,96,112,128,160,192}: ptr, size e i primi 48
-// byte (ascii-escaped). Il diff per puntatore+contenuto tra due checkpoint
-// isola il set cresciuto-e-sopravvissuto; l'istogramma dei contenuti nomina
-// il canale. Census-only, opt-in, mai su path di parità.
+// CONTENT inspection of the live blocks in the signature bins. Armed by
+// PHPR_MI_BLOCKDUMP=<base> (+ PHPR_MI_BLOCKDUMP_AT="500,1000"); at the
+// per-request checkpoint n ∈ AT it writes <base>.r<n> with one line per
+// live block of the bins {32,64,96,112,128,160,192}: ptr, size and the
+// first 48 bytes (ascii-escaped). The pointer+content diff between two
+// checkpoints isolates the grown-and-survived set; the content histogram
+// names the channel. Census-only, opt-in, never on the parity path.
 // ---------------------------------------------------------------------------
 thread_local! {
     static BLOCKDUMP_REQ: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
 }
 
-// KL71-2 seconda passata: TUTTI i bin fino a 1024 — le foglie dei nodi
-// della firma (stringhe condivise) vivono nei bin medi (256/512/640).
+// Second pass: ALL bins up to 1024 — the leaves of the signature nodes
+// (shared strings) live in the middle bins (256/512/640).
 const BLOCKDUMP_MAX: usize = 1024;
 
 unsafe extern "C" fn block_content_visitor(
@@ -659,10 +658,11 @@ pub fn phys_footprint() -> u64 {
     unsafe { info.assume_init() }.phys_footprint
 }
 
-/// Fuori macOS il ledger phys_footprint NON ESISTE (task_info è API Mach):
-/// stub a 0 — lo stesso valore del ramo kr!=0, «nessuna lettura» — SOLO per
-/// tenere compilabili le corsie mem-census sul runner Linux (S-139, fase 1
-/// GH Actions). Da qui non esce mai una cifra: lo strumento è macOS-only.
+/// Outside macOS the phys_footprint ledger DOES NOT EXIST (task_info is a
+/// Mach API): stub returning 0 — the same value as the kr!=0 branch, "no
+/// reading" — ONLY to keep the mem-census lanes compiling on the Linux
+/// runner (GH Actions). No figure ever comes out of here: the instrument
+/// is macOS-only.
 #[cfg(not(target_os = "macos"))]
 pub fn phys_footprint() -> u64 {
     0
@@ -819,35 +819,34 @@ impl BinTab {
     }
 }
 
-// L-71.1 (WP-71, Leijen): SCOPE-HEAP mimalloc attorno a `run_deferred` —
-// il retained-form del canale defer PER COSTRUZIONE: ogni allocazione fatta
-// mentre lo scope è attivo finisce nelle pagine del heap dedicato; ciò che
-// sopravvive al pop (e ai teardown successivi) resta contato lì, il churn
-// che muore non accumula. Il visitor emette le sue righe come
-// `tag=mi_bin src=defer`.
+// mimalloc SCOPE-HEAP around `run_deferred` — the retained form of the
+// defer channel BY CONSTRUCTION: every allocation made while the scope is
+// active lands in the pages of the dedicated heap; whatever survives the pop
+// (and the later teardowns) stays counted there, while churn that dies does
+// not accumulate. The visitor emits its lines as `tag=mi_bin src=defer`.
 //
-// ADDENDUM STRUMENTO (pre-letto, forma P70-0-bis): il mimalloc v3 di questo
-// tree non esporta più `mi_heap_set_default` — il push/pop del default-heap
-// del lock è realizzato al livello del GLOBAL ALLOCATOR del binario census
-// (php-cli `CountingMi`): a scope attivo `scoped_alloc`/`scoped_realloc`
-// instradano su `mi_heap_malloc_aligned(defer_heap, …)`; `mi_free` è
-// heap-agnostico (libera nella pagina proprietaria). La GRANDEZZA misurata
-// è identica a quella lockata. Thread-safety: heap e flag thread_local
-// (mai condivisi); il master wpdev è single-thread.
+// INSTRUMENT NOTE: the mimalloc v3 in this tree no longer exports
+// `mi_heap_set_default` — the default-heap push/pop is realized at the
+// GLOBAL ALLOCATOR level of the census binary (php-cli `CountingMi`): with
+// the scope active, `scoped_alloc`/`scoped_realloc` route through
+// `mi_heap_malloc_aligned(defer_heap, …)`; `mi_free` is heap-agnostic (it
+// frees into the owning page). The measured QUANTITY is identical to the
+// one originally planned. Thread-safety: heap and flag are thread_local
+// (never shared); the dev master is single-threaded.
 thread_local! {
     static DEFER_HEAP: std::cell::Cell<*mut std::os::raw::c_void> =
         const { std::cell::Cell::new(std::ptr::null_mut()) };
     static DEFER_DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
 }
 
-/// RAII della finestra scope-heap: decrementa la profondità al drop
-/// (rientranze annidate di run_deferred restano nello scope).
+/// RAII guard of the scope-heap window: decrements the depth on drop
+/// (nested re-entries of run_deferred stay inside the scope).
 pub struct DeferHeapScope;
 
-/// Entra nello scope-heap del canale defer (creandolo alla prima entrata).
-/// Un fallimento di `mi_heap_new` degrada a no-op (heap null ⇒
-/// `scoped_alloc` risponde None e l'allocazione resta sul default): il
-/// letto per-src semplicemente non esiste, mai un crash del census.
+/// Enter the defer channel's scope-heap (creating it on first entry).
+/// A `mi_heap_new` failure degrades to a no-op (null heap ⇒ `scoped_alloc`
+/// answers None and the allocation stays on the default): the per-src bed
+/// simply does not exist, never a census crash.
 pub fn defer_heap_enter() -> DeferHeapScope {
     DEFER_HEAP.with(|h| {
         if h.get().is_null() {
@@ -872,9 +871,9 @@ fn defer_active_heap() -> *mut std::os::raw::c_void {
     DEFER_HEAP.with(|h| h.get())
 }
 
-/// Allocazione instradata sullo scope-heap quando attivo; `None` = usa il
-/// default (scope inattivo o heap non creabile). Chiamata dal
-/// `#[global_allocator]` del binario census.
+/// Allocation routed to the scope-heap when active; `None` = use the
+/// default (scope inactive or heap not creatable). Called from the census
+/// binary's `#[global_allocator]`.
 #[inline]
 pub fn scoped_alloc(size: usize, align: usize, zeroed: bool) -> Option<*mut u8> {
     let heap = defer_active_heap();
@@ -891,8 +890,8 @@ pub fn scoped_alloc(size: usize, align: usize, zeroed: bool) -> Option<*mut u8> 
     Some(p as *mut u8)
 }
 
-/// Realloc instradato sullo scope-heap quando attivo (un blocco nato su un
-/// altro heap viene ricopiato nel defer-heap da mimalloc). `None` = default.
+/// Realloc routed to the scope-heap when active (a block born on another
+/// heap is copied into the defer-heap by mimalloc). `None` = default.
 #[inline]
 pub fn scoped_realloc(ptr: *mut u8, new_size: usize, align: usize) -> Option<*mut u8> {
     let heap = defer_active_heap();
@@ -1398,9 +1397,8 @@ fn phys_window_dump(win: u32, phys: u64, tag: &str) {
 /// binary owns the allocator choice; this crate only owns the counters).
 static GA_ALLOC: AtomicU64 = AtomicU64::new(0);
 static GA_FREE: AtomicU64 = AtomicU64::new(0);
-// S-102 (A-LE-103-1): anche i CONTEGGI di eventi, non solo i byte — la gamba
-// alloc si giudica a mem-census diretto (le stats a pagine sono cieche al
-// churn malloc/free bilanciato, RC-LE-103-1).
+// Event COUNTS too, not just bytes — the alloc leg is judged by direct
+// mem-census (page-level stats are blind to balanced malloc/free churn).
 static GA_ALLOC_N: AtomicU64 = AtomicU64::new(0);
 static GA_FREE_N: AtomicU64 = AtomicU64::new(0);
 
@@ -1409,7 +1407,7 @@ pub fn galloc_note(bytes: usize) {
     GA_ALLOC.fetch_add(bytes as u64, Relaxed);
     GA_ALLOC_N.fetch_add(1, Relaxed);
     hist_note(bytes);
-    // S-148: partizione per tag di contesto (stessa run, stesso hook).
+    // Partition by context tag (same run, same hook).
     s148_alloc_note(bytes);
 }
 
@@ -1417,19 +1415,19 @@ pub fn galloc_note(bytes: usize) {
 pub fn gfree_note(bytes: usize) {
     GA_FREE.fetch_add(bytes as u64, Relaxed);
     GA_FREE_N.fetch_add(1, Relaxed);
-    // S-104 H-D (A-LE-105-1): il free era ASSUNTO simmetrico all'alloc
-    // senza istogramma — ora la distribuzione lato free si MISURA.
+    // The free side used to be ASSUMED symmetric to the alloc side, without a
+    // histogram — now the free-side distribution is MEASURED.
     fhist_note(bytes);
 }
 
-// S-103 H-D (A-LE-104-1, RC-LE-104-7): il realloc DISAGGREGATO — contarlo
-// come alloc+free pieni fa apparire un realloc in-place come churn doppio
-// («2 alloc/35B» era esistenza, non cifra). Famiglia separata.
+// Realloc DISAGGREGATED — counting it as a full alloc+free makes an in-place
+// realloc look like double churn ("2 alloc/35B" was existence, not a figure).
+// Separate family.
 static GA_REALLOC_N: AtomicU64 = AtomicU64::new(0);
 static GA_REALLOC_OLD: AtomicU64 = AtomicU64::new(0);
 static GA_REALLOC_NEW: AtomicU64 = AtomicU64::new(0);
-// Istogramma size-class degli ALLOC puri (bucket: ≤16 ≤32 ≤48 ≤64 ≤96
-// ≤128 ≤256 ≤512 ≤1k ≤4k >4k): «~35 B medio» diventa una distribuzione.
+// Size-class histogram of the pure ALLOCs (buckets: ≤16 ≤32 ≤48 ≤64 ≤96
+// ≤128 ≤256 ≤512 ≤1k ≤4k >4k): "~35 B average" becomes a distribution.
 pub const HIST_BUCKETS: [usize; 10] = [16, 32, 48, 64, 96, 128, 256, 512, 1024, 4096];
 static GA_HIST: [AtomicU64; 11] = [const { AtomicU64::new(0) }; 11];
 
@@ -1442,7 +1440,7 @@ fn hist_note(bytes: usize) {
     GA_HIST[i].fetch_add(1, Relaxed);
 }
 
-/// Un realloc: NON passa più da galloc/gfree (disaggregazione A-LE-104-1).
+/// One realloc: NO LONGER goes through galloc/gfree (disaggregated).
 #[inline]
 pub fn grealloc_note(old: usize, new: usize) {
     GA_REALLOC_N.fetch_add(1, Relaxed);
@@ -1450,7 +1448,7 @@ pub fn grealloc_note(old: usize, new: usize) {
     GA_REALLOC_NEW.fetch_add(new as u64, Relaxed);
 }
 
-/// (realloc_n, old_bytes, new_bytes) cumulativi.
+/// Cumulative (realloc_n, old_bytes, new_bytes).
 pub fn realloc_counters() -> (u64, u64, u64) {
     (
         GA_REALLOC_N.load(Relaxed),
@@ -1459,14 +1457,13 @@ pub fn realloc_counters() -> (u64, u64, u64) {
     )
 }
 
-/// L'istogramma size-class degli alloc puri (11 bucket, vedi HIST_BUCKETS).
+/// Size-class histogram of the pure allocs (11 buckets, see HIST_BUCKETS).
 pub fn alloc_histogram() -> [u64; 11] {
     std::array::from_fn(|i| GA_HIST[i].load(Relaxed))
 }
 
-// S-104 H-D (A-LE-105-1): istogramma size-class dei FREE puri — stessa
-// bucketizzazione degli alloc, famiglia separata (i realloc restano fuori
-// da entrambe, disaggregazione A-LE-104-1).
+// Size-class histogram of the pure FREEs — same bucketization as the allocs,
+// separate family (reallocs stay out of both, disaggregated).
 static GA_FHIST: [AtomicU64; 11] = [const { AtomicU64::new(0) }; 11];
 
 #[inline]
@@ -1478,15 +1475,14 @@ fn fhist_note(bytes: usize) {
     GA_FHIST[i].fetch_add(1, Relaxed);
 }
 
-/// L'istogramma size-class dei free puri (stessi bucket degli alloc).
+/// Size-class histogram of the pure frees (same buckets as the allocs).
 pub fn free_histogram() -> [u64; 11] {
     std::array::from_fn(|i| GA_FHIST[i].load(Relaxed))
 }
 
-// S-105 H-D gate G2 (censimento ARITÀ): istogramma dell'arità vista da
-// bind_params — il choke-point esatto del perimetro della leva args.
-// Bucket {0,1,2,3,4,≥5}; il chiamante è feature-gated (mem-census), la
-// build di parità non contiene la chiamata.
+// ARITY census: histogram of the arity seen by bind_params — the exact
+// choke-point of the args perimeter. Buckets {0,1,2,3,4,≥5}; the caller is
+// feature-gated (mem-census), the parity build does not contain the call.
 static GA_ARITY: [AtomicU64; 6] = [const { AtomicU64::new(0) }; 6];
 
 #[inline]
@@ -1494,9 +1490,9 @@ pub fn arity_note(n: usize) {
     GA_ARITY[n.min(5)].fetch_add(1, Relaxed);
 }
 
-// S-106-D-12 (A-MA-107-2): contatore del backstop ArgPlace in decay_arg —
-// ogni hit è un funnel di materializzazione mancato (in parità il chiamante
-// è feature-gated; il degrade a NULL resta, ma non più silenzioso).
+// Counter of the ArgPlace backstop in decay_arg — every hit is a missed
+// materialization funnel (in parity the caller is feature-gated; the degrade
+// to NULL stays, but is no longer silent).
 static GA_ARGPLACE_DECAY: AtomicU64 = AtomicU64::new(0);
 
 #[inline]
@@ -1504,12 +1500,12 @@ pub fn argplace_decay_note() {
     GA_ARGPLACE_DECAY.fetch_add(1, Relaxed);
 }
 
-/// Hit del backstop ArgPlace (atteso 0: ogni valore ≠0 è un funnel mancato).
+/// Hits of the ArgPlace backstop (expected 0: any value ≠0 is a missed funnel).
 pub fn argplace_decay_hits() -> u64 {
     GA_ARGPLACE_DECAY.load(Relaxed)
 }
 
-/// L'istogramma dell'arità dei bind (bucket 0..4 esatti, ultimo = ≥5).
+/// Arity histogram of the binds (buckets 0..4 exact, last = ≥5).
 pub fn arity_histogram() -> [u64; 6] {
     std::array::from_fn(|i| GA_ARITY[i].load(Relaxed))
 }
@@ -1523,16 +1519,16 @@ pub fn alloc_counters() -> (u64, u64) {
     (GA_ALLOC.load(Relaxed), GA_FREE.load(Relaxed))
 }
 
-/// S-102 (A-LE-103-1): event COUNTS (alloc_n, free_n) — zero in any build
-/// whose global allocator does not route through the counting wrapper.
+/// Event COUNTS (alloc_n, free_n) — zero in any build whose global
+/// allocator does not route through the counting wrapper.
 pub fn alloc_event_counters() -> (u64, u64) {
     (GA_ALLOC_N.load(Relaxed), GA_FREE_N.load(Relaxed))
 }
 
-// S-142 (criterio s142-criterio-census-rd1.md, REVISIONE dell'edit dopo STOP
-// hash: la v1 con statiche sempre-compilate NON era byte-neutra): contatori
-// del MECCANISMO L-RD1 — teardown inline di PhpArray. TUTTO sotto feature
-// `mem-census`: nel pin non esiste nemmeno il simbolo.
+// Counters of the inline PhpArray teardown mechanism (revised after a hash
+// STOP: the v1 with always-compiled statics was NOT byte-neutral).
+// EVERYTHING under feature `mem-census`: in the pin the symbol does not
+// even exist.
 #[cfg(feature = "mem-census")]
 static RD1_ARRAYS: AtomicU64 = AtomicU64::new(0);
 #[cfg(feature = "mem-census")]
@@ -1540,9 +1536,9 @@ static RD1_ELEMS: AtomicU64 = AtomicU64::new(0);
 #[cfg(feature = "mem-census")]
 static RD1_TOMBS: AtomicU64 = AtomicU64::new(0);
 
-/// Pre-pass di conteggio all'ingresso di `PhpArray::drop` (repr non vuota,
-/// elementi vivi, tombstoni) — SOLO build census; il drain del pin resta
-/// testualmente intatto.
+/// Counting pre-pass at the entry of `PhpArray::drop` (non-empty repr, live
+/// elements, tombstones) — census builds ONLY; the pin's drain stays
+/// textually intact.
 #[cfg(feature = "mem-census")]
 #[inline]
 pub fn rd1_note(len: usize, elems: u64, tombs: u64) {
@@ -1563,12 +1559,11 @@ pub fn rd1_counters() -> (u64, u64, u64) {
     )
 }
 
-// S-143 istruttoria (criterio s143-criterio-istruttoria.md p.2, deliberato
-// concilio): eventi di CREAZIONE BUFFER per arr/props — colmano il buco tra
-// i `cum_n` di canale (box) e le coppie raw dell'allocatore. Un buffer
-// Hashed conta UNA volta (entries+index insieme, banda dichiarata); il
-// propsbuf conta la transizione accounted 0→>0 (slots+dyn insieme).
-// TUTTO sotto feature `mem-census` (disciplina S-142 p.2).
+// BUFFER CREATION events for arr/props — they fill the gap between the
+// channel `cum_n` (boxes) and the allocator's raw pairs. A Hashed buffer
+// counts ONCE (entries+index together, stated band); propsbuf counts the
+// accounted 0→>0 transition (slots+dyn together). EVERYTHING under feature
+// `mem-census`.
 #[cfg(feature = "mem-census")]
 static S143_ARRBUF_N: AtomicU64 = AtomicU64::new(0);
 #[cfg(feature = "mem-census")]
@@ -1588,20 +1583,19 @@ pub fn s143_propsbuf_note() {
     s148_attr_note();
 }
 
-/// Snapshot (arrbuf, propsbuf) per la riga `s143` del dump.
+/// Snapshot (arrbuf, propsbuf) for the dump's `s143` line.
 #[cfg(feature = "mem-census")]
 pub fn s143_counters() -> (u64, u64) {
     (S143_ARRBUF_N.load(Relaxed), S143_PROPSBUF_N.load(Relaxed))
 }
 
-// S-144 tranche-2 (revisione S-143 az.1, criterio s144-criterio-tranche2.md):
-// nascite dei box `Rc<RefCell<Zval>>` (classe `rczval` del criterio S-143
-// p.2) al funnel unico `zval::zcell`/`zcell_prop` — il flag prop marca i
-// SOLI siti inequivocabilmente di macchineria-proprietà (bracket
-// [strict, loose]: la classificazione dei siti misti resta NO, dichiarata)
-// — più il contatore `vecargs` (Vec argomenti con buffer allocato ai funnel
-// bind_params/decay_args; path diretto no-alloc e nativi fuori perimetro,
-// dichiarato). TUTTO sotto feature `mem-census` (disciplina S-142 p.2).
+// Births of the `Rc<RefCell<Zval>>` boxes (class `rczval`) at the single
+// funnel `zval::zcell`/`zcell_prop` — the prop flag marks ONLY the sites
+// that are unambiguously property machinery (bracket [strict, loose]: mixed
+// sites are deliberately classified as NO) — plus the `vecargs` counter
+// (argument Vecs with an allocated buffer at the bind_params/decay_args
+// funnels; the direct no-alloc path and natives are outside the perimeter,
+// by design). EVERYTHING under feature `mem-census`.
 #[cfg(feature = "mem-census")]
 static S144_RCZVAL_N: AtomicU64 = AtomicU64::new(0);
 #[cfg(feature = "mem-census")]
@@ -1609,11 +1603,10 @@ static S144_RCZVAL_PROP_N: AtomicU64 = AtomicU64::new(0);
 #[cfg(feature = "mem-census")]
 static S144_VECARGS_N: AtomicU64 = AtomicU64::new(0);
 
-// S-145 sonda-B (modello wp145-harness/s145-sonda-b-modello.md): movimenti
-// Zval per CLASSE dal SOLO impl Clone manuale census-gated di `Zval` — il
-// denominatore della partizione memcpy/inc-dec/nota. `rcother` raccoglie
-// Closure/Generator/Resource/ArgPlace/WeakHandle (inc/dec di RcBox al prezzo
-// obj, dichiarato nel modello).
+// Zval movements per CLASS from the SOLE census-gated manual `impl Clone`
+// of `Zval` — the denominator of the memcpy/inc-dec/note partition.
+// `rcother` collects Closure/Generator/Resource/ArgPlace/WeakHandle (RcBox
+// inc/dec at the obj price, as the model states).
 #[cfg(feature = "mem-census")]
 static S145_CLONE_SCALAR: AtomicU64 = AtomicU64::new(0);
 #[cfg(feature = "mem-census")]
@@ -1646,11 +1639,11 @@ pub fn s145_clone_note(v: &crate::Zval) {
         | Zval::ArgPlace(_) => (&S145_CLONE_RCOTHER, 5),
     };
     c.fetch_add(1, Relaxed);
-    // S-147: lo STESSO movimento, attribuito al sito/digramma del dispatch.
+    // The SAME movement, attributed to the dispatch site/digram.
     s147_mv_note(k);
 }
 
-/// Snapshot (scalar, str, arr, obj, ref, rcother) per la riga `s145` del dump.
+/// Snapshot (scalar, str, arr, obj, ref, rcother) for the dump's `s145` line.
 #[cfg(feature = "mem-census")]
 pub fn s145_counters() -> (u64, u64, u64, u64, u64, u64) {
     (
@@ -1663,14 +1656,14 @@ pub fn s145_counters() -> (u64, u64, u64, u64, u64, u64) {
     )
 }
 
-// S-147 census unico ORM (concilio S-146, sintesi §Ordine p.1): attribuzione
-// di OGNI movimento Zval (impl Clone census-gated) al SITO VM corrente — l'op
-// del dispatch, notato da `OpCensus::record` PRIMA dell'esecuzione
-// dell'handler — più il DIGRAMMA (op precedente → op corrente) al momento del
-// movimento. La tabella dei nomi la registra il runtime quando arma l'op
-// census (PHPR_OP_CENSUS); senza arming ogni movimento cade nel sito
-// sentinella «outside» (dichiarato: il TOTALE resta esatto, è l'attribuzione
-// che degrada). TUTTO sotto `mem-census`: nel pin non esiste il simbolo.
+// Single ORM census: attribution of EVERY Zval movement (census-gated
+// `impl Clone`) to the current VM SITE — the dispatched op, noted by
+// `OpCensus::record` BEFORE the handler runs — plus the DIGRAM (previous op
+// → current op) at the moment of the movement. The name table is registered
+// by the runtime when it arms the op census (PHPR_OP_CENSUS); without
+// arming, every movement falls into the "outside" sentinel site (by design:
+// the TOTAL stays exact, only the attribution degrades). EVERYTHING under
+// `mem-census`: in the pin the symbol does not exist.
 #[cfg(feature = "mem-census")]
 const S147_N_SITES: usize = 256;
 #[cfg(feature = "mem-census")]
@@ -1689,17 +1682,17 @@ std::thread_local! {
         const { std::cell::Cell::new((S147_OUTSIDE, S147_OUTSIDE)) };
 }
 
-/// Registrata dal runtime quando arma l'op-census: la tabella OP_NAMES che dà
-/// il nome ai siti nel dump (dente: la tabella deve stare sotto la sentinella).
+/// Registered by the runtime when it arms the op-census: the OP_NAMES table
+/// that names the sites in the dump (the table must fit below the sentinel).
 #[cfg(feature = "mem-census")]
 pub fn s147_register_names(names: &'static [&'static str]) {
     assert!(names.len() < S147_N_SITES, "OP_NAMES non entra nella tabella s147");
     let _ = S147_NAMES.set(names);
 }
 
-/// Notata dal dispatch PRIMA dell'esecuzione dell'handler: i movimenti fatti
-/// dentro l'handler (builtins inclusi) si attribuiscono a `cur`; il digramma
-/// è (op precedente → cur) sullo stesso thread.
+/// Noted by the dispatch BEFORE the handler runs: movements made inside the
+/// handler (builtins included) are attributed to `cur`; the digram is
+/// (previous op → cur) on the same thread.
 #[cfg(feature = "mem-census")]
 #[inline]
 pub fn s147_note_dispatch(cur: u16) {
@@ -1726,8 +1719,8 @@ fn s147_site_name(i: usize) -> &'static str {
     S147_NAMES.get().and_then(|n| n.get(i)).copied().unwrap_or("?")
 }
 
-/// Righe `s147mv`/`s147dg` (solo non-zero, pid-prefixed) appese al file di
-/// `PHPR_MEM_CENSUS` a fine processo — il parser somma sui pid.
+/// `s147mv`/`s147dg` lines (non-zero only, pid-prefixed) appended to the
+/// `PHPR_MEM_CENSUS` file at process end — the parser sums over pids.
 #[cfg(feature = "mem-census")]
 fn s147_dump_lines() {
     use std::io::Write;
@@ -1776,9 +1769,9 @@ fn s147_dump_lines() {
 }
 
 // ---------------------------------------------------------------------------
-// S-148 tranche-3: partizione COMPLETA di `galloc_n` per TAG di contesto
-// (attribuzione dell'`other` 57,9% — wp148-harness/s148-criterio-attrib.md).
-// Lista CHIUSA; il tag più INTERNO vince (RAII save/restore sul thread).
+// COMPLETE partition of `galloc_n` by context TAG (attribution of the 57.9%
+// `other` share). CLOSED list; the INNERMOST tag wins (RAII save/restore on
+// the thread).
 
 pub const S148_NONE: u8 = 0;
 pub const S148_FRAME: u8 = 1;
@@ -1799,7 +1792,7 @@ std::thread_local! {
     static S148_CUR: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
 }
 
-/// RAII: imposta il tag corrente del thread e ripristina il precedente al Drop.
+/// RAII: sets the thread's current tag and restores the previous one on Drop.
 pub struct S148Scope {
     prev: u8,
 }
@@ -1828,8 +1821,8 @@ fn s148_cur_tag() -> usize {
     (S148_CUR.try_with(|c| c.get() as usize).unwrap_or(0)).min(S148_N_TAGS - 1)
 }
 
-/// Hook dal wrapper GlobalAlloc (via `galloc_note`): ogni alloc grezza cade in
-/// ESATTAMENTE un tag (Σ tag == galloc_n per costruzione, identità p.4).
+/// Hook from the GlobalAlloc wrapper (via `galloc_note`): every raw alloc
+/// falls into EXACTLY one tag (Σ tag == galloc_n by construction).
 #[inline]
 fn s148_alloc_note(bytes: usize) {
     let t = s148_cur_tag();
@@ -1840,16 +1833,16 @@ fn s148_alloc_note(bytes: usize) {
         i += 1;
     }
     S148_TAG_HIST[t][i].fetch_add(1, Relaxed);
-    // S-149 tranche-4: dentro il tag `hostcall` ogni alloc cade in un NOME
-    // (Σ nomi + unnamed == hostcall.n per costruzione, criterio p.4).
+    // Inside the `hostcall` tag every alloc falls into a NAME
+    // (Σ names + unnamed == hostcall.n by construction).
     if t == S148_HOSTCALL as usize {
         s149_name_alloc_note(bytes);
     }
 }
 
-/// Crosswalk: una nota-evento già attribuita in s144 (cum_n str/arr/obj,
-/// arrbuf, propsbuf, rczval, vecargs — convenzione 1 evento = 1 alloc
-/// EREDITATA) accredita il tag corrente; `other_tag = n − attr` nel parser.
+/// Crosswalk: an event note already attributed in s144 (cum_n str/arr/obj,
+/// arrbuf, propsbuf, rczval, vecargs — INHERITED convention 1 event =
+/// 1 alloc) credits the current tag; `other_tag = n − attr` in the parser.
 #[inline]
 pub fn s148_attr_note() {
     let t = s148_cur_tag();
@@ -1859,16 +1852,16 @@ pub fn s148_attr_note() {
     }
 }
 
-/// Righe `s148tag` (pid-prefixed) appese al file di `PHPR_MEM_CENSUS` a fine
-/// processo — il parser somma sui pid.
+/// `s148tag` lines (pid-prefixed) appended to the `PHPR_MEM_CENSUS` file at
+/// process end — the parser sums over pids.
 fn s148_dump_lines() {
     use std::io::Write;
     let Ok(path) = std::env::var("PHPR_MEM_CENSUS") else { return };
     let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) else {
         return;
     };
-    // Snapshot COERENTE prima di ogni alloc del dump stesso (identità p.4:
-    // Σ tag n == galloc_n al medesimo istante; solo load atomici qui).
+    // COHERENT snapshot before any alloc of the dump itself (identity:
+    // Σ tag n == galloc_n at the same instant; only atomic loads here).
     let ga = GA_ALLOC_N.load(Relaxed);
     let n: [u64; S148_N_TAGS] = std::array::from_fn(|t| S148_TAG_N[t].load(Relaxed));
     let attr: [u64; S148_N_TAGS] = std::array::from_fn(|t| S148_TAG_ATTR[t].load(Relaxed));
@@ -1898,11 +1891,11 @@ fn s148_dump_lines() {
 }
 
 // ---------------------------------------------------------------------------
-// S-149 tranche-4: partizione di `hostcall.n` per NOME di builtin
-// (wp149-harness/s149-criterio-tr4.md). Scope-nome negli STESSI due siti del
-// tag s148 (perimetro IDENTICO); il conteggio per-nome scatta SOLO col tag
-// corrente == `hostcall` ⇒ Σ nomi + unnamed == hostcall.n per costruzione.
-// Tabella statica pre-allocata: il censimento stesso non alloca mai.
+// Partition of `hostcall.n` by builtin NAME. The name scope sits at the SAME
+// two sites as the s148 tag (IDENTICAL perimeter); the per-name count fires
+// ONLY with current tag == `hostcall` ⇒ Σ names + unnamed == hostcall.n by
+// construction. Pre-allocated static table: the census itself never
+// allocates.
 
 const S149_SLOTS: usize = 4096;
 const S149_NAME_MAX: usize = 40;
@@ -1921,8 +1914,8 @@ std::thread_local! {
     static S149_CUR: std::cell::Cell<u32> = const { std::cell::Cell::new(u32::MAX) };
 }
 
-/// FNV-1a 64 del nome; slot vuoto = chiave 0 (eguaglianza per hash a 64 bit,
-/// DICHIARATA nel criterio p.3). Ritorna u32::MAX su tabella piena.
+/// FNV-1a 64 of the name; empty slot = key 0 (equality by 64-bit hash, a
+/// stated approximation). Returns u32::MAX when the table is full.
 #[inline]
 fn s149_slot_for(name: &[u8]) -> u32 {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
@@ -1959,8 +1952,8 @@ fn s149_slot_for(name: &[u8]) -> u32 {
     u32::MAX
 }
 
-/// RAII: imposta il nome-builtin corrente del thread (u32::MAX = nessuno) e
-/// ripristina il precedente al Drop (nesting builtin→callable→builtin ok).
+/// RAII: sets the thread's current builtin name (u32::MAX = none) and
+/// restores the previous one on Drop (builtin→callable→builtin nesting ok).
 pub struct S149Scope {
     prev: u32,
 }
@@ -1990,7 +1983,7 @@ fn s149_cur_slot() -> u32 {
     S149_CUR.try_with(|c| c.get()).unwrap_or(u32::MAX)
 }
 
-/// Hook dal ramo `hostcall` di `s148_alloc_note`.
+/// Hook from the `hostcall` branch of `s148_alloc_note`.
 #[inline]
 fn s149_name_alloc_note(bytes: usize) {
     let s = s149_cur_slot();
@@ -2002,7 +1995,8 @@ fn s149_name_alloc_note(bytes: usize) {
     S149_B[s as usize].fetch_add(bytes as u64, Relaxed);
 }
 
-/// Hook dal ramo `hostcall` di `s148_attr_note` (crosswalk s144 EREDITATO).
+/// Hook from the `hostcall` branch of `s148_attr_note` (INHERITED s144
+/// crosswalk).
 #[inline]
 fn s149_name_attr_note() {
     let s = s149_cur_slot();
@@ -2011,9 +2005,9 @@ fn s149_name_attr_note() {
     }
 }
 
-/// Righe `s149name`/`s149sum` (pid-prefixed) appese a `PHPR_MEM_CENSUS` a
-/// fine processo — il parser somma sui pid. Snapshot dei contatori PRIMA di
-/// ogni alloc del dump stesso (identità criterio p.4).
+/// `s149name`/`s149sum` lines (pid-prefixed) appended to `PHPR_MEM_CENSUS`
+/// at process end — the parser sums over pids. Counters are snapshotted
+/// BEFORE any alloc of the dump itself (partition identity).
 fn s149_dump_lines() {
     use std::io::Write;
     let Ok(path) = std::env::var("PHPR_MEM_CENSUS") else { return };
@@ -2070,9 +2064,9 @@ pub fn s144_vecargs_note() {
     s148_attr_note();
 }
 
-// Revisione S-143 az.5: il box sintetico di `copy_with_id(0)`
-// (vm/mod.rs, serializzazione) NON passa dal mint oggetti — tick dedicato
-// perché il suo peso smetta di essere «probabile piccolo» e diventi cifra.
+// The synthetic box of `copy_with_id(0)` (vm/mod.rs, serialization) does
+// NOT go through the object mint — dedicated tick so that its weight stops
+// being "probably small" and becomes a figure.
 #[cfg(feature = "mem-census")]
 static S144_OBJSYNTH_N: AtomicU64 = AtomicU64::new(0);
 
@@ -2087,7 +2081,7 @@ pub fn s144_objsynth() -> u64 {
     S144_OBJSYNTH_N.load(Relaxed)
 }
 
-/// Snapshot (rczval, rczval_prop, vecargs) per la riga `s144` del dump.
+/// Snapshot (rczval, rczval_prop, vecargs) for the dump's `s144` line.
 #[cfg(feature = "mem-census")]
 pub fn s144_counters() -> (u64, u64, u64) {
     (

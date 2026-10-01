@@ -5,10 +5,10 @@ use std::borrow::Cow;
 
 use super::*;
 
-// S-102 punto 4 (A-BA-103-1): hook compatti del census pila operandi —
-// `scn!(Sito: op)` conta una esecuzione dell'arm, `scn!(Sito: Prim = n)`
-// conta n transiti della primitiva AL SENTIERO ESEGUITO (fast e slow si
-// contano dove eseguono, mai staticamente). Vuoto fuori dalla feature.
+// Compact hooks for the operand-stack census — `scn!(Site: op)` counts one
+// execution of the arm, `scn!(Site: Prim = n)` counts n transits of the
+// primitive ON THE PATH ACTUALLY EXECUTED (fast and slow paths are counted
+// where they run, never statically). Empty outside the feature.
 #[cfg(feature = "zval-census")]
 macro_rules! scn {
     ($site:ident: op) => {
@@ -27,10 +27,9 @@ macro_rules! scn {
     ($($t:tt)*) => {};
 }
 
-// S-103 drop-census (design in wp103-harness/hc2-prep-design.md §2):
-// `dcn!(Sito: &v)` conta UNA fine-vita di Zval al sito, classificata per
-// specie col predicato `is_gc_container` — si piazza dove la vita del
-// valore finisce, sul sentiero eseguito. Vuoto fuori dalla feature.
+// Drop census: `dcn!(Site: &v)` counts ONE Zval end-of-life at the site,
+// classified by kind via the `is_gc_container` predicate — place it where
+// the value's lifetime ends, on the executed path. Empty outside the feature.
 #[cfg(feature = "zval-census")]
 macro_rules! dcn {
     ($site:ident: $v:expr) => {
@@ -45,12 +44,11 @@ macro_rules! dcn {
     ($($t:tt)*) => {};
 }
 
-// S-103 leva-nulla (A-BA-103-4 → KS-BA-104-2, design in
-// wp103-harness/hc2-prep-design.md §1): perturbazione di LAYOUT
-// semanticamente NULLA — mai chiamata, #[no_mangle] la tiene nel testo,
-// #[inline(never)] la tiene FUORI dai sentieri. Il |Δ| misurato sul
-// giudice tra pin e build `--features null-lever` È la banda-layout:
-// nessun A/B micro è giudicabile sotto quella banda.
+// Null lever: a semantically NULL code-LAYOUT perturbation — never called,
+// #[no_mangle] keeps it in the text section, #[inline(never)] keeps it OFF
+// the hot paths. The |Δ| measured on the benchmark judge between the pinned
+// build and a `--features null-lever` build IS the layout noise band: no
+// micro A/B below that band can be judged.
 #[cfg(feature = "null-lever")]
 #[inline(never)]
 #[no_mangle]
@@ -274,8 +272,7 @@ fn binary_fast(b: BinOp, lhs: &Zval, rhs: &Zval) -> Option<Zval> {
     })
 }
 
-/// S-171 L-SL1 «forma sigillata Long» (wp171-harness/s171-criterio.md p.1):
-/// the Long→Long subset of [`binary_fast`]'s `(Long, Long)` arm on bare
+/// "Sealed Long form": the Long→Long subset of [`binary_fast`]'s `(Long, Long)` arm on bare
 /// `i64`, VERBATIM. An arm that would leave the Long domain (overflow →
 /// Double, `y<0` shift → ArithmeticError, Div/Mod/Pow/Concat → generic)
 /// answers `None` and the caller falls back to the exact generic body,
@@ -408,11 +405,10 @@ impl<'m> super::Vm<'m> {
         Ok(())
     }
 
-    /// S-171 L-SL1: corpo ESATTO di `Op::BinarySCSCDst` (S-108 lotto-2 W10 +
-    /// S-112 H-A2b, INVARIATO) tenuto fuori linea — vi si arriva solo quando
-    /// il cammino i64 dell'arm non copre l'istanza (tag, overflow, shift
-    /// negativo, Div/Mod/Pow); ricomputa da zero, il fast path non ha
-    /// lasciato tracce.
+    /// EXACT body of `Op::BinarySCSCDst` (unchanged), kept out of line — only
+    /// reached when the arm's i64 path does not cover the instance (tag,
+    /// overflow, negative shift, Div/Mod/Pow); recomputes from scratch, the
+    /// fast path has left no trace.
     #[cold]
     #[inline(never)]
     #[allow(clippy::too_many_arguments)]
@@ -431,12 +427,11 @@ impl<'m> super::Vm<'m> {
         l: u16,
         dst: u16,
     ) -> Result<(), PhpError> {
-        // S-108 lotto-2 W10: l'albero BinarySCSC ESATTO (tre
-        // funnel, ordine a→b→combine) poi la coda BinarySTDst
-        // sul risultato senza transito di pila — stessa
-        // read_slot silenziosa del lhs, stessa coda (guardia
-        // binary_fast + funnel, come l'op non fusa da S-112
-        // H-A2), stesso reg_store_slot.
+        // The EXACT BinarySCSC tree (three funnels, order
+        // a→b→combine) followed by the BinarySTDst tail on the
+        // result without going through the stack — same silent
+        // read_slot of the lhs, same tail (binary_fast guard +
+        // funnel, as in the unfused op), same reg_store_slot.
         let cva = func.consts[ca as usize].to_zval();
         let a = 'r: {
             {
@@ -468,9 +463,9 @@ impl<'m> super::Vm<'m> {
             None => self.binary_value_ab(op, a, bv)?,
         };
         let lhs = read_slot(&self.frames[top].slots[l as usize]);
-        // S-112 H-A2b: stessa guardia inline del combine qui
-        // sopra — hoisting puro della prima riga di
-        // binary_value_ab, il miss resta al funnel.
+        // Same inline guard as the combine above — pure hoisting
+        // of binary_value_ab's first line, the miss stays with
+        // the funnel.
         let res = match binary_fast(opd, &lhs, &res) {
             Some(v) => v,
             None => self.binary_value_ab(opd, lhs, res)?,
@@ -478,9 +473,9 @@ impl<'m> super::Vm<'m> {
         self.reg_store_slot(top, dst, res)
     }
 
-    /// S-171 L-SL1: corpo ESATTO di `Op::CmpJmpSC` (materializzazione del
-    /// const, guardia + binary_fast + funnel, to_bool con diags) fuori
-    /// linea; restituisce il bool del confronto, il salto resta all'arm.
+    /// EXACT body of `Op::CmpJmpSC` (const materialisation, guard +
+    /// binary_fast + funnel, to_bool with diags) out of line; returns the
+    /// comparison's bool, the jump stays with the arm.
     #[cold]
     #[inline(never)]
     fn cmp_jmp_sc_slow(
@@ -492,7 +487,7 @@ impl<'m> super::Vm<'m> {
         cidx: u16,
     ) -> Result<bool, PhpError> {
         let cv = func.consts[cidx as usize].to_zval();
-        dcn!(CmpJmpSC: &cv); // il const materializzato muore nell'arm (fast o slow)
+        dcn!(CmpJmpSC: &cv); // the materialised const dies in the arm (fast or slow)
         let res = 'r: {
             {
                 let lv = &self.frames[top].slots[slot as usize];
@@ -505,17 +500,16 @@ impl<'m> super::Vm<'m> {
             let lhs = self.reg_load_slot(top, func, slot);
             self.binary_value_ab(op, lhs, cv)?
         };
-        dcn!(CmpJmpSC: &res); // il Bool temporaneo muore dopo to_bool
+        dcn!(CmpJmpSC: &res); // the temporary Bool dies after to_bool
         Ok(convert::to_bool(&res, &mut self.diags))
     }
 
 
-    /// S-172 L-SL2: corpo ESATTO di `Op::BinarySTDst` (S-106 H-A1 + S-112
-    /// H-A2c, INVARIATO: pop del rhs, `read_slot` silenziosa del lhs, guardia
-    /// binary_fast + funnel binary_value_ab, reg_store_slot) tenuto fuori
-    /// linea — vi si arriva solo quando il cammino i64 dell'arm non copre
-    /// l'istanza (tag, overflow, Div/Mod/Pow, shift negativo); ricomputa da
-    /// zero, il fast path non ha lasciato tracce.
+    /// EXACT body of `Op::BinarySTDst` (unchanged: pop of the rhs, silent
+    /// `read_slot` of the lhs, binary_fast guard + binary_value_ab funnel,
+    /// reg_store_slot) kept out of line — only reached when the arm's i64
+    /// path does not cover the instance (tag, overflow, Div/Mod/Pow, negative
+    /// shift); recomputes from scratch, the fast path has left no trace.
     #[cold]
     #[inline(never)]
     #[allow(unused_variables)]
@@ -540,22 +534,22 @@ impl<'m> super::Vm<'m> {
             super::zvalcensus::note_prop_val(2, &lhs);
             super::zvalcensus::note_prop_val(2, &rhs);
         }
-        dcn!(BinarySTDst: &lhs); // consumati dalla coda (fast o funnel)
+        dcn!(BinarySTDst: &lhs); // consumed by the tail (fast or funnel)
         dcn!(BinarySTDst: &rhs);
-        // S-112 H-A2c: guardia binary_fast inline (hoisting puro
-        // della prima riga di binary_value_ab), miss al funnel.
+        // Inline binary_fast guard (pure hoisting of
+        // binary_value_ab's first line), miss to the funnel.
         let res = match binary_fast(b, &lhs, &rhs) {
             Some(v) => v,
             None => self.binary_value_ab(b, lhs, rhs)?,
         };
-        // il valore corrente del dst muore nello store
+        // the current value of dst dies in the store
         dcn!(BinarySTDst: &self.frames[top].slots[dst as usize]);
         self.reg_store_slot(top, dst, res)
     }
 
-    /// Corpo di `Op::Stringify` dopo il pop (S-107 lotto): UN solo sito
-    /// possiede la semantica — condiviso con [`Op::StringifySlot`], frame
-    /// `__toString` (RET_STRINGIFY) compreso.
+    /// Body of `Op::Stringify` after the pop: ONE site owns the semantics —
+    /// shared with [`Op::StringifySlot`], `__toString` frame (RET_STRINGIFY)
+    /// included.
     #[inline(always)]
     fn stringify_entry(&mut self, top: usize, v: Zval) -> Result<(), PhpError> {
         let target = v.deref_clone();
@@ -606,19 +600,19 @@ impl<'m> super::Vm<'m> {
         Ok(())
     }
 
-    /// Corpo di `Op::IncDecSlot` senza il push del risultato (S-107 lotto,
-    /// [`Op::IncDecSlotPop`]/[`Op::IncDecSlotJmp`]): stessa guardia Long del
-    /// braccio non fuso, stessi `compute_incdec`/`raise_diags`/`store_slot`
-    /// nello stesso ordine. `pre` non esiste più: pre/post differivano solo
-    /// nel valore SCARTATO.
+    /// Body of `Op::IncDecSlot` without the push of the result
+    /// ([`Op::IncDecSlotPop`]/[`Op::IncDecSlotJmp`]): same Long guard as the
+    /// unfused arm, same `compute_incdec`/`raise_diags`/`store_slot` in the
+    /// same order. `pre` no longer exists: pre/post only differed in the
+    /// DISCARDED value.
     #[inline(always)]
     fn incdec_slot_discard(&mut self, top: usize, slot: u16, inc: bool) -> Result<(), PhpError> {
         let i = slot as usize;
-        // WP-33 T1c guard (identica al braccio IncDecSlot): Long puro senza
-        // overflow = op di registro, nessun diag possibile. S-171 L-SL1
-        // (criterio p.1c): il payload si aggiorna IN PLACE — nessuna
-        // riscrittura del Zval intero, nessun drop dell'old; l'overflow e
-        // ogni altro tag vanno al corpo ESATTO fuori linea.
+        // Guard (identical to the IncDecSlot arm): a pure Long without
+        // overflow is a register op, no diag possible. The payload is
+        // updated IN PLACE — no rewrite of the whole Zval, no drop of the
+        // old value; overflow and every other tag go to the EXACT body out
+        // of line.
         if let Zval::Long(l) = &mut self.frames[top].slots[i] {
             if let Some(n) = l.checked_add(if inc { 1 } else { -1 }) {
                 *l = n;
@@ -628,28 +622,27 @@ impl<'m> super::Vm<'m> {
         self.incdec_slot_discard_slow(top, i, inc)
     }
 
-    /// S-174 «sweep-in-op» (criterio wp174-harness/s174-criterio.md p.2): il
-    /// corpo di [`Op::Sweep`] è INERTE quando il frame è in un distruttore
-    /// (Frame::in_destructor) o quando vale il fast-path WP-39/WP-50 del
-    /// handler: buffer delle note vuoto (cursore in coda), nessuna demozione
-    /// light da ri-esaminare per un main sweep, pressione del cycle collector
-    /// sotto `gc_sweep_bound`. UN solo testo: il handler `Op::Sweep` lo
-    /// richiama; gli op fusi lo interrogano sullo Sweep SEGUENTE
-    /// (`sweep_skip_next`) DOPO ogni loro effetto, dal solo sentiero in place
-    /// su Long (nessun drop, nessuna chiamata PHP possibile) — si scavalca
-    /// SOLO uno Sweep che non farebbe nulla; nessuna elisione statica.
-    /// S-176 «flag gc-idle» (wp176-harness/s176-criterio-flag.md): il
-    /// fast-path è CACHED in `Vm::gc_idle[main]` (mod.rs: `gc_idle_compute`
-    /// è il testo delle tre clausole, `gc_idle_set` l'unico store) — qui un
-    /// solo byte letto, mai le tre clausole.
+    /// "Sweep-in-op": the body of [`Op::Sweep`] is INERT when the frame is in
+    /// a destructor (Frame::in_destructor) or when the handler's fast path
+    /// holds: empty note buffer (cursor at the end), no light demotion to
+    /// re-examine for a main sweep, cycle collector pressure below
+    /// `gc_sweep_bound`. ONE text: the `Op::Sweep` handler calls it; the fused
+    /// ops query it about the NEXT Sweep (`sweep_skip_next`) AFTER all their
+    /// effects, only from the in-place path on Long (no drop, no PHP call
+    /// possible) — ONLY a Sweep that would do nothing is skipped; no static
+    /// elision.
+    /// "gc-idle flag": the fast path is CACHED in `Vm::gc_idle[main]`
+    /// (mod.rs: `gc_idle_compute` is the text of the three clauses,
+    /// `gc_idle_set` the only store) — here a single byte is read, never the
+    /// three clauses.
     #[inline(always)]
     fn sweep_idle(&self, top: usize, main: bool) -> bool {
         self.frames[top].flags.get(FrameFlags::IN_DESTRUCTOR) || self.gc_idle[main as usize]
     }
 
-    /// Vero se `func.ops[at]` è uno `Sweep` inerte (vedi [`Self::sweep_idle`]):
-    /// l'op fuso può allora saltarlo senza dispatch. Nelle build census
-    /// risponde SEMPRE falso: lo Sweep resta contato dal suo handler.
+    /// True if `func.ops[at]` is an inert `Sweep` (see [`Self::sweep_idle`]):
+    /// the fused op may then skip it without dispatch. In census builds it
+    /// ALWAYS answers false: the Sweep stays counted by its handler.
     #[inline(always)]
     fn sweep_skip_next(&self, top: usize, func: &Func, at: usize) -> bool {
         #[cfg(any(feature = "op-census", feature = "gc-census"))]
@@ -663,9 +656,9 @@ impl<'m> super::Vm<'m> {
         }
     }
 
-    /// S-171 L-SL1: corpo ESATTO di [`Self::incdec_slot_discard`] oltre il
-    /// Long senza overflow (Undef→Null, `compute_incdec`, `raise_diags`,
-    /// `store_slot`, nello stesso ordine di prima), tenuto fuori linea.
+    /// EXACT body of [`Self::incdec_slot_discard`] beyond the non-overflowing
+    /// Long (Undef→Null, `compute_incdec`, `raise_diags`, `store_slot`, in the
+    /// same order as before), kept out of line.
     #[cold]
     #[inline(never)]
     fn incdec_slot_discard_slow(&mut self, top: usize, i: usize, inc: bool) -> Result<(), PhpError> {
@@ -774,9 +767,9 @@ impl<'m> super::Vm<'m> {
         super::concat_in_place(slot, rhs, || typed_refs_empty)
     }
 
-    /// Corpo di `ConcatN`, condiviso con `ConcatNConst` (S-109 F2, criterio
-    /// lotto-3: helper condivisi, zero biforcazione): join in un'allocazione
-    /// quando tutte le parti sono Str, altrimenti funnel pairwise.
+    /// Body of `ConcatN`, shared with `ConcatNConst` (shared helpers, zero
+    /// forking): join in a single allocation when all parts are Str,
+    /// otherwise pairwise funnel.
     fn concat_n(&mut self, top: usize, n: usize) -> Result<(), PhpError> {
         let base = self.frames[top].stack.len() - n;
         if self.frames[top].stack[base..].iter().all(|v| matches!(v, Zval::Str(_))) {
@@ -898,9 +891,9 @@ impl<'m> super::Vm<'m> {
     /// [`Op::ThisPropGet`] shares the identical semantics (warning order,
     /// IC fill discipline, magic re-entry) by construction. Pushes the read
     /// value (or re-enters the VM via a hook/`__get` frame) and returns.
-    /// Corpo di `Op::PropGet` dopo il pop del ricevitore (S-107 lotto):
-    /// condiviso con [`Op::PropGetSlot`] — deref del Ref, IC-hit, fallback.
-    /// Il `continue` del braccio storico è il `return Ok(())` dell'IC-hit.
+    /// Body of `Op::PropGet` after the pop of the receiver: shared with
+    /// [`Op::PropGetSlot`] — Ref deref, IC-hit, fallback. The `continue` of
+    /// the original arm is the IC-hit's `return Ok(())`.
     #[inline(always)]
     fn prop_get_entry(
         &mut self,
@@ -914,16 +907,15 @@ impl<'m> super::Vm<'m> {
         // instead of cloning a second handle that dies at arm end.
         // Only a Ref clones out its inner value (the wrapper never
         // travels past this point).
-        // INV-RECV-1 (S-102 audit, wp102-harness/inv-recv-1-audit.md):
-        // at every point of this arm reachable by synchronous PHP
-        // or by an absolute strong_count observer, ≥1 owned handle
-        // of the receiver is alive — `target` here, then the frame
-        // clone in push_hook/push_magic_prop before the fallback
-        // returns. Extending the move to other forms requires
-        // re-auditing that table (KS-MA-103-2).
+        // INV-RECV-1 (audited): at every point of this arm reachable
+        // by synchronous PHP or by an absolute strong_count observer,
+        // ≥1 owned handle of the receiver is alive — `target` here,
+        // then the frame clone in push_hook/push_magic_prop before
+        // the fallback returns. Extending the move to other forms
+        // requires re-auditing that table.
         let target = if matches!(obj, Zval::Ref(_)) {
             let t = obj.deref_clone();
-            // S-101 census: bump Rc del ricevitore (P2, solo Ref).
+            // census: bump Rc of the receiver (Ref only).
             #[cfg(feature = "zval-census")]
             super::zvalcensus::note_recv_clone_prop(&t);
             t
@@ -944,12 +936,12 @@ impl<'m> super::Vm<'m> {
                         if !matches!(v, Zval::Undef) {
                             let v = v.deref_clone();
                             drop(b);
-                            // S-101 census: specie del valore letto (P1).
+                            // census: kind of the value read.
                             #[cfg(feature = "zval-census")]
                             super::zvalcensus::note_prop_val(0, &v);
                             scn!(PropGet: Push = 1);
                             self.frames[top].stack.push(v);
-                            dcn!(PropGet: &target); // l'handle mosso muore a fine arm
+                            dcn!(PropGet: &target); // the moved handle dies at arm end
                             return Ok(());
                         }
                     }
@@ -959,12 +951,12 @@ impl<'m> super::Vm<'m> {
         self.prop_get_fallback(top, target, name, ic)
     }
 
-    /// Corpo di `Op::PropSet` dopo i due pop (S-107 lotto): condiviso con
-    /// [`Op::PropSetPop`] via const-generic `DISCARD` (monomorfizzato: zero
-    /// dispatch a runtime). Con `DISCARD` il valore assegnato NON viene
-    /// spinto — era il push che il `Pop` fuso scartava; ogni altro effetto
-    /// (hook, `__set`, typed/readonly, gc_note sul valore rimpiazzato) è
-    /// il codice storico del braccio, `continue` → `return Ok(())`.
+    /// Body of `Op::PropSet` after the two pops: shared with
+    /// [`Op::PropSetPop`] via the const-generic `DISCARD` (monomorphised:
+    /// zero runtime dispatch). With `DISCARD` the assigned value is NOT
+    /// pushed — that was the push the fused `Pop` discarded; every other
+    /// effect (hook, `__set`, typed/readonly, gc_note on the replaced value)
+    /// is the original arm's code, `continue` → `return Ok(())`.
     #[inline(always)]
     fn prop_set_entry<const DISCARD: bool>(
         &mut self,
@@ -979,17 +971,17 @@ impl<'m> super::Vm<'m> {
         // INV-RECV-1 holds here too: `target` is owned through
         // lazy_prop_access and every write path below; the old
         // value's synchronous __destruct always sees ≥1 owned
-        // receiver handle (audit: wp102-harness/inv-recv-1-audit.md).
+        // receiver handle (audited).
         let target = if matches!(obj, Zval::Ref(_)) {
             let t = obj.deref_clone();
-            // S-101 census: bump Rc del ricevitore (P2, solo Ref).
+            // census: bump Rc of the receiver (Ref only).
             #[cfg(feature = "zval-census")]
             super::zvalcensus::note_recv_clone_prop(&t);
             t
         } else {
             obj
         };
-        // S-101 census: specie del valore scritto (P1).
+        // census: kind of the value written.
         #[cfg(feature = "zval-census")]
         super::zvalcensus::note_prop_val(1, &value);
         // A write to a lazy object initializes it first (PHP 8.4) —
@@ -1042,14 +1034,14 @@ impl<'m> super::Vm<'m> {
                         }
                 };
                 if hit {
-                    // S-134 IC non-plain (s134-criterio-icnp p.1): il ramo TY
-                    // coercisce nello stesso ordine del cammino pieno (coerce
-                    // PRIMA della scrittura, stessa esposizione a __toString)
-                    // e ri-onora le typed_refs sul post-coercizione come il
-                    // blocco del cammino pieno; ogni altro salto del ramo NP
-                    // è un fatto di classe provato al fill.
-                    // S-176 census «typed» (op-census builds only): IC hit
-                    // on a typed (TY) vs plain class.
+                    // Non-plain IC: the TY branch coerces in the same order
+                    // as the full path (coerce BEFORE the write, same
+                    // exposure to __toString) and re-honours the typed_refs
+                    // on the post-coercion value like the full path's block;
+                    // every other skip of the NP branch is a class fact
+                    // proven at fill time.
+                    // Census "typed" (op-census builds only): IC hit on a
+                    // typed (TY) vs plain class.
                     #[cfg(feature = "op-census")]
                     super::census::census_prop_set(if raw & crate::bytecode::PropIc::TY != 0 {
                         &super::census::PROP_SET_IC_TYPED
@@ -1079,13 +1071,13 @@ impl<'m> super::Vm<'m> {
                         #[cfg(feature = "zval-census")]
                         super::zvalcensus::note_gcnote_site_propset_old();
                         self.gc_note(&old);
-                        dcn!(PropSet: &old); // il vecchio valore muore qui
+                        dcn!(PropSet: &old); // the old value dies here
                     }
                     if !DISCARD {
                         scn!(PropSet: Push = 1);
                         self.frames[top].stack.push(value);
                     }
-                    dcn!(PropSet: &target); // l'handle mosso muore a fine arm
+                    dcn!(PropSet: &target); // the moved handle dies at arm end
                     return Ok(());
                 }
             }
@@ -1162,8 +1154,8 @@ impl<'m> super::Vm<'m> {
             // (a backing write inside the hook). The expression still
             // yields the assigned value; the hook's own return is dropped.
             let (oid, cid) = { let b = o.borrow(); (b.id, b.class_id as usize) };
-            // S-134: vero solo sul percorso che ha ESEGUITO i check hook qui
-            // sotto con esito negativo — condizione di fill del ramo NP.
+            // True only on the path that has EXECUTED the hook checks below
+            // with a negative outcome — fill condition of the NP branch.
             let mut np_fillable = false;
             if !self.hook_guarded(oid, name) {
                 if let Some(func) = self.prop_hook(cid, name, true) {
@@ -1183,11 +1175,10 @@ impl<'m> super::Vm<'m> {
                 }
                 np_fillable = true;
             }
-            // S-133 ctor resolve-once: ONE `resolve_prop_access` for the
-            // whole non-plain path — the magic-set decision and the key/slot/
-            // IC block below share it (formerly two identical resolves: the 4
-            // ctor resolves of the S-131 model; sonda S-133 split 2+2).
-            // Computed AFTER the hook checks so the hooked-set path keeps
+            // Ctor resolve-once: ONE `resolve_prop_access` for the whole
+            // non-plain path — the magic-set decision and the key/slot/IC
+            // block below share it (formerly two identical resolves, as a
+            // probe showed for the ctor-heavy model). Computed AFTER the hook checks so the hooked-set path keeps
             // zero resolves. Same (class, name, scope) triple both sites used
             // before, nothing between them mutates class or props.
             let ocid = o.borrow().class_id as usize;
@@ -1211,14 +1202,14 @@ impl<'m> super::Vm<'m> {
             // creation — readonly / typed enforcement applies only to the
             // former (a parent's private reached from a child scope is a
             // *dynamic* write, untyped and unguarded). The resolution is the
-            // S-133 hoisted one above (shared with the magic-set check).
+            // hoisted one above (shared with the magic-set check).
             let declared_slot = matches!(access, PropAccess::Slot { .. });
             key = match access {
                 PropAccess::Slot { key: k, slot } => {
                     slot_idx = slot;
                     // IC fill: only from a plain_set_props class
                     // (public, symmetric, untyped, non-readonly,
-                    // hook-free in blocco — see PropIc).
+                    // hook-free as a whole — see PropIc).
                     if let Some(i) = slot {
                         if self.classes[ocid].plain_set_props {
                             ic.fill(ocid as u32, crate::bytecode::PropIc::scope_key(cur), i);
@@ -1266,15 +1257,15 @@ impl<'m> super::Vm<'m> {
                     }
                 }
             }
-            // S-134 «IC non-plain» (s134-criterio-icnp p.1): cache del
-            // risultato della resolve per (classe, scope) nella cella IC
-            // esistente, bit NP+TY nello slot. Fill SOLO coi fatti di classe
-            // provati SU QUESTO percorso: check hook eseguiti e negativi,
-            // slot dichiarato con key == name (mai un private mangled), asym
-            // già superato (siamo oltre il suo check), non readonly, `__set`
-            // strutturalmente ASSENTE — con un `__set` il typed-unset DEVE
-            // dispatchare il magic: l'assenza è ciò che rende il salto del
-            // magic-check un fatto di classe e non di istanza.
+            // Non-plain IC: cache the resolve result per (class, scope) in
+            // the existing IC cell, NP+TY bits in the slot. Fill ONLY with
+            // the class facts proven ON THIS path: hook checks executed and
+            // negative, declared slot with key == name (never a mangled
+            // private), asym already passed (we are past its check), not
+            // readonly, `__set` structurally ABSENT — with a `__set` the
+            // typed-unset MUST dispatch the magic: its absence is what makes
+            // skipping the magic check a class fact rather than an instance
+            // fact.
             if np_fillable && declared_slot && ro_decl.is_none() && key.as_ref() == &name[..] {
                 if let Some(i) = slot_idx {
                     if resolve_method_runtime(&self.classes, ocid, b"__set").is_none() {
@@ -1461,24 +1452,23 @@ impl<'m> super::Vm<'m> {
                 return Err(err);
             }
         }
-        // §3.13 (A-ST-103-4): il warning della lettura si timbra con la riga
-        // dell'op che LEGGE, all'accodamento — il flush può cadere sulla
-        // riga successiva (fixture 09).
+        // The read's warning is stamped with the line of the op that READS,
+        // at enqueue time — the flush may land on the next line (fixture 09).
         let before_diags = self.diags.len();
         let v = read_property_at(&target, &key, slot_idx, &mut self.diags);
         let read_line = self.cur_line(top);
         self.mark_pending_diag_lines(before_diags, read_line);
-        // S-101 census: specie del valore letto (P1, percorso generale).
+        // census: kind of the value read (general path).
         #[cfg(feature = "zval-census")]
         super::zvalcensus::note_prop_val(0, &v);
         self.frames[top].stack.push(v);
         Ok(())
     }
 
-    /// Corpo condiviso di `Op::CallBuiltin` (L-HD2 forma-2, S-125): riceve gli
-    /// argomenti già sfilati dalla pila (array esatto per arità <=4, Vec oltre)
-    /// e restituisce il valore da pushare. Fuori da `run_loop` di proposito:
-    /// i rami freddi non pesano sul layout del dispatcher.
+    /// Shared body of `Op::CallBuiltin`: receives the arguments already
+    /// popped from the stack (exact array for arity <=4, Vec beyond) and
+    /// returns the value to push. Deliberately outside `run_loop`: the cold
+    /// branches do not weigh on the dispatcher's layout.
     ///
     /// Shared with the DYNAMIC call path (`Vm::invoke_named`: string
     /// callables, `call_user_func`, first-class callables, and the run-time
@@ -1714,11 +1704,11 @@ impl<'m> super::Vm<'m> {
                     // An unset local reads as NULL (silent — used for compiler
                     // temporaries and PHP's warning-free contexts). A reference
                     // slot is followed. Source-level `$x` reads use `LoadVar`.
-                    // S-95.0 A-ZV2 F1: conta se QUESTO sito è un ultimo uso
-                    // (sola misura, design95-liveness.md).
+                    // census: count whether THIS site is a last use
+                    // (measurement only).
                     #[cfg(feature = "zval-census")]
                     super::zvalcensus::note_slot_load_site(func, ip, &self.frames[top].slots[*s as usize]);
-                    // S-101 census: clone di un handle Object in pila (P2).
+                    // census: clone of an Object handle onto the stack.
                     #[cfg(feature = "zval-census")]
                     super::zvalcensus::note_recv_load(&self.frames[top].slots[*s as usize]);
                     scn!(LoadSlot: op);
@@ -1738,11 +1728,11 @@ impl<'m> super::Vm<'m> {
                             self.diags.push(Diag::Warning(msg));
                         }
                     }
-                    // S-95.0 A-ZV2 F1: conta se QUESTO sito è un ultimo uso
-                    // (sola misura, design95-liveness.md).
+                    // census: count whether THIS site is a last use
+                    // (measurement only).
                     #[cfg(feature = "zval-census")]
                     super::zvalcensus::note_slot_load_site(func, ip, &self.frames[top].slots[*slot as usize]);
-                    // S-101 census: clone di un handle Object in pila (P2).
+                    // census: clone of an Object handle onto the stack.
                     #[cfg(feature = "zval-census")]
                     super::zvalcensus::note_recv_load(&self.frames[top].slots[*slot as usize]);
                     scn!(LoadVar: op);
@@ -2211,28 +2201,27 @@ impl<'m> super::Vm<'m> {
                         super::zvalcensus::note_prop_val(2, &lhs);
                         super::zvalcensus::note_prop_val(2, &rhs);
                     }
-                    dcn!(BinaryDst: &lhs); // consumati da binary_value_ab
+                    dcn!(BinaryDst: &lhs); // consumed by binary_value_ab
                     dcn!(BinaryDst: &rhs);
                     let res = self.binary_value_ab(*b, lhs, rhs)?;
-                    // il valore corrente del dst muore nello store
+                    // the current value of dst dies in the store
                     dcn!(BinaryDst: &self.frames[top].slots[*dst as usize]);
                     self.reg_store_slot(top, *dst, res)?;
                 }
                 Op::BinarySTDst { op: b, l, dst } => {
-                    // S-106 leva H-A1 (ha1-criterio.out): fonde il tris
-                    // `LoadSlot(l); Swap; BinaryDst{op,dst}` del compound assign;
-                    // corpo ESATTO in `binary_st_dst_slow` (S-172).
+                    // Fuses the compound assign's triple
+                    // `LoadSlot(l); Swap; BinaryDst{op,dst}`; EXACT body in
+                    // `binary_st_dst_slow`.
                     scn!(BinarySTDst: op);
-                    // S-172 L-SL2 «forma sigillata Long» fetta 2 = prop (criterio
-                    // wp172-harness/s172-criterio.md p.2b): rhs in cima alla pila
-                    // Long e slot l Long ⇒ catena i64 (`long_arith_i64` = arm Long
-                    // di binary_fast, VERBATIM), pop del Long e scrittura IN PLACE
-                    // su un dst già Long (= store_slot su Long: nessun typed-ref,
-                    // gc_note di un Long è no-op); ogni miss (tag, overflow,
-                    // Div/Mod/Pow, shift negativo) va al corpo ESATTO fuori linea,
-                    // che ricomputa da zero: il fast path non ha effetti
-                    // collaterali. I `dcn!` restano nel corpo esatto (sul hit
-                    // nessun Zval è materializzato).
+                    // "Sealed Long form": rhs on top of the stack Long and slot
+                    // l Long ⇒ i64 chain (`long_arith_i64` = binary_fast's Long
+                    // arm, VERBATIM), pop of the Long and write IN PLACE onto a
+                    // dst that is already Long (= store_slot on Long: no
+                    // typed-ref, gc_note of a Long is a no-op); every miss (tag,
+                    // overflow, Div/Mod/Pow, negative shift) goes to the EXACT
+                    // body out of line, which recomputes from scratch: the fast
+                    // path has no side effects. The `dcn!` stay in the exact
+                    // body (no Zval is materialised on the hit).
                     let fast = {
                         let fr = &self.frames[top];
                         match (fr.stack.last(), &fr.slots[*l as usize]) {
@@ -2245,8 +2234,8 @@ impl<'m> super::Vm<'m> {
                             self.frames[top].stack.pop();
                             if let Zval::Long(x) = &mut self.frames[top].slots[*dst as usize] {
                                 *x = r;
-                                // S-174 «sweep-in-op» B (criterio p.2): dal solo
-                                // sentiero in place, Sweep seguente inerte ⇒ ip+2.
+                                // Sweep-in-op: only from the in-place path, an
+                                // inert next Sweep ⇒ ip+2.
                                 if self.sweep_skip_next(top, func, ip + 1) {
                                     self.frames[top].ip = ip + 2;
                                 }
@@ -2258,11 +2247,10 @@ impl<'m> super::Vm<'m> {
                     }
                 }
                 Op::BinaryTC { op: b, cidx } => {
-                    // S-107 lotto: BinarySC a lhs di PILA (bigram
-                    // PushConst→Binary). Const materializzato una volta;
-                    // stesso binary_fast + funnel binary_value_ab del
-                    // braccio Binary — il lhs arriva dalla pila ESATTAMENTE
-                    // come nell'op non fusa.
+                    // BinarySC with a STACK lhs (bigram PushConst→Binary).
+                    // Const materialised once; same binary_fast +
+                    // binary_value_ab funnel as the Binary arm — the lhs
+                    // comes from the stack EXACTLY as in the unfused op.
                     let cv = func.consts[*cidx as usize].to_zval();
                     let res = 'r: {
                         if let Some(lv) = self.frames[top].stack.last() {
@@ -2279,12 +2267,12 @@ impl<'m> super::Vm<'m> {
                     self.frames[top].stack.push(res);
                 }
                 Op::BinarySCSC { opa, la, ca, opb, lb, cb, op } => {
-                    // S-107 lotto: l'albero `(la⊚ca) ⊚ (lb⊚cb)` (giudice
-                    // arith) in un'unica forma monomorfa. Ordine di
-                    // valutazione e diagnostica ORIGINALI: a per intero
-                    // (lettura con parità warning + funnel), poi b, poi il
-                    // combine — stessi binary_fast/binary_value_ab/
-                    // reg_load_slot delle forme SC.
+                    // The tree `(la⊚ca) ⊚ (lb⊚cb)` (arith benchmark) in a
+                    // single monomorphic form. ORIGINAL evaluation order and
+                    // diagnostics: a in full (read with warning parity +
+                    // funnel), then b, then the combine — same
+                    // binary_fast/binary_value_ab/reg_load_slot as the SC
+                    // forms.
                     let cva = func.consts[*ca as usize].to_zval();
                     let a = 'r: {
                         {
@@ -2318,18 +2306,18 @@ impl<'m> super::Vm<'m> {
                     self.frames[top].stack.push(res);
                 }
                 Op::BinarySCSCDst { opa, la, ca, opb, lb, cb, op, opd, l, dst } => {
-                    // S-171 L-SL1 «forma sigillata Long» (criterio
-                    // wp171-harness/s171-criterio.md p.1a): quando i tre slot
-                    // sono Long e i due const sono Int, la catena a→b→combine→
-                    // dst gira INTERA su i64 (`long_arith_i64` = arm Long→Long
-                    // di binary_fast, VERBATIM, un match per op: forma
-                    // GENERICA, nessuna tupla cotta) senza Zval temporanei,
-                    // senza to_zval/read_slot/guardie; il risultato si scrive
-                    // IN PLACE sul payload di un dst già Long (= store_slot su
-                    // Long: nessun typed-ref, gc_note di un Long è no-op).
-                    // Ogni miss (tag, overflow, shift negativo, Div/Mod/Pow)
-                    // va al corpo ESATTO fuori linea, che ricomputa da zero:
-                    // il fast path non ha effetti collaterali.
+                    // "Sealed Long form": when the three slots are Long and
+                    // the two consts are Int, the chain a→b→combine→dst runs
+                    // ENTIRELY on i64 (`long_arith_i64` = binary_fast's
+                    // Long→Long arm, VERBATIM, one match per op: GENERIC form,
+                    // no baked tuple) without temporary Zvals, without
+                    // to_zval/read_slot/guards; the result is written IN PLACE
+                    // onto the payload of a dst that is already Long
+                    // (= store_slot on Long: no typed-ref, gc_note of a Long
+                    // is a no-op). Every miss (tag, overflow, negative shift,
+                    // Div/Mod/Pow) goes to the EXACT body out of line, which
+                    // recomputes from scratch: the fast path has no side
+                    // effects.
                     let fast = {
                         let fr = &self.frames[top];
                         if let (
@@ -2357,10 +2345,10 @@ impl<'m> super::Vm<'m> {
                         Some(r) => {
                             if let Zval::Long(x) = &mut self.frames[top].slots[*dst as usize] {
                                 *x = r;
-                                // S-174 «sweep-in-op» B (criterio p.2): dal solo
-                                // sentiero in place, se lo Sweep seguente è inerte
-                                // (`sweep_skip_next`, predicato del handler valutato
-                                // DOPO l'effetto) lo si scavalca senza dispatch.
+                                // Sweep-in-op: only from the in-place path, if
+                                // the next Sweep is inert (`sweep_skip_next`,
+                                // the handler's predicate evaluated AFTER the
+                                // effect) it is skipped without dispatch.
                                 if self.sweep_skip_next(top, func, ip + 1) {
                                     self.frames[top].ip = ip + 2;
                                 }
@@ -2374,31 +2362,31 @@ impl<'m> super::Vm<'m> {
                     }
                 }
                 Op::LoadVarPushConst { slot, cidx } => {
-                    // S-108 lotto-2 W13: pura coppia di push — LoadVar
-                    // (parità warning via reg_load_slot/unit_slot_name,
-                    // guardia fold_slot) poi il const. Nessun effetto eliso.
+                    // A pure pair of pushes — LoadVar (warning parity via
+                    // reg_load_slot/unit_slot_name, fold_slot guard) then
+                    // the const. No effect elided.
                     let v = self.reg_load_slot(top, func, *slot);
                     self.frames[top].stack.push(v);
                     let cv = func.consts[*cidx as usize].to_zval();
                     self.frames[top].stack.push(cv);
                 }
                 Op::IncDecSlotPop { slot, inc } => {
-                    // S-107 lotto: `$x++;` come statement — IncDecSlot ESATTO
-                    // (metodo condiviso) senza push+Pop del transiente.
+                    // `$x++;` as a statement — EXACT IncDecSlot (shared
+                    // method) without push+Pop of the transient.
                     self.incdec_slot_discard(top, *slot, *inc)?;
                 }
                 Op::IncDecSlotJmp { slot, inc, addr } => {
-                    // S-107 lotto: il trigramma IncDecSlot;Pop;Jump del
-                    // back-edge di loop — incremento poi salto incondizionato.
+                    // The trigram IncDecSlot;Pop;Jump of a loop back-edge —
+                    // increment then unconditional jump.
                     self.incdec_slot_discard(top, *slot, *inc)?;
-                    // S-174 leva «Sweep-in-op» braccio C = «back-edge fuso» (criterio
-                    // wp174-harness/s174-criterio.md p.2): se la meta del salto è il
-                    // CmpJmpSC di testa del loop e il suo fast path è in dominio (const
-                    // Int, slot Long: `long_cmp_i64` VERBATIM dal handler), il confronto
-                    // si decide QUI e `ip` va direttamente alla meta del CmpJmpSC (o
-                    // all'op che lo segue): un dispatch in meno per iterazione. Ogni miss
-                    // ⇒ `ip = addr`, il CmpJmpSC gira come oggi (corpo esatto compreso).
-                    // Spento sotto op-census (il CmpJmpSC resta contato dal suo handler).
+                    // Sweep-in-op, "fused back-edge": if the jump target is the
+                    // loop-head CmpJmpSC and its fast path is in domain (const Int,
+                    // slot Long: `long_cmp_i64` VERBATIM from the handler), the
+                    // comparison is decided HERE and `ip` goes directly to the
+                    // CmpJmpSC's target (or to the op after it): one dispatch less
+                    // per iteration. Every miss ⇒ `ip = addr`, the CmpJmpSC runs as
+                    // it does today (exact body included). Disabled under
+                    // op-census (the CmpJmpSC stays counted by its handler).
                     let a = *addr as usize;
                     self.frames[top].ip = a;
                     #[cfg(not(feature = "op-census"))]
@@ -2436,12 +2424,12 @@ impl<'m> super::Vm<'m> {
                 }
                 Op::CmpJmpSC { op, slot, cidx, addr, when } => {
                     scn!(CmpJmpSC: op);
-                    // S-171 L-SL1 (criterio p.1b): const `Int` e slot `Long`
-                    // letti al posto (niente to_zval; niente guardia
-                    // Undef/Ref: il match sul tag la ingloba), confronto a
-                    // `bool` diretto (`long_cmp_i64` = arm Long/Long di
-                    // binary_fast, VERBATIM) senza Zval::Bool/to_bool/diags;
-                    // ogni altro caso va al corpo ESATTO fuori linea.
+                    // Const `Int` and slot `Long` read in place (no to_zval;
+                    // no Undef/Ref guard: the tag match subsumes it), direct
+                    // comparison to `bool` (`long_cmp_i64` = binary_fast's
+                    // Long/Long arm, VERBATIM) without Zval::Bool/to_bool/
+                    // diags; every other case goes to the EXACT body out of
+                    // line.
                     let fast = match (&func.consts[*cidx as usize], &self.frames[top].slots[*slot as usize]) {
                         (crate::bytecode::Const::Int(c), Zval::Long(l)) => long_cmp_i64(*op, *l, *c),
                         _ => None,
@@ -2465,9 +2453,9 @@ impl<'m> super::Vm<'m> {
                     self.concat_n(top, n)?;
                 }
                 Op::ConcatNConst { n, cidx } => {
-                    // S-109 F2: la parte literal (Str per guardia della
-                    // finestra) è l'ultimo push del join; poi lo STESSO
-                    // corpo di ConcatN (concat_n, helper condiviso).
+                    // The literal part (Str by the window's guard) is the
+                    // last push of the join; then the SAME body as ConcatN
+                    // (concat_n, shared helper).
                     let n = *n as usize;
                     let cv = func.consts[*cidx as usize].to_zval();
                     self.frames[top].stack.push(cv);
@@ -2562,9 +2550,9 @@ impl<'m> super::Vm<'m> {
                     self.stringify_entry(top, v)?;
                 }
                 Op::StringifySlot { slot } => {
-                    // S-107 lotto: LoadVar (parità warning via reg_load_slot)
-                    // + Stringify ESATTO — stesso metodo condiviso, frame
-                    // __toString compreso.
+                    // LoadVar (warning parity via reg_load_slot) + EXACT
+                    // Stringify — same shared method, __toString frame
+                    // included.
                     let v = self.reg_load_slot(top, func, *slot);
                     self.stringify_entry(top, v)?;
                 }
@@ -2782,15 +2770,15 @@ impl<'m> super::Vm<'m> {
                             continue;
                         }
                     }
-                    // S-135 leva AP1 (criterio s135-criterio-ap1.md): caso
-                    // monomorfo `$a[k] = v` con base slot GIÀ Array — la
-                    // specializzazione letterale del cammino pieno (coerce →
-                    // make_mut → set_returning_displaced → gc_note → push),
-                    // senza il plumbing path_op/path_walk/Last. Il peek NON
-                    // coercisce e non vivifica: ogni altro caso (base
-                    // Ref/Object/Str/Null-vivify, append, nkeys>1, chiave
-                    // illegale a parte il TypeError condiviso, Busy) resta
-                    // al cammino pieno sotto, INVARIATO.
+                    // Monomorphic case `$a[k] = v` with a base slot that is
+                    // ALREADY an Array — the literal specialisation of the
+                    // full path (coerce → make_mut → set_returning_displaced
+                    // → gc_note → push), without the path_op/path_walk/Last
+                    // plumbing. The peek does NOT coerce and does not
+                    // vivify: every other case (base Ref/Object/Str/
+                    // Null-vivify, append, nkeys>1, illegal key apart from
+                    // the shared TypeError, Busy) stays with the full path
+                    // below, UNCHANGED.
                     if !*append && *nkeys == 1 {
                         let is_plain_arr = {
                             let cell = match *base {
@@ -2820,14 +2808,14 @@ impl<'m> super::Vm<'m> {
                                     }
                                 }
                                 LeafWrite::Busy(cell, val) => {
-                                    // Drain Set di path_op replicato (H-70.1;
-                                    // H-71.3: Err dichiarato irraggiungibile).
-                                    // S-136 az.rev. S-135 #3: QUI Busy stesso è
-                                    // dichiarato irraggiungibile (nessun guard
-                                    // di walk vivo, borrow del base cell chiuso
-                                    // prima del drain, nessun codice utente in
-                                    // mezzo): replica difensiva tenuta, ma il
-                                    // contatore dedicato denuncia se mai morde.
+                                    // Replica of path_op's Set drain (Err is
+                                    // declared unreachable). HERE Busy itself
+                                    // is declared unreachable (no live walk
+                                    // guard, the base cell's borrow is closed
+                                    // before the drain, no user code in
+                                    // between): the defensive replica is kept,
+                                    // but a dedicated counter reports if it
+                                    // ever fires.
                                     ap1_busy_note();
                                     match cell.try_borrow_mut() {
                                         Ok(mut g) => {
@@ -3837,33 +3825,32 @@ impl<'m> super::Vm<'m> {
                     // the Call, so it resumes correctly once the callee returns.
                     let n = *argc as usize;
                     if callee.simple_call && n == callee.n_params as usize {
-                        // S-105 leva H-D (forma 2): simple-call ad arità esatta
-                        // — gli argomenti passano DIRETTAMENTE dalla pila del
-                        // chiamante ai primi slot del callee, in ordine inverso
-                        // di pop: nessun contenitore, nessuna alloc (canale
-                        // 1 alloc × 32 B/chiamata inchiodato da hd-free-hist).
-                        // Semantica = braccio fast di bind_params. DECLASSATO
-                        // (S-106-D-9, KS-MA-107-1): «decay_arg è pure-read»
-                        // era un CLAIM non provato — il drop del wrapper Ref
-                        // dentro decay_arg può liberare l'ultima ref (memoria
-                        // resa, handle-id riciclabili): l'ordine (0..n).rev()
-                        // è equivalente al push-order di bind_params SOLO
-                        // finché nessun operando è last-ref, proprietà mai
-                        // provata per NOME. Niente user code nel decay (no
-                        // __destruct inline nel drop glue) è l'unica parte
-                        // osservata; il dente handle-id/cascata è a backlog.
+                        // Simple-call at exact arity — the arguments pass
+                        // DIRECTLY from the caller's stack to the callee's
+                        // leading slots, in reverse pop order: no container,
+                        // no alloc (the 1 alloc × 32 B/call channel pinned
+                        // down by the free-histogram). Semantics = the fast
+                        // arm of bind_params. DOWNGRADED: "decay_arg is
+                        // pure-read" was an unproven CLAIM — dropping the Ref
+                        // wrapper inside decay_arg can free the last ref
+                        // (memory released, handle-ids recyclable): the order
+                        // (0..n).rev() is equivalent to bind_params' push
+                        // order ONLY as long as no operand is a last ref, a
+                        // property never proven by NAME. No user code in the
+                        // decay (no inline __destruct in the drop glue) is the
+                        // only part observed; the handle-id/cascade gap is
+                        // in the backlog.
                         #[cfg(feature = "mem-census")]
                         php_types::memcensus::arity_note(n);
-                        // L-CR1 (S-181, wp181-harness/s181-criterio-cr1.md):
-                        // (a) il frame nasce DENTRO `frames` (push dei buffer
-                        // del pool) e gli argomenti passano per split_at_mut —
-                        // nessun Frame per valore attraverso `enter_callee`,
-                        // il cui ramo simple_call è solo trace + push
-                        // (replicato qui al byte; `decay_arg` non esegue
-                        // codice utente ⇒ l'ordine push/pop non è osservabile);
-                        // (b) arità ESATTA per costruzione (argc == n_params ≥
-                        // required) ⇒ il `CheckArity` in testa al corpo non
-                        // può fallire: si entra a ip=1.
+                        // (a) the frame is born INSIDE `frames` (push of the
+                        // pool's buffers) and the arguments pass through
+                        // split_at_mut — no Frame by value through
+                        // `enter_callee`, whose simple_call branch is only
+                        // trace + push (replicated here to the byte;
+                        // `decay_arg` runs no user code ⇒ the push/pop order
+                        // is not observable); (b) EXACT arity by construction
+                        // (argc == n_params ≥ required) ⇒ the `CheckArity` at
+                        // the head of the body cannot fail: enter at ip=1.
                         if log::log_enabled!(target: "phpr::call", log::Level::Trace) {
                             log::trace!(
                                 target: "phpr::call",
@@ -3973,14 +3960,14 @@ impl<'m> super::Vm<'m> {
                     self.enter_callee(frame)?;
                 }
                 Op::CallBuiltin { name, argc } => {
-                    // S-148 (census): estensione dinamica del builtin nel
-                    // tag `hostcall` della partizione galloc.
+                    // census: the builtin's dynamic extent under the
+                    // `hostcall` tag of the galloc partition.
                     #[cfg(feature = "mem-census")]
                     let _s148 = php_types::memcensus::s148_scope(
                         php_types::memcensus::S148_HOSTCALL,
                     );
-                    // S-149 tranche-4 (census): partizione di hostcall.n per
-                    // NOME (stesso perimetro del tag, criterio p.1).
+                    // census: partition of hostcall.n by NAME (same
+                    // perimeter as the tag).
                     #[cfg(feature = "mem-census")]
                     let _s149 = php_types::memcensus::s149_name_scope(&name[..]);
                     let f = match self.registry.get(&name[..]) {
@@ -3988,14 +3975,13 @@ impl<'m> super::Vm<'m> {
                         // The compiler only emits CallBuiltin for value builtins.
                         _ => return Err(undefined_builtin(&name)),
                     };
-                    // L-HD2 forma-2 (S-125): per arità <=4 gli argomenti passano
-                    // per POP DIRETTI in un array esatto sullo stack nativo —
-                    // niente split_off (coppia malloc+free per chiamata, canale
-                    // H-D), niente slot di riempimento, niente iteratore; il
-                    // contratto di visibilità è quello storico (gli argomenti
-                    // vivono fuori dal frame durante la chiamata). Oltre 4
-                    // resta il Vec. Corpo (rami freddi inclusi) in
-                    // `value_builtin_call`, fuori dal dispatcher.
+                    // For arity <=4 the arguments pass by DIRECT POPS into an
+                    // exact array on the native stack — no split_off (a
+                    // malloc+free pair per call), no filler slots, no
+                    // iterator; the visibility contract is the original one
+                    // (the arguments live outside the frame during the call).
+                    // Beyond 4 the Vec remains. Body (cold branches included)
+                    // in `value_builtin_call`, outside the dispatcher.
                     let result = match *argc {
                         0 => self.value_builtin_call(top, f, name, &mut [])?,
                         1 => {
@@ -4078,28 +4064,27 @@ impl<'m> super::Vm<'m> {
                     self.frames[top].stack.push(result);
                 }
                 Op::CallHostBuiltin { name, argc } => {
-                    // S-148 (census): estensione dinamica del builtin nel
-                    // tag `hostcall` della partizione galloc.
+                    // census: the builtin's dynamic extent under the
+                    // `hostcall` tag of the galloc partition.
                     #[cfg(feature = "mem-census")]
                     let _s148 = php_types::memcensus::s148_scope(
                         php_types::memcensus::S148_HOSTCALL,
                     );
-                    // S-149 tranche-4 (census): partizione di hostcall.n per
-                    // NOME (stesso perimetro del tag, criterio p.1).
+                    // census: partition of hostcall.n by NAME (same
+                    // perimeter as the tag).
                     #[cfg(feature = "mem-census")]
                     let _s149 = php_types::memcensus::s149_name_scope(&name[..]);
-                    // An evaluator-only host builtin (Session B): it may invoke a
-                    // user callable via `call_callable` (a nested `run_loop`).
-                    // HD2-hostcall (S-156): per arità ≤4 gli argomenti passano
-                    // per POP DIRETTI in un array nativo (ordine sorgente ==
-                    // split_off di pop_keys) e i nomi convertiti dispacciano
-                    // sulla slice — niente args-Vec (canale H-D, 1 alloc ×
-                    // 16-64 B/chiamata). Un nome NON convertito ricostruisce il
-                    // Vec dagli stessi valori (1 alloc, identico a prima, più
-                    // DUE match persi: qui e delega). Il contratto di visibilità
-                    // è quello storico di pop_keys: gli argomenti vivono fuori
-                    // dal frame durante la chiamata (anche nei run_loop
-                    // annidati del builtin).
+                    // An evaluator-only host builtin: it may invoke a user
+                    // callable via `call_callable` (a nested `run_loop`).
+                    // For arity ≤4 the arguments pass by DIRECT POPS into a
+                    // native array (source order == pop_keys' split_off) and
+                    // the converted names dispatch on the slice — no args-Vec
+                    // (1 alloc × 16-64 B/call). A NON-converted name rebuilds
+                    // the Vec from the same values (1 alloc, identical to
+                    // before, plus TWO missed matches: here and in the
+                    // delegate). The visibility contract is pop_keys' original
+                    // one: the arguments live outside the frame during the
+                    // call (also in the builtin's nested run_loops).
                     // Flush this builtin's own diagnostics at its call line, like
                     // `run_value_builtin` does for registry builtins — otherwise a
                     // warning it pushes (e.g. header()'s "headers already sent")
@@ -4408,8 +4393,8 @@ impl<'m> super::Vm<'m> {
                     // Ret-shaping bits and CLONE_INIT (WP-53; flags are not
                     // mutated between here and the frame pop).
                     let fl = self.frames[top].flags.bits();
-                    // L-CR1 (S-181) (c): la guardia magic esiste solo con
-                    // `ext`: niente Vec vuoto costruito e iterato a ogni Ret.
+                    // The magic guard only exists with `ext`: no empty Vec
+                    // built and iterated on every Ret.
                     let guard = self
                         .frames[top]
                         .ext_opt_mut()
@@ -4861,15 +4846,15 @@ impl<'m> super::Vm<'m> {
                     self.prop_get_entry(top, obj, name, ic)?;
                 }
                 Op::PropGetSlot { slot, name, ic } => {
-                    // S-173 L-SL2 fetta 3 P3 (criterio wp172-harness/s173-criterio.md
-                    // p.2): peephole runtime sul bigramma `$s OP= $o->x`
-                    // (questo op + BinarySTDst). Guardie IC VERBATIM dall'hit qui
-                    // sotto (scope_key, ic.get, class_id, lazy) + dominio del fast
-                    // path di BinarySTDst (prop Long, slot l Long, `long_arith_i64`
-                    // in dominio): il risultato va in place su dst Long — altrimenti
-                    // `reg_store_slot(Long(r))`, P2 verbatim — con `ip+2`: nessun
-                    // push/pop del Long, un dispatch in meno. OGNI miss cade al
-                    // sentiero storico sotto, da zero: il probe non tocca stato.
+                    // Runtime peephole on the bigram `$s OP= $o->x` (this op +
+                    // BinarySTDst). IC guards VERBATIM from the hit below
+                    // (scope_key, ic.get, class_id, lazy) + the domain of
+                    // BinarySTDst's fast path (prop Long, slot l Long,
+                    // `long_arith_i64` in domain): the result goes in place on a
+                    // Long dst — otherwise `reg_store_slot(Long(r))`, verbatim —
+                    // with `ip+2`: no push/pop of the Long, one dispatch less.
+                    // EVERY miss falls to the original path below, from scratch:
+                    // the probe touches no state.
                     #[cfg(not(any(feature = "zval-census", feature = "op-census")))]
                     if let Some(Op::BinarySTDst { op: b2, l, dst }) = func.ops.get(ip + 1) {
                         let sealed: Option<i64> = 'l: {
@@ -4896,8 +4881,8 @@ impl<'m> super::Vm<'m> {
                         if let Some(r) = sealed {
                             if let Zval::Long(x) = &mut self.frames[top].slots[*dst as usize] {
                                 *x = r;
-                                // S-174 «sweep-in-op» B (criterio p.2): dal solo
-                                // sentiero in place, Sweep a ip+2 inerte ⇒ ip+3.
+                                // Sweep-in-op: only from the in-place path, an
+                                // inert Sweep at ip+2 ⇒ ip+3.
                                 if self.sweep_skip_next(top, func, ip + 2) {
                                     self.frames[top].ip = ip + 3;
                                     continue;
@@ -4909,14 +4894,14 @@ impl<'m> super::Vm<'m> {
                             continue;
                         }
                     }
-                    // S-107 lotto: LoadVar (parità warning via reg_load_slot)
-                    // + PropGet ESATTO — stesso metodo condiviso (IC-hit +
-                    // fallback), zero biforcazione.
-                    // S-113 H-P1a: probe IC col ricevitore in PRESTITO (forma
-                    // ThisPropGet, prior art WP-34) — l'hit non clona l'handle
-                    // dello slot; condizioni VERBATIM dall'hit di
-                    // prop_get_entry, OGNI miss cade nel sentiero storico
-                    // invariato (warning Undef, deref del Ref, fallback).
+                    // LoadVar (warning parity via reg_load_slot) + EXACT
+                    // PropGet — same shared method (IC-hit + fallback), zero
+                    // forking.
+                    // IC probe with the receiver BORROWED (ThisPropGet form)
+                    // — the hit does not clone the slot's handle; conditions
+                    // VERBATIM from prop_get_entry's hit, EVERY miss falls
+                    // into the unchanged original path (Undef warning, Ref
+                    // deref, fallback).
                     let mut hit: Option<Zval> = None;
                     if let Zval::Object(o) = &self.frames[top].slots[*slot as usize] {
                         let sk = crate::bytecode::PropIc::scope_key(self.frames[top].class);
@@ -4942,16 +4927,16 @@ impl<'m> super::Vm<'m> {
                     self.prop_get_entry(top, obj, name, ic)?;
                 }
                 Op::PropDimGetConst { slot, name, key, ic } => {
-                    // S-145 «FR1» (criterio s145-criterio-fr1.md): hit =
-                    // elemento letto through-borrow — l'`Rc<PhpArray>` della
-                    // prop NON viene clonato — e composito saltato (`ip+3`);
-                    // OGNI miss = braccio PropGetSlot verbatim, poi il
-                    // composito intatto che segue (fallback per costruzione:
-                    // magic, warning, string-offset, chiave assente, chiave
-                    // non-Long/Str). Condizioni IC VERBATIM da PropGetSlot;
-                    // guardie valore VERBATIM dal fast di FetchDim. Il
-                    // census propget_val NON vede questo hit (il valore
-                    // prop non è materializzato): dichiarato.
+                    // Hit = element read through a borrow — the prop's
+                    // `Rc<PhpArray>` is NOT cloned — and the composite is
+                    // skipped (`ip+3`); EVERY miss = the PropGetSlot arm
+                    // verbatim, then the intact composite that follows
+                    // (fallback by construction: magic, warning,
+                    // string-offset, absent key, non-Long/Str key). IC
+                    // conditions VERBATIM from PropGetSlot; value guards
+                    // VERBATIM from FetchDim's fast path. The propget_val
+                    // census does NOT see this hit (the prop value is not
+                    // materialised): declared.
                     let mut hit: Option<Zval> = None;
                     if let Zval::Object(o) = &self.frames[top].slots[*slot as usize] {
                         let sk = crate::bytecode::PropIc::scope_key(self.frames[top].class);
@@ -4977,9 +4962,9 @@ impl<'m> super::Vm<'m> {
                         }
                     }
                     if let Some(v) = hit {
-                        // ip PRIMA del flush: un handler che lancia deve
-                        // svolgersi dalla continuazione del triplo, come
-                        // nel FetchDim originale (trap #1: flush AT read).
+                        // ip BEFORE the flush: a throwing handler must
+                        // unwind from the triple's continuation, as in the
+                        // original FetchDim (trap #1: flush AT read).
                         self.frames[top].ip = ip + 3;
                         if self.diags_rendered < self.diags.len() {
                             let line = self.cur_line(top);
@@ -4993,23 +4978,23 @@ impl<'m> super::Vm<'m> {
                     self.prop_get_entry(top, obj, name, ic)?;
                 }
                 Op::PropGetSlotRecv { recv, slot, name, ic } => {
-                    // S-108 lotto-2 W9a: LoadSlot ESATTO (push silente del
-                    // ricevitore) poi PropGetSlot intero (parità warning +
-                    // prop_get_entry condivisa). La sospensione hook/__get
-                    // sta nell'ULTIMO helper: al ritorno del frame lo stream
-                    // riprende come nella sequenza non fusa, col ricevitore
-                    // già in pila.
-                    // L-A (S-114): peephole runtime sul bigramma
-                    // `$o->x = $o->y OP C` (questo op + BinaryTCPropSetPop).
-                    // Probe bipartito SOLO-borrow, condizioni replicate
-                    // verbatim da prop_get_entry (hit IC get) e
-                    // prop_set_entry (hit IC set): sul double-hit niente
-                    // clone del ricevitore, niente round-trip di pila,
-                    // niente lazy_prop_access (ri-implicato dalle guardie),
-                    // niente clone del value, un dispatch in meno (ip+2).
-                    // OGNI miss cade alla sequenza storica sotto, da zero:
-                    // il probe non tocca stato. Fuori dalle build census:
-                    // i contatori misurano il sentiero storico.
+                    // EXACT LoadSlot (silent push of the receiver) then the
+                    // whole PropGetSlot (warning parity + shared
+                    // prop_get_entry). The hook/__get suspension lives in
+                    // the LAST helper: when the frame returns the stream
+                    // resumes as in the unfused sequence, with the receiver
+                    // already on the stack.
+                    // Runtime peephole on the bigram `$o->x = $o->y OP C`
+                    // (this op + BinaryTCPropSetPop). Two-part BORROW-ONLY
+                    // probe, conditions replicated verbatim from
+                    // prop_get_entry (IC get hit) and prop_set_entry (IC set
+                    // hit): on the double hit no clone of the receiver, no
+                    // stack round-trip, no lazy_prop_access (re-implied by
+                    // the guards), no clone of the value, one dispatch less
+                    // (ip+2). EVERY miss falls to the original sequence
+                    // below, from scratch: the probe touches no state.
+                    // Excluded from census builds: the counters measure the
+                    // original path.
                     #[cfg(not(any(feature = "zval-census", feature = "op-census")))]
                     let fused = 'f: {
                         let Some(Op::BinaryTCPropSetPop {
@@ -5031,26 +5016,25 @@ impl<'m> super::Vm<'m> {
                         let Some((cid1, gslot)) = ic.get(sk) else {
                             break 'f false;
                         };
-                        // S-172 L-SL2 «forma sigillata Long» fetta 2 = prop (criterio
-                        // wp172-harness/s172-criterio.md p.2a): sul double-hit con prop
-                        // letto Long, const Int e `long_arith_i64` (arm Long di
-                        // binary_fast, VERBATIM) in dominio, il risultato si scrive IN
-                        // PLACE sul payload del prop di destinazione se è già Long
-                        // (= replace_slot + gc_note di un Long, no-op), altrimenti per
-                        // write_property_at come nel sentiero fuso; nessun Zval
-                        // temporaneo (yv, cv, value, old). Guardie get/set-side
-                        // IDENTICHE al sentiero fuso storico qui sotto; ogni miss (tag,
-                        // overflow, Div/Mod/Pow, shift negativo) vi ricade e ricomputa
-                        // da zero: il probe non ha effetti.
-                        // S-173 L-SL2 fetta 3 P4 (criterio s173-criterio.md p.2): quando
-                        // recv == slot il ricevitore della scrittura È l'oggetto letto:
-                        // UN solo `borrow_mut` copre le guardie get-side (class_id, lazy)
-                        // e set-side (class_id, enum, slot presente e Long) del probe
-                        // sigillato qui sotto, la lettura di y e la scrittura in place di
-                        // r — le STESSE guardie, un RefCell in meno ×2 e un class_id in
-                        // meno. Copre SOLO il caso in place (dst già Long); ogni altro
-                        // esito (miss di dominio, dst non-Long/Ref/assente) cade al probe
-                        // sigillato sotto, che ricomputa da zero: nessun effetto.
+                        // "Sealed Long form" for props: on the double hit with the
+                        // read prop Long, const Int and `long_arith_i64` (binary_fast's
+                        // Long arm, VERBATIM) in domain, the result is written IN PLACE
+                        // onto the destination prop's payload if it is already Long
+                        // (= replace_slot + gc_note of a Long, a no-op), otherwise via
+                        // write_property_at as in the fused path; no temporary Zval
+                        // (yv, cv, value, old). Get/set-side guards IDENTICAL to the
+                        // original fused path below; every miss (tag, overflow,
+                        // Div/Mod/Pow, negative shift) falls back to it and recomputes
+                        // from scratch: the probe has no effects.
+                        // When recv == slot the receiver of the write IS the object
+                        // read: ONE `borrow_mut` covers the get-side guards (class_id,
+                        // lazy) and set-side guards (class_id, enum, slot present and
+                        // Long) of the sealed probe below, the read of y and the
+                        // in-place write of r — the SAME guards, one RefCell fewer ×2
+                        // and one class_id fewer. Covers ONLY the in-place case (dst
+                        // already Long); every other outcome (domain miss, dst
+                        // non-Long/Ref/absent) falls to the sealed probe below, which
+                        // recomputes from scratch: no effect.
                         if *recv == *slot {
                             if let crate::bytecode::Const::Int(k) = &func.consts[*cidx as usize] {
                                 if let Some((cid2, sslot)) = set_ic.get(sk) {
@@ -5065,8 +5049,8 @@ impl<'m> super::Vm<'m> {
                                                 if let Some(Zval::Long(x)) = bm.props.get_slot_mut(sslot) {
                                                     *x = r;
                                                     drop(bm);
-                                                    // S-174 «sweep-in-op» B (criterio p.2): scrittura in place
-                                                    // compiuta, nessun effetto pendente: Sweep a ip+2 inerte ⇒ ip+3.
+                                                    // Sweep-in-op: in-place write done, no pending effect:
+                                                    // an inert Sweep at ip+2 ⇒ ip+3.
                                                     self.frames[top].ip = if self.sweep_skip_next(top, func, ip + 2) {
                                                         ip + 3
                                                     } else {
@@ -5129,9 +5113,8 @@ impl<'m> super::Vm<'m> {
                             )? {
                                 self.gc_note(&old);
                             }
-                            // S-174 «sweep-in-op» B (criterio p.2): SOLO dal sentiero in
-                            // place (write_property_at può notare l'old): Sweep a ip+2
-                            // inerte ⇒ ip+3.
+                            // Sweep-in-op: ONLY from the in-place path (write_property_at
+                            // may gc_note the old value): an inert Sweep at ip+2 ⇒ ip+3.
                             self.frames[top].ip = if in_place && self.sweep_skip_next(top, func, ip + 2) {
                                 ip + 3
                             } else {
@@ -5192,11 +5175,11 @@ impl<'m> super::Vm<'m> {
                     if !fused {
                         let rv = read_slot(&self.frames[top].slots[*recv as usize]);
                         self.frames[top].stack.push(rv);
-                        // S-113 H-P1b: stesso probe in prestito di P1a, DOPO il
-                        // push del recv (ordine di pila identico al sentiero
-                        // storico); ogni miss → reg_load_slot + prop_get_entry
-                        // invariati. Sotto L-A (S-114) questo ramo è il
-                        // solo-miss del peephole fuso.
+                        // Same borrowed probe as PropGetSlot, AFTER the push
+                        // of the recv (stack order identical to the original
+                        // path); every miss → reg_load_slot + prop_get_entry
+                        // unchanged. This branch is the miss-only side of the
+                        // fused peephole above.
                         let mut hit: Option<Zval> = None;
                         if let Zval::Object(o) = &self.frames[top].slots[*slot as usize] {
                             let sk = crate::bytecode::PropIc::scope_key(self.frames[top].class);
@@ -5258,7 +5241,7 @@ impl<'m> super::Vm<'m> {
                             ))
                         }
                     };
-                    // S-101 census: bump Rc del ricevitore (P2, solo fallback).
+                    // census: bump Rc of the receiver (fallback only).
                     #[cfg(feature = "zval-census")]
                     super::zvalcensus::note_recv_clone_prop(&target);
                     self.prop_get_fallback(top, target, name, ic)?;
@@ -5355,18 +5338,18 @@ impl<'m> super::Vm<'m> {
                     self.prop_set_entry::<false>(top, obj, value, name, ic)?;
                 }
                 Op::PropSetPop { name, ic } => {
-                    // S-107 lotto: PropSet ESATTO (stesso metodo, DISCARD
-                    // monomorfizzato dal const-generic) senza il push del
-                    // valore assegnato che il Pop scartava.
+                    // EXACT PropSet (same method, DISCARD monomorphised by
+                    // the const-generic) without the push of the assigned
+                    // value that the Pop discarded.
                     let value = self.frames[top].stack.pop().expect("PropSetPop value");
                     let obj = self.frames[top].stack.pop().expect("PropSetPop object");
                     self.prop_set_entry::<true>(top, obj, value, name, ic)?;
                 }
                 Op::BinaryTCPropSetPop { op: b, cidx, name, ic } => {
-                    // S-108 lotto-2 W9b: BinaryTC ESATTO (funnel const-rhs,
-                    // flat — binary_value_ab non sospende, precedente
-                    // BinarySCSC) senza il push del risultato, poi l'entry
-                    // PropSet DISCARD condivisa come ULTIMO passo.
+                    // EXACT BinaryTC (const-rhs funnel, flat —
+                    // binary_value_ab does not suspend, precedent BinarySCSC)
+                    // without the push of the result, then the shared
+                    // PropSet DISCARD entry as the LAST step.
                     let cv = func.consts[*cidx as usize].to_zval();
                     let value = 'r: {
                         if let Some(lv) = self.frames[top].stack.last() {
@@ -5460,8 +5443,8 @@ impl<'m> super::Vm<'m> {
                 Op::PropIncDec { name, inc, pre, ic } => {
                     let obj = self.frames[top].stack.pop().expect("PropIncDec object");
                     let cur = self.frames[top].class;
-                    // V3 (S-119 treno-2): il ricevitore è POSSEDUTO (pop) —
-                    // il deref_clone serve solo a un Ref; altrimenti si muove.
+                    // The receiver is OWNED (pop) — the deref_clone is only
+                    // needed for a Ref; otherwise it is moved.
                     let obj_d = if matches!(obj, Zval::Ref(_)) { obj.deref_clone() } else { obj };
                     // INLINE CACHE (WP-30): the RMW twin of the PropSet hit.
                     // Fills only from a `plain_set_props` class (below), so a
@@ -5879,24 +5862,22 @@ impl<'m> super::Vm<'m> {
                     }
                 }
                 Op::MethodCall { method, argc, ic, deref } => {
-                    // L-MC1b (S-165): fast path borrow-IC k≤2 in forma
-                    // OUTLINE — corpo e ammissione in `methodcall_fast`
-                    // (#[inline(never)]): l'arbitrato
-                    // s165-arbitrato-guardie.md ha mostrato che la variante
-                    // inline (mc1r5) pagava un prezzo di LAYOUT su run_loop
-                    // (missload/arrload persistenti a R=5); qui il loop paga
-                    // solo l'ammissione d'arità e una call. L-MCk (S-166):
-                    // cade il cap argc≤2 — il gate vero (simple_call ad
-                    // arità ESATTA + IC-hit + recv Object) vive già dentro
-                    // `methodcall_fast`; criterio s166-criterio-mck.md.
+                    // Borrow-IC fast path in OUTLINE form — body and
+                    // admission in `methodcall_fast` (#[inline(never)]): the
+                    // guard arbitration showed that the inline variant paid
+                    // a LAYOUT price on run_loop (persistent missload/arrload
+                    // at R=5); here the loop only pays the arity admission
+                    // and one call. The argc≤2 cap was dropped — the real
+                    // gate (simple_call at EXACT arity + IC-hit + recv
+                    // Object) already lives inside `methodcall_fast`.
                     let n = *argc as usize;
                     if self.methodcall_fast(top, n, ic, *deref)? {
                         continue;
                     }
                     let args = self.pop_keys(top, *argc); // source order
                     let recv = self.frames[top].stack.pop().expect("MethodCall receiver");
-                    // V5 (S-119 treno-2): il frame vuole l'handle POSSEDUTO —
-                    // recv lo è già (pop); il clone serve solo a un Ref.
+                    // The frame wants the OWNED handle — recv already is
+                    // (pop); the clone is only needed for a Ref.
                     let this = if matches!(recv, Zval::Ref(_)) { recv.deref_clone() } else { recv };
                     self.method_call(top, this, &method, args, Some(&ic), *deref)?;
                 }
@@ -6723,9 +6704,8 @@ impl<'m> super::Vm<'m> {
                 Op::FieldAssign { base, steps, ic } => {
                     let value = self.frames[top].stack.pop().expect("FieldAssign value");
                     let keys = self.pop_field_keys(top, &steps);
-                    // S-136 FD1 (criterio s136-criterio-dimwrite.md): fast
-                    // path dim-write su prop al hit IC; MISS restituisce
-                    // keys+value al cammino pieno INVARIATO.
+                    // Dim-write fast path on a prop at IC hit; a MISS
+                    // returns keys+value to the UNCHANGED full path.
                     let keys = match self.field_assign_fast(*base, top, &steps, keys, value.clone(), ic)? {
                         None => {
                             self.frames[top].stack.push(value);
@@ -6733,11 +6713,12 @@ impl<'m> super::Vm<'m> {
                         }
                         Some((keys, _)) => keys,
                     };
-                    // L-OL1-F4 (S-129): su base-oggetto piana di classe senza
-                    // hook il trio byref/indirect/lazy è no-op per costruzione.
+                    // On a plain object base of a hook-free class the
+                    // byref/indirect/lazy trio is a no-op by construction.
                     if self.field_prelude_skip(*base, top, &steps) {
                         self.field_set(*base, top, &steps, keys, value.clone())?;
-                        // FD1 fill: solo dal ramo F4 a esito Ok (fatti provati).
+                        // IC fill: only from the plain branch with Ok outcome
+                        // (proven facts).
                         self.field_assign_fill(*base, top, &steps, ic);
                         self.frames[top].stack.push(value);
                         continue;
@@ -6763,8 +6744,8 @@ impl<'m> super::Vm<'m> {
                 Op::FieldAssignOp { base, steps, op, ic } => {
                     let rhs = self.frames[top].stack.pop().expect("FieldAssignOp rhs");
                     let keys = self.pop_field_keys(top, &steps);
-                    // S-138 FD1-ext RMW (criterio s138-criterio-rmw.md): fast
-                    // path a IC-hit; MISS restituisce keys al pieno INVARIATO.
+                    // RMW fast path at IC hit; a MISS returns keys to the
+                    // UNCHANGED full path.
                     let keys = match self.field_rmw_fast(
                         *base, top, &steps, keys, RmwArg::Bin(*op, &rhs), ic,
                     )? {
@@ -6814,7 +6795,8 @@ impl<'m> super::Vm<'m> {
                     }
                     let result = self.apply_binop_ovl(*op, &old, &rhs)?;
                     self.field_set_op(*base, top, &steps, keys, result.clone())?;
-                    // FD1-ext fill: ramo piano a esito Ok, stessi fatti F4.
+                    // IC fill: plain branch with Ok outcome, same facts as
+                    // FieldAssign.
                     if self.field_prelude_skip(*base, top, &steps) {
                         self.field_assign_fill(*base, top, &steps, ic);
                         #[cfg(feature = "ic-stats")]
@@ -6825,7 +6807,7 @@ impl<'m> super::Vm<'m> {
                 }
                 Op::FieldIncDec { base, steps, inc, pre, ic } => {
                     let keys = self.pop_field_keys(top, &steps);
-                    // S-138 FD1-ext RMW: fast path a IC-hit (come FieldAssignOp).
+                    // RMW fast path at IC hit (as in FieldAssignOp).
                     let keys = match self.field_rmw_fast(
                         *base, top, &steps, keys, RmwArg::IncDec { inc: *inc, pre: *pre }, ic,
                     )? {
@@ -6878,7 +6860,8 @@ impl<'m> super::Vm<'m> {
                         ops::decrement(&mut newv, &mut self.diags)?;
                     }
                     self.field_set_op(*base, top, &steps, keys, newv.clone())?;
-                    // FD1-ext fill: ramo piano a esito Ok, stessi fatti F4.
+                    // IC fill: plain branch with Ok outcome, same facts as
+                    // FieldAssign.
                     if self.field_prelude_skip(*base, top, &steps) {
                         self.field_assign_fill(*base, top, &steps, ic);
                         #[cfg(feature = "ic-stats")]
@@ -7233,12 +7216,11 @@ impl<'m> super::Vm<'m> {
                         // note buffer is empty here), no purge, no collect.
                         // Full census: 1.014,7M light entries, ~805M of them
                         // band-only.
-                        // S-174 «sweep-in-op» (criterio wp174-harness/s174-criterio.md
-                        // p.2): il predicato qui sopra vive in `sweep_idle` — UN
-                        // solo testo, condiviso con gli op che lo interrogano
-                        // sullo Sweep SEGUENTE (`sweep_skip_next`) dopo i loro
-                        // effetti. Qui, sotto `!IN_DESTRUCTOR`, vale il solo
-                        // fast-path WP-39/WP-50.
+                        // Sweep-in-op: the predicate above lives in
+                        // `sweep_idle` — ONE text, shared with the ops that
+                        // query it about the NEXT Sweep (`sweep_skip_next`)
+                        // after their effects. Here, under `!IN_DESTRUCTOR`,
+                        // only the fast path applies.
                         let noop = self.sweep_idle(top, *main);
                         #[cfg(feature = "gc-census")]
                         if noop
@@ -7258,23 +7240,22 @@ impl<'m> super::Vm<'m> {
         }
     }
 
-    /// L-MC1b (S-165): corpo OUTLINE del fast path borrow-IC k≤2 di
-    /// `Op::MethodCall` — l'IC-hit legge il ricevitore IN PLACE (pattern
-    /// ThisMethodCall, WP-36) e gli argomenti passano DIRETTAMENTE dalla
-    /// pila del chiamante ai primi slot del callee (H-D forma 2, S-105).
-    /// Ammissione: recv Object DIRETTO in pila (non-Ref), IC hit, callee
-    /// simple_call ad arità esatta. Un ArgPlace si materializza QUI con la
-    /// catena del funnel (simple_call ⇒ maschera by-ref tutta falsa ⇒
-    /// R-fetch), in ordine sorgente, flush alla riga della CALL. Soundness
-    /// IC = ThisMethodCall: un Fiber non è mai NEL cache (`method_call`
-    /// devia prima del fill site di `dispatch_instance_call`, suo unico
-    /// scrittore); Generator/Closure non sono `Zval::Object`. L'ordine di
-    /// pop (0..n).rev() eredita il caveat last-ref di H-D (S-106-D-9).
-    /// `#[inline(never)]`: il corpo resta FUORI da run_loop (cura del
-    /// prezzo di layout, arbitrato s165-arbitrato-guardie.md). `Ok(true)` =
-    /// chiamata dispatchata (frame entrato); `Ok(false)` = non ammessa, il
-    /// chiamante prosegue sul funnel generico invariato.
-    /// Criterio: wp165-harness/s165-criterio-mc1.md.
+    /// OUTLINE body of the borrow-IC fast path of `Op::MethodCall` — the
+    /// IC-hit reads the receiver IN PLACE (ThisMethodCall pattern) and the
+    /// arguments pass DIRECTLY from the caller's stack to the callee's
+    /// leading slots (as in the simple-call form of `Op::Call`).
+    /// Admission: recv Object DIRECTLY on the stack (non-Ref), IC hit, callee
+    /// simple_call at exact arity. An ArgPlace is materialised HERE with the
+    /// funnel's chain (simple_call ⇒ by-ref mask all false ⇒ R-fetch), in
+    /// source order, flush at the CALL's line. IC soundness = ThisMethodCall:
+    /// a Fiber is never IN the cache (`method_call` diverts before the fill
+    /// site of `dispatch_instance_call`, its only writer); Generator/Closure
+    /// are not `Zval::Object`. The pop order (0..n).rev() inherits the
+    /// last-ref caveat of the direct-pass call form. `#[inline(never)]`: the
+    /// body stays OUT of run_loop (to avoid the layout price the inline
+    /// variant measured). `Ok(true)` = call dispatched (frame entered);
+    /// `Ok(false)` = not admitted, the caller continues on the unchanged
+    /// generic funnel.
     #[inline(never)]
     fn methodcall_fast(
         &mut self,
@@ -7302,7 +7283,7 @@ impl<'m> super::Vm<'m> {
         let callee = &self.classes[defc].methods[midx].func;
         let m = self.class_mod(defc);
         let mut frame = self.pooled_frame(callee, m);
-        // Copia value-context di un ritorno `&m()` (WP-53).
+        // Value-context copy of a `&m()` return (WP-53).
         if deref && callee.by_ref && !callee.is_generator {
             frame.flags.set(FrameFlags::RET_DEREF, true);
         }
@@ -7331,7 +7312,7 @@ impl<'m> super::Vm<'m> {
                     a
                 };
             }
-            // R-fetch warnings alla riga della CALL (specchio di `method_call`).
+            // R-fetch warnings at the CALL's line (mirror of `method_call`).
             let line = self.cur_line(top);
             self.flush_diags(line)?;
         }
@@ -7341,10 +7322,9 @@ impl<'m> super::Vm<'m> {
         }
         frame.this = Some(recv);
         frame.class = Some(defc);
-        frame.static_class = Some(cid); // LSB = classe del ricevitore
-        // L-CR1 (S-181) (b): arità esatta per ammissione ⇒ il `CheckArity`
-        // in testa al corpo non può fallire (argc == n_params ≥ required):
-        // ingresso a ip=1.
+        frame.static_class = Some(cid); // LSB = the receiver's class
+        // Exact arity by admission ⇒ the `CheckArity` at the head of the
+        // body cannot fail (argc == n_params ≥ required): enter at ip=1.
         if matches!(callee.ops.first(), Some(Op::CheckArity { .. })) {
             frame.ip = 1;
         }

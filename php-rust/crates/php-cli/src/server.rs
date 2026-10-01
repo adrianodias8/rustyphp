@@ -1,4 +1,4 @@
-//! `phpr -S host:port [-t docroot] [router.php]` — a work-alike of PHP's
+//! `ferro -S host:port [-t docroot] [router.php]` — a work-alike of PHP's
 //! built-in development web server (the cli-server SAPI).
 //!
 //! Faithful to `php -S` 8.5.7 (oracle-pinned by the WP-4 sapi-probe battery):
@@ -765,7 +765,7 @@ fn write_bare_error(
     code
 }
 
-/// Entry point for `phpr -S`. Parses the residual arguments (already past
+/// Entry point for `ferro -S`. Parses the residual arguments (already past
 /// `-S host:port`), binds, and serves forever. Only returns on a bind error.
 pub fn serve(addr: &str, mut rest: std::iter::Peekable<impl Iterator<Item = std::ffi::OsString>>) -> u8 {
     // The SAPI name must be installed before ANYTHING is lowered (PHP_SAPI is
@@ -854,10 +854,10 @@ pub fn serve(addr: &str, mut rest: std::iter::Peekable<impl Iterator<Item = std:
 }
 
 // ---------------------------------------------------------------------------
-// Worker mode (fork, DECISION_KERNEL.md §5): `phpr -S host:port --worker
+// Worker mode (fork, DECISION_KERNEL.md §5): `ferro -S host:port --worker
 // worker.php [--workers N]`. N OS threads, one `Vm` each, each running
 // `worker.php` once; the script boots the application and then loops on
-// `phpr_handle_request(callable)`, which takes the next request off a shared
+// `ferro_handle_request(callable)`, which takes the next request off a shared
 // queue, runs the callable and sends the response back. Connections are
 // handled by one lightweight thread each (accept → parse → queue → write,
 // keep-alive served request after request), so connections outnumber

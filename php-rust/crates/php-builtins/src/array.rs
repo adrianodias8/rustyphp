@@ -425,8 +425,8 @@ pub fn sort(arr: &mut Zval, args: &[Zval], ctx: &mut Ctx) -> Result<Zval, PhpErr
     let rc = as_array_mut(arr, "sort")?;
     let mut vals: Vec<Zval> = rc.iter().map(|(_, v)| v.clone()).collect();
     if !flag_value_sort(&mut vals, flags, false, ctx, |v| v) {
-        // ops::compare (loose) NON è un ordine totale sui tipi misti: la std
-        // panica, zend_sort no — merge sort tollerante (WP-16).
+        // ops::compare (loose) is NOT a total order over mixed types: the
+        // std sort panics, zend_sort does not — tolerant merge sort.
         ops::stable_sort_by(&mut vals, |a, b| ops::compare(a, b).cmp(&0));
     }
     let mut out = PhpArray::new();

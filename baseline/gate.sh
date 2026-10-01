@@ -10,7 +10,7 @@
 # run-baseline.sh — the gate never rewrites the baseline itself.
 #
 # Why not upstream's scripts/corpus-gate.sh: it is hard-wired to upstream's
-# volume paths and to a frozen fail-set (wp109-harness/corpus-gate/) that is
+# volume paths and to a frozen fail-set (its wp109-harness/corpus-gate/) that was
 # not published in the repository.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

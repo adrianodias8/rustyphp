@@ -1,5 +1,4 @@
-# Toolchain PINNATA (audit Sol 2026-07-30 P0.1): i gate Clippy/lint non
-# devono rompersi per un cambio di compilatore non deliberato.
-# Aggiornare = decisione esplicita con gate integrale verde sulla nuova.
+# Pinned toolchain: a compiler change must be a deliberate decision, taken with
+# the full gate green on the new version (codegen changes move benchmarks).
 [toolchain]
 channel = "1.98.1"

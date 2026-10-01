@@ -117,7 +117,7 @@ impl IniTable {
         // enforces the limit either way, so accepting the write is the
         // faithful observable state.
         add("memory_limit", "128M", INI_ALL, true, false);
-        // Zend's CLI SAPI hardwires 0 / -1; `phpr -S` swaps in the php.ini
+        // Zend's CLI SAPI hardwires 0 / -1; `ferro -S` swaps in the php.ini
         // web values (30 / 60) at request init, see the web_request block in
         // vm/mod.rs. Both report-only: phpr has no execution/input clock.
         add("max_execution_time", "0", INI_ALL, false, false);
@@ -233,11 +233,11 @@ impl IniTable {
         add("tidy.clean_output", "0", INI_USER, true, false);
         add("tidy.default_config", "", INI_SYSTEM, false, false);
         drop(add);
-        // upload_tmp_dir e open_basedir partono NULL (ini_get → "",
-        // ini_get_all → NULL, WP-16 probe). open_basedir è settable —
-        // WP_Automatic_Updater::is_allowed_dir legge ini_get e fa i suoi
-        // check; phpr NON applica la restrizione alle operazioni su file
-        // (divergenza documentata).
+        // upload_tmp_dir and open_basedir start out NULL (ini_get → "",
+        // ini_get_all → NULL, oracle-probed). open_basedir is settable —
+        // WP_Automatic_Updater::is_allowed_dir reads ini_get and does its own
+        // checks; phpr does NOT enforce the restriction on file operations
+        // (documented divergence).
         t.insert(
             b"upload_tmp_dir".to_vec(),
             IniEntry {
@@ -490,9 +490,9 @@ impl<'m> Vm<'m> {
                 &String::from_utf8_lossy(&value).into_owned(),
             );
         }
-        // Oddity oracle-pinned (WP-16 probe): un ini_set di open_basedir
-        // aggiorna ANCHE global_value (la restrizione non è ripristinabile,
-        // OnUpdateBaseDir non conserva l'orig).
+        // Oracle-pinned oddity: an ini_set of open_basedir ALSO updates
+        // global_value (the restriction cannot be restored; OnUpdateBaseDir
+        // does not keep the original).
         if name == b"open_basedir" {
             entry.global = value.clone();
         }

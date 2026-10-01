@@ -39,21 +39,21 @@ pub mod unserialize;
 
 pub use builtin::{Builtin, BuiltinFn, BuiltinRefFn, Ctx, Registry};
 
-/// A-PE-100-2 (Concilio WP-100): sigillo EAGER del modo register-lowering a
-/// un confine NOMINATO — il primo atto dei due main (CLI e server), mai lazy
-/// alla prima compile. PHP `putenv()` chiama `std::env::set_var` in-process:
-/// senza sigillo, il modo di un processo server long-lived sarebbe deciso
-/// dalla prima richiesta che compila (stato di richiesta promosso a
-/// configurazione di motore). Col sigillo l'autore del modo è SOLO
-/// l'ambiente allo spawn del processo.
+/// EAGER seal of the register-lowering mode at a NAMED boundary — the first
+/// act of both mains (CLI and server), never lazily at the first compile.
+/// PHP `putenv()` calls `std::env::set_var` in-process: without the seal,
+/// the mode of a long-lived server process would be decided by the first
+/// request that compiles (request state promoted to engine configuration).
+/// With the seal, the ONLY author of the mode is the environment at process
+/// spawn.
 pub fn seal_reg_lower_mode() {
     let _ = compile::reg_lower::enabled();
 }
 
-/// Il default nominato del contratto di modo (S-100 punto 1): ciò che vale
-/// quando `PHPR_REG_LOWER` è ASSENTE. Esportato perché i denti fuori-crate
-/// (anti-putenv, funnel, launcher) derivino i bracci dal CONTRATTO invece
-/// che da una premessa cablata che il flip del default renderebbe falsa.
+/// The named default of the mode contract: what applies when
+/// `PHPR_REG_LOWER` is ABSENT. Exported so that out-of-crate tests
+/// (anti-putenv, funnel, launcher) derive their arms from the CONTRACT
+/// instead of a hard-wired premise that a default flip would make false.
 pub use compile::reg_lower::DEFAULT_ON as REG_LOWER_DEFAULT_ON;
 // Session F: the bytecode VM is the sole production engine. `run_source` /
 // `run_source_with` / `Outcome` resolve to the VM; the tree-walking `eval` module

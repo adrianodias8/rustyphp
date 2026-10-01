@@ -744,10 +744,11 @@ const LOADED_EXTENSIONS: &[&[u8]] = &[
     // xml_parser_*, XMLWriter) are filled in test-driven — a use ahead of the
     // implementation surfaces as an honest "undefined function".
     b"xml", b"xmlwriter", b"tokenizer", b"phar",
-    // §3.19 catena composer (S-127): iconv() core c'è; il resto della
-    // superficie (iconv_strlen/substr/mime_*) si riempie test-driven, stesso
-    // patto della riga sopra — un uso anticipato è un onesto "undefined
-    // function". symfony/polyfill-mbstring esige ext-iconv nei METADATI.
+    // Composer chain: the core iconv() exists; the rest of the surface
+    // (iconv_strlen/substr/mime_*) is filled in test-driven, same deal as
+    // the line above — a use ahead of the implementation is an honest
+    // "undefined function". symfony/polyfill-mbstring requires ext-iconv in
+    // its METADATA.
     b"iconv",
 ];
 
@@ -756,10 +757,10 @@ const LOADED_EXTENSIONS: &[&[u8]] = &[
 const LOADED_EXTENSIONS_CASED: &[&[u8]] = &[
     b"Core", b"session", b"standard", b"SPL", b"pcre", b"json", b"mbstring", b"hash", b"date", b"openssl",
     b"zip", b"dom", b"libxml", b"Reflection", b"ctype", b"curl", b"pcntl", b"posix",
-    // §3.19 catena composer (S-127): la lista cased aveva PERSO SimpleXML
-    // (drift vs la gemella lowercase) — extension_loaded('simplexml') diceva
-    // sì mentre get_loaded_extensions() non lo listava, e il PlatformRepository
-    // di Composer non materializzava ext-simplexml.
+    // Composer chain: the cased list had LOST SimpleXML (drift vs its
+    // lowercase twin) — extension_loaded('simplexml') said yes while
+    // get_loaded_extensions() did not list it, and Composer's
+    // PlatformRepository did not materialise ext-simplexml.
     b"PDO", b"pdo_sqlite", b"sqlite3", b"SimpleXML", b"bcmath", b"gmp",
     b"gd", b"exif",
     b"fileinfo",

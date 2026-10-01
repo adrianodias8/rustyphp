@@ -1,8 +1,7 @@
-//! Register-lowering pass — Leva B stage 2 v3 "raw registers"
-//! (doc/plans-archive/REGISTER_BYTECODE_PLAN.md §5; post-mortem v1/v2 in
-//! sessions/WP_SESSION_44.md; re-armed in S-97.1 under the micro-category
-//! judge — the WP-44 verdict was rendered on the diluted WordPress
-//! aggregate, see wp97-harness/arith-decomposition.out).
+//! Register-lowering pass — stage 2 v3 "raw registers" of the register
+//! bytecode plan. The v1/v2 attempts were abandoned after a post-mortem; the
+//! pass was re-armed under the micro-category judge — the earlier negative
+//! verdict had been rendered on the diluted WordPress aggregate.
 //!
 //! v3 design rule (the discriminating experiment after the enum-operand
 //! hybrid measured +1.2% consistent on A/B): the run_loop must see ZERO
@@ -22,12 +21,12 @@
 //! - const is ALWAYS rhs. A written const-lhs folds ONLY for mirrorable
 //!   comparisons (Lt↔Gt, Le↔Ge; Eq-family unchanged — compares emit no
 //!   coercion diags and no operand-typed errors). Spaceship is not
-//!   mirrorable → no fold. **S-97.1 divergence from WP-44 v3**: the
+//!   mirrorable → no fold. **Divergence from the original v3 design**: the
 //!   commutative-arith swap (`3 + $x` → `$x + 3`) was DROPPED — an
 //!   "Unsupported operand types" TypeError names the operands in ORDER
 //!   (`int + array` vs `array + int`), so the swap is observable when the
 //!   slot holds a non-numeric at runtime. The corpus never caught it
-//!   ("corretto per fortuna del corpus" ≠ "corretto").
+//!   ("correct by luck of the corpus" ≠ "correct").
 //! - dst folds: `Binary, StoreSlot s` and `Binary, Dup, StoreSlot s, Pop`
 //!   sink into the `*Dst` forms (net stack/slot/gc_note effect identical —
 //!   the only elision is the transient duplicate, which no longer exists
@@ -43,35 +42,34 @@
 use crate::bytecode::{Addr, Const, Func, Op};
 use crate::hir::{BinOp, UnOp};
 
-/// CONTRATTO DI MODO di `PHPR_REG_LOWER` (S-100 punto 1 — KS-MA-101-1,
-/// A-HO-101-2, A-HE-101-1, A-PE-101-4). Grafia VALUE-PARSED, lista CHIUSA:
+/// MODE CONTRACT of `PHPR_REG_LOWER`. VALUE-PARSED spelling, CLOSED list:
 ///
-///   - variabile ASSENTE   -> `DEFAULT_ON` (il flip del default cambia SOLO
-///     quella costante, mai questa funzione)
-///   - `PHPR_REG_LOWER=1`  -> ON  (opt-in esplicito)
-///   - `PHPR_REG_LOWER=0`  -> OFF (opt-out esplicito; prima del contratto
-///     `=0` ACCENDEVA il pass — `is_some()` presence-based, refutazione
-///     capitale n.1 del Concilio WP-101)
-///   - qualunque altro valore -> `DEFAULT_ON` + warning su stderr che nomina
-///     la grammatica (mai un fallback silenzioso)
+///   - variable ABSENT     -> `DEFAULT_ON` (a default flip changes ONLY that
+///     constant, never this function)
+///   - `PHPR_REG_LOWER=1`  -> ON  (explicit opt-in)
+///   - `PHPR_REG_LOWER=0`  -> OFF (explicit opt-out; before the contract
+///     `=0` TURNED the pass ON — the check was presence-based via
+///     `is_some()`, a capital defect)
+///   - any other value     -> `DEFAULT_ON` + a warning on stderr that names
+///     the grammar (never a silent fallback)
 ///
-/// Letto UNA volta (OnceLock) e sigillato EAGER dai main via
-/// `seal_reg_lower_mode()`; la unit-cache key porta il modo, così un'unità
-/// compilata in un modo non può mai servire un processo nell'altro.
+/// Read ONCE (OnceLock) and sealed EAGERLY by the mains via
+/// `seal_reg_lower_mode()`; the unit-cache key carries the mode, so a unit
+/// compiled in one mode can never serve a process running in the other.
 pub(crate) fn enabled() -> bool {
     static V: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *V.get_or_init(|| mode_from_env(std::env::var_os("PHPR_REG_LOWER").as_deref()))
 }
 
-/// Default di processo quando `PHPR_REG_LOWER` è ASSENTE. FLIPPATO a `true`
-/// in S-100 punto 5 (promozione flag-on a default) coi gate del Concilio
-/// WP-101 tutti verdi: corpus 1418 per NOME + diff per-test ZERO nei due
-/// modi, parità server bimodale (sentinella estesa), coppia WP con bande
-/// pre-registrate, batteria a modo ESPLICITO. L'opt-out è `PHPR_REG_LOWER=0`
-/// (grammatica value-parsed sopra).
+/// Process default when `PHPR_REG_LOWER` is ABSENT. FLIPPED to `true` when
+/// flag-on was promoted to the default, with every gate green: the 1418-test
+/// corpus by NAME with ZERO per-test diff between the two modes, bimodal
+/// server parity (extended sentinel), the WordPress pair within
+/// pre-registered bands, the test battery in EXPLICIT mode. The opt-out is
+/// `PHPR_REG_LOWER=0` (value-parsed grammar above).
 pub const DEFAULT_ON: bool = true;
 
-/// La grammatica del contratto, pura e testabile senza toccare l'ambiente.
+/// The contract grammar, pure and testable without touching the environment.
 pub fn mode_from_env(raw: Option<&std::ffi::OsStr>) -> bool {
     let Some(v) = raw else { return DEFAULT_ON };
     match v.to_str() {
@@ -91,11 +89,11 @@ pub fn mode_from_env(raw: Option<&std::ffi::OsStr>) -> bool {
 /// target-collection and the remap phase use — a new `Addr`-bearing variant
 /// must be added HERE or the pass corrupts it.
 ///
-/// A-HE-100-2 / KS-HE-101-2 (Concilio WP-101): match ESAUSTIVO, nessun
-/// wildcard su `Op` — una variante NUOVA non compila finché non viene
-/// classificata qui (stessa classe del dente S-96 in vm/liveness.rs). Il
-/// gruppo «senza Addr» è la lista CHIUSA verificata a mano contro i payload
-/// di bytecode.rs (unici campi `Addr` oggi: i 16 bracci sopra).
+/// EXHAUSTIVE match, no wildcard on `Op` — a NEW variant does not compile
+/// until it is classified here (same class of guard as the one in
+/// vm/liveness.rs). The "no Addr" group is the CLOSED list, verified by hand
+/// against the payloads in bytecode.rs (the only `Addr` fields today: the 16
+/// arms above).
 fn visit_addrs(op: &mut Op, f: &mut impl FnMut(&mut Addr)) {
     match op {
         Op::FillDefault { skip, .. } | Op::StaticGuard { skip, .. } => f(skip),
@@ -115,7 +113,7 @@ fn visit_addrs(op: &mut Op, f: &mut impl FnMut(&mut Addr)) {
         Op::IterNext { end, .. } | Op::IterNextRef { end, .. } => f(end),
         Op::PropConcatGate { done, .. } => f(done),
         Op::NsShadowGuard { user, .. } => f(user),
-        // ---- lista chiusa: varianti SENZA Addr (niente da visitare) ----
+        // ---- closed list: variants WITHOUT an Addr (nothing to visit) ----
         Op::PushConst { .. } | Op::Pop { .. } | Op::Dup { .. }
         | Op::LoadSlot { .. } | Op::LoadVar { .. } | Op::PushUndef { .. }
         | Op::StoreSlot { .. } | Op::ConcatAssignSlot { .. } | Op::Swap { .. }
@@ -125,8 +123,8 @@ fn visit_addrs(op: &mut Op, f: &mut impl FnMut(&mut Addr)) {
         | Op::LoadGlobals { .. } | Op::GlobalsDynAssign { .. }
         | Op::CoerceParam { .. } | Op::CoerceParams { .. } | Op::CheckArity { .. }
         | Op::IncDecSlot { .. }
-        // S-145 FR1: salto implicito ip+3, nessun campo Addr da rimappare
-        // (nasce a shrink, DOPO questo pass; classificato per il dente).
+        // Implicit ip+3 skip, no Addr field to remap (it is born at shrink
+        // time, AFTER this pass; classified here to satisfy the guard).
         | Op::PropDimGetConst { .. }
         | Op::BindRef { .. } | Op::StaticStore { .. } | Op::StaticAlias { .. }
         | Op::PushRef { .. } | Op::MakeRef { .. } | Op::PushArgPlace { .. }
@@ -271,13 +269,13 @@ pub(super) fn lower_func(f: &mut Func) {
     let mut map = vec![0u32; n + 1];
     let mut i = 0usize;
     while i < n {
-        // S-109 F1 Neg-fold: [PushConst(c), Unary(Neg)] stessa riga, i+1 non
-        // bersaglio — il const si NEGA IN TABELLA (consts-append) e resta un
-        // solo PushConst. Vive QUI e non in fuse_window (che ha &Func: la
-        // tabella const è mutabile solo nel driver). SOLO Int con
-        // checked_neg()=Some (INT_MIN resta non fuso: la sua negazione
-        // promuove a float via il funnel unario) e Float; la negazione
-        // replica apply_unop_ovl a compile-time.
+        // Neg-fold: [PushConst(c), Unary(Neg)] on the same line, i+1 not a
+        // target — the const is NEGATED IN THE TABLE (consts-append) and a
+        // single PushConst remains. Lives HERE and not in fuse_window (which
+        // has &Func: the const table is mutable only in the driver). ONLY
+        // Int with checked_neg()=Some (INT_MIN stays unfused: its negation
+        // promotes to float through the unary funnel) and Float; the negation
+        // replicates apply_unop_ovl at compile time.
         if i + 1 < n && !blocked[i + 1] && f.lines[i + 1] == f.lines[i] {
             if let (Op::PushConst(c), Op::Unary(UnOp::Neg)) = (&f.ops[i], &f.ops[i + 1]) {
                 let negated = match f.consts.get(*c as usize) {
@@ -321,14 +319,13 @@ pub(super) fn lower_func(f: &mut Func) {
             }
         }
     }
-    // S-100 A-MA-101-3, DECISIONE MISURATA (wp100-harness/hb2flip-premisura
-    // .out: L=12,9 ns/occ, banda, sopra il pavimento 1,0; add.php del giudice
-    // ha 1 residuo per iterazione): il flip del default non deve RITIRARE la
-    // specializzazione H-B2 dai siti stack che le finestre non coprono — ogni
-    // `Binary(Add)` sopravvissuto alle finestre diventa la forma
-    // specializzata. Equivalenza provata da reg_lower_differential
-    // (A-HE-100-3); tripwire: flag-on l'emissione non contiene MAI un
-    // `Binary(Add)` generico (o forma fusa o `BinaryAdd`).
+    // MEASURED DECISION (12.9 ns/occurrence, above the 1.0 floor; the
+    // judge's add.php has 1 residual per iteration): the default flip must
+    // not WITHDRAW the `+` specialization from the stack sites the windows
+    // do not cover — every `Binary(Add)` that survives the windows becomes
+    // the specialized form. Equivalence proven by reg_lower_differential;
+    // tripwire: flag-on, the emission NEVER contains a generic
+    // `Binary(Add)` (either a fused form or `BinaryAdd`).
     for op in &mut new_ops {
         if matches!(op, Op::Binary(BinOp::Add)) {
             *op = Op::BinaryAdd;
@@ -343,9 +340,9 @@ enum BinKind {
     SS(u16, u16),
     SC(u16, u16),
     /// lhs from `LoadSlot` (silent read), rhs from the stack — the
-    /// compound-assign prefix `LoadSlot(l), Swap` (S-106 leva H-A1).
+    /// compound-assign prefix `LoadSlot(l), Swap`.
     /// Fuses ONLY with an assign-and-discard tail: there is no bare
-    /// `BinaryST` value form by choice (minimal lever, ha1-criterio.out).
+    /// `BinaryST` value form by choice (minimal change, measured).
     ST(u16),
     Stack,
 }
@@ -356,17 +353,17 @@ enum BinKind {
 /// only ever emits `Binary(Add)`, but the test battery (and any future
 /// mixed pipeline) compiles with the specialized emission.
 ///
-/// A-MA-101-2 (Concilio WP-101, salda A-MA-100-2): match ESAUSTIVO — una
-/// variante NUOVA di `Op` (in particolare una futura specializzazione
-/// Binary-like tipo `BinarySub`) NON COMPILA finché non viene classificata
-/// qui: il ledger delle forme che le finestre fondono non decade in silenzio.
+/// EXHAUSTIVE match — a NEW `Op` variant (in particular a future Binary-like
+/// specialization such as `BinarySub`) DOES NOT COMPILE until it is
+/// classified here: the ledger of forms the windows fuse cannot decay
+/// silently.
 fn bin_op_of(op: &Op) -> Option<BinOp> {
     match op {
         Op::Binary(b) => Some(*b),
         Op::BinaryAdd => Some(BinOp::Add),
-        // ---- lista chiusa: varianti che le finestre NON fondono ----
-        // (le forme registro già abbassate — BinarySS/SC/Dst/CmpJmpSS/SC —
-        // restano fuori PER SCELTA: il pass non ri-fonde il proprio output.)
+        // ---- closed list: variants the windows do NOT fuse ----
+        // (the already-lowered register forms — BinarySS/SC/Dst/CmpJmpSS/SC —
+        // stay out BY CHOICE: the pass does not re-fuse its own output.)
         Op::PropConcatGate { .. } | Op::NsShadowGuard { .. }
         | Op::PushConst { .. } | Op::Pop { .. } | Op::Dup { .. }
         | Op::LoadSlot { .. } | Op::LoadVar { .. } | Op::PushUndef { .. }
@@ -389,7 +386,7 @@ fn bin_op_of(op: &Op) -> Option<BinOp> {
         | Op::Jump { .. } | Op::JumpIfFalse { .. } | Op::JumpIfTrue { .. }
         | Op::CmpJmp { .. } | Op::CmpJmpConst { .. } | Op::BinarySS { .. }
         | Op::BinarySSDst { .. } | Op::BinarySC { .. } | Op::BinarySCDst { .. }
-        // S-145 FR1: forma fusa post-pass, le finestre non la fondono.
+        // Post-pass fused form; the windows do not fuse it.
         | Op::PropDimGetConst { .. }
         | Op::BinaryDst { .. } | Op::BinarySTDst { .. } | Op::BinaryTC { .. }
         | Op::BinarySCSC { .. } | Op::IncDecSlotPop { .. } | Op::IncDecSlotJmp { .. }
@@ -463,11 +460,11 @@ fn fuse_window(f: &Func, blocked: &[bool], i: usize) -> (Op, usize) {
     let free = |j: usize| j < n && !blocked[j] && f.lines[j] == line;
 
     if let Some(a) = fold_slot(f, i) {
-        // S-107 W6 (PRIMA delle finestre 3-op: la più lunga vince): l'albero
+        // W6 (BEFORE the 3-op windows: the longest wins): the tree
         // [LoadVar, PushConst, Binary, LoadVar, PushConst, Binary, Binary]
-        // — due sottoespressioni slot⊚const che alimentano un Binary
-        // (census arith: BinarySC;BinarySC;Binary(Sub), 50M/run). Nessuna
-        // coda Dst per scelta (il giudice alimenta BinarySTDst).
+        // — two slot⊚const subexpressions feeding one Binary
+        // (arith census: BinarySC;BinarySC;Binary(Sub), 50M/run). No Dst
+        // tail by choice (the judge feeds BinarySTDst).
         if (3..=6).all(|k| free(i + k)) && free(i + 1) && free(i + 2) {
             if let (Some(ca), Some(opa), Some(lb), Some(cb), Some(opb), Some(op)) = (
                 fold_const(f, i + 1),
@@ -477,10 +474,10 @@ fn fuse_window(f: &Func, blocked: &[bool], i: usize) -> (Op, usize) {
                 bin_op_of(&f.ops[i + 5]),
                 bin_op_of(&f.ops[i + 6]),
             ) {
-                // S-108 lotto-2 W10: la coda BinarySTDst nella STESSA riga —
-                // [LoadSlot(l), Swap, Binary(opd), tail-assign] subito dopo
-                // l'albero: l'intero statement `$s opd= (…)` in un'op sola.
-                // Se la coda non c'è, la finestra S-107 resta identica.
+                // W10: the BinarySTDst tail on the SAME line —
+                // [LoadSlot(l), Swap, Binary(opd), tail-assign] right after
+                // the tree: the whole statement `$s opd= (…)` in a single op.
+                // Without the tail, the W6 window stays identical.
                 if (7..=9).all(|k| free(i + k)) {
                     if let (Op::LoadSlot(l), Op::Swap) = (&f.ops[i + 7], &f.ops[i + 8]) {
                         if *l <= u16::MAX as u32 {
@@ -538,18 +535,18 @@ fn fuse_window(f: &Func, blocked: &[bool], i: usize) -> (Op, usize) {
                 }
             }
         }
-        // S-107 W3/W8: 2-op a testa LoadVar — la lettura fusa conserva la
-        // parità warning (guardia fold_slot + `unit_slot_name` a runtime).
+        // W3/W8: 2-op windows headed by LoadVar — the fused read keeps
+        // warning parity (fold_slot guard + `unit_slot_name` at runtime).
         if free(i + 1) {
             match &f.ops[i + 1] {
-                // [LoadVar, PropGet] → PropGetSlot (bigram 60M nel giudice prop)
+                // [LoadVar, PropGet] → PropGetSlot (60M bigram in the prop judge)
                 Op::PropGet { name, ic } => {
                     return (
                         Op::PropGetSlot { slot: a, name: name.clone(), ic: ic.clone() },
                         2,
                     )
                 }
-                // [LoadVar, Stringify] → StringifySlot (interpolazione str/arr)
+                // [LoadVar, Stringify] → StringifySlot (str/arr interpolation)
                 Op::Stringify => return (Op::StringifySlot { slot: a }, 2),
                 _ => {}
             }
@@ -574,18 +571,17 @@ fn fuse_window(f: &Func, blocked: &[bool], i: usize) -> (Op, usize) {
                 }
             }
         }
-        // S-108 lotto-2 W13: [LoadVar, PushConst] — la coppia di push
-        // argomenti (calls/arr/re) quando NESSUNA finestra più lunga ha
-        // vinto. Guardia di non-interferenza: se all'op dopo il const c'è un
-        // Binary sulla stessa riga, la coppia si LASCIA al braccio W5
-        // ([PushConst, Binary] → BinaryTC); se dopo il const c'è un
-        // [LoadVar foldabile, Cmp specchiabile] sulla stessa riga, il const
-        // appartiene al fold SPECCHIO (S-109, azione-1 revisore S-108: su
-        // quel pattern l'emissione torna lotto-1). W13 resta invece PRIMA
-        // di F2 ([PushConst, ConcatN]): su [LoadVar, PushConst, ConcatN]
-        // vince W13 come in lotto-2 — F2 fonde solo i const che nessuna
-        // finestra precedente ha assorbito. Il lotto AGGIUNGE fusioni, non
-        // cambia mai l'emissione dei lotti precedenti.
+        // W13: [LoadVar, PushConst] — the argument-push pair (calls/arr/re)
+        // when NO longer window has won. Non-interference guard: if the op
+        // after the const is a Binary on the same line, the pair is LEFT to
+        // the W5 arm ([PushConst, Binary] → BinaryTC); if after the const
+        // there is a [foldable LoadVar, mirrorable Cmp] on the same line, the
+        // const belongs to the MIRROR fold (on that pattern the emission is
+        // the earlier one). W13 does however stay BEFORE F2
+        // ([PushConst, ConcatN]): on [LoadVar, PushConst, ConcatN] W13 wins as
+        // before — F2 fuses only the consts no earlier window absorbed. A
+        // batch ADDS fusions; it never changes the emission of earlier
+        // batches.
         if free(i + 1) {
             if let Some(c) = fold_const(f, i + 1) {
                 let w5 = free(i + 2) && bin_op_of(&f.ops[i + 2]).is_some();
@@ -600,7 +596,7 @@ fn fuse_window(f: &Func, blocked: &[bool], i: usize) -> (Op, usize) {
         }
     }
     // [PushConst, LoadVar, Binary] — const written first: fold only a
-    // mirrorable COMPARISON (order-free by construction). The WP-44
+    // mirrorable COMPARISON (order-free by construction). The original v3
     // commutative-arith swap is deliberately absent (see module doc).
     if let Some(c) = fold_const(f, i) {
         if free(i + 1) && free(i + 2) {
@@ -612,11 +608,11 @@ fn fuse_window(f: &Func, blocked: &[bool], i: usize) -> (Op, usize) {
                 }
             }
         }
-        // S-109 F2: [PushConst(Str), ConcatN] — la parte literal del join
-        // entra nell'op di concatenazione (helper condiviso concat_n).
-        // Guardia: SOLO Const::Str (il fast path all-Str di ConcatN resta
-        // monomorfo); ConcatN è puro per costruzione — nessun helper
-        // sospendibile in finestra (vincolo S-108).
+        // F2: [PushConst(Str), ConcatN] — the literal part of the join goes
+        // into the concatenation op (shared helper concat_n). Guard: ONLY
+        // Const::Str (the all-Str fast path of ConcatN stays monomorphic);
+        // ConcatN is pure by construction — no suspendable helper inside a
+        // window (a standing constraint).
         if free(i + 1) {
             if let Op::ConcatN(nn) = &f.ops[i + 1] {
                 if matches!(f.consts.get(c as usize), Some(Const::Str(_))) {
@@ -624,15 +620,15 @@ fn fuse_window(f: &Func, blocked: &[bool], i: usize) -> (Op, usize) {
                 }
             }
         }
-        // S-107 W5: [PushConst, Binary] ADIACENTI — lhs in PILA, const
-        // SEMPRE rhs per costruzione (il PushConst precede immediatamente il
-        // Binary ⇒ il const è il top). Nessuno swap, nessuna divergenza
-        // d'ordine possibile (bigram prop: PushConst(1);BinaryAdd, 30M).
+        // W5: ADJACENT [PushConst, Binary] — lhs on the STACK, const ALWAYS
+        // rhs by construction (the PushConst immediately precedes the Binary
+        // ⇒ the const is the top). No swap, no order divergence possible
+        // (prop bigram: PushConst(1);BinaryAdd, 30M).
         if free(i + 1) {
             if let Some(op) = bin_op_of(&f.ops[i + 1]) {
-                // S-108 lotto-2 W9b: la coda [PropSet, Pop] nella stessa
-                // riga — `$o->p = <stack> op const;` intero (funnel BinaryTC
-                // flat, poi l'entry PropSet DISCARD come ultimo passo).
+                // W9b: the [PropSet, Pop] tail on the same line — the whole
+                // `$o->p = <stack> op const;` (flat BinaryTC funnel, then the
+                // PropSet DISCARD entry as the last step).
                 if free(i + 2) && free(i + 3) {
                     if let (Op::PropSet { name, ic }, Op::Pop) = (&f.ops[i + 2], &f.ops[i + 3]) {
                         return (
@@ -645,14 +641,14 @@ fn fuse_window(f: &Func, blocked: &[bool], i: usize) -> (Op, usize) {
             }
         }
     }
-    // [LoadSlot, Swap, Binary] — RMW su slot (S-106 leva H-A1): il prefisso
-    // lhs-da-slot del compound assign `$s <op>= expr`. EMENDAMENTO DICHIARATO
-    // (S-106-R-3) della regola v3 «LoadSlot never folded»: quella regola
-    // presumeva LoadSlot FREDDO e il dump del giudice arith la refuta (è il
-    // read del compound assign nel corpo caldo). La lettura è SILENZIOSA per
-    // contratto — nessun warning da risintetizzare ⇒ il fold è
-    // diagnostic-safe. Fonde SOLO con coda assign-and-discard (BinKind::ST
-    // senza coda non fonde: nessuna forma value).
+    // [LoadSlot, Swap, Binary] — RMW on a slot: the lhs-from-slot prefix of
+    // the compound assign `$s <op>= expr`. A DECLARED AMENDMENT of the v3
+    // rule "LoadSlot never folded": that rule assumed LoadSlot was COLD and
+    // the arith judge's dump refutes it (it is the compound-assign read in
+    // the hot body). The read is SILENT by contract — no warning to
+    // re-synthesise ⇒ the fold is diagnostic-safe. Fuses ONLY with an
+    // assign-and-discard tail (BinKind::ST without a tail does not fuse: no
+    // value form).
     if let Op::LoadSlot(l) = &f.ops[i] {
         if *l <= u16::MAX as u32 && free(i + 1) && free(i + 2) {
             if matches!(f.ops[i + 1], Op::Swap) {
@@ -660,10 +656,10 @@ fn fuse_window(f: &Func, blocked: &[bool], i: usize) -> (Op, usize) {
                     return bin_dst(f, &free, i, 3, BinKind::ST(*l as u16), op);
                 }
             }
-            // S-108 lotto-2 W9a: [LoadSlot(recv), LoadVar, PropGet] — la
-            // testa RMW del giudice prop (`$o->c = $o->c …`): push silente
-            // del ricevitore + la finestra W3 intera. La sospensione
-            // hook/__get resta nell'ULTIMO helper del handler.
+            // W9a: [LoadSlot(recv), LoadVar, PropGet] — the RMW head of the
+            // prop judge (`$o->c = $o->c …`): silent push of the receiver +
+            // the whole W3 window. The hook/__get suspension stays in the
+            // LAST helper of the handler.
             if let Some(slot) = fold_slot(f, i + 1) {
                 if let Op::PropGet { name, ic } = &f.ops[i + 2] {
                     return (
@@ -674,11 +670,11 @@ fn fuse_window(f: &Func, blocked: &[bool], i: usize) -> (Op, usize) {
             }
         }
     }
-    // S-107 W1: [IncDecSlot, Pop] (+ Jump di back-edge) — il valore spinto
-    // è SCARTATO, quindi pre/post collassano nella forma fusa e il gc_note
-    // eliso è un no-op (il transiente è sempre uno scalare: ++/-- su
-    // array/oggetto è TypeError prima di ogni push). Il trigramma col Jump
-    // è la forma calda in TUTTI e sei i giudici.
+    // W1: [IncDecSlot, Pop] (+ back-edge Jump) — the pushed value is
+    // DISCARDED, so pre/post collapse into the fused form and the elided
+    // gc_note is a no-op (the transient is always a scalar: ++/-- on an
+    // array/object is a TypeError before any push). The trigram with the
+    // Jump is the hot form in ALL six judges.
     if let Op::IncDecSlot { slot, inc, pre: _ } = &f.ops[i] {
         if *slot <= u16::MAX as u32 && free(i + 1) && matches!(f.ops[i + 1], Op::Pop) {
             if free(i + 2) {
@@ -692,17 +688,17 @@ fn fuse_window(f: &Func, blocked: &[bool], i: usize) -> (Op, usize) {
             return (Op::IncDecSlotPop { slot: *slot as u16, inc: *inc }, 2);
         }
     }
-    // S-107 W2: [Dup, StoreSlot s, Pop] ≡ [StoreSlot s] — nessuna op nuova:
-    // il duplicato transiente elide (stesso precedente delle code *Dst; il
-    // gc_note del Pop cadeva sul clone transiente, che non esiste più).
-    // Cattura le code assign-and-discard dietro produttori NON fusabili
-    // (Call, CallBuiltin, Ret del chiamato — census calls/str).
+    // W2: [Dup, StoreSlot s, Pop] ≡ [StoreSlot s] — no new op: the
+    // transient duplicate is elided (same precedent as the *Dst tails; the
+    // Pop's gc_note fell on the transient clone, which no longer exists).
+    // Catches the assign-and-discard tails behind NON-fusable producers
+    // (Call, CallBuiltin, the callee's Ret — calls/str census).
     if matches!(f.ops[i], Op::Dup) && free(i + 1) && free(i + 2) {
         if let (Op::StoreSlot(s), Op::Pop) = (&f.ops[i + 1], &f.ops[i + 2]) {
             return (Op::StoreSlot(*s), 3);
         }
     }
-    // S-107 W4: [PropSet, Pop] → PropSetPop (statement `$o->p = v;`).
+    // W4: [PropSet, Pop] → PropSetPop (statement `$o->p = v;`).
     if let Op::PropSet { name, ic } = &f.ops[i] {
         if free(i + 1) && matches!(f.ops[i + 1], Op::Pop) {
             return (Op::PropSetPop { name: name.clone(), ic: ic.clone() }, 2);
@@ -751,7 +747,7 @@ fn bin_dst(
             (Op::BinarySCDst { op, slot, cidx, dst }, w + e)
         }
         (BinKind::SC(slot, cidx), None) => (Op::BinarySC { op, slot, cidx }, w),
-        // H-A1: senza coda la finestra ST NON fonde (nessuna forma value).
+        // Without a tail the ST window does NOT fuse (no value form).
         (BinKind::ST(l), Some((dst, e))) => (Op::BinarySTDst { op, l, dst }, w + e),
         (BinKind::ST(_), None) => (f.ops[i].clone(), 1),
         (BinKind::Stack, Some((dst, e))) => (Op::BinaryDst { op, dst }, w + e),
@@ -769,11 +765,11 @@ fn dump_enabled() -> bool {
 }
 
 /// Dump a compiled unit's bytecode to stderr (gated on `PHPR_DUMP_OPS`).
-/// Scope (A-HE-100-4, sanatoria RC-1): main, functions, closures, class
+/// Scope: main, functions, closures, class
 /// methods, property-HOOK bodies — every body that passes through the
 /// `compile_body` funnel and that the lowering pass therefore rewrites
 /// flag-on — plus the prop-init thunks (hand-built, NEVER lowered: declared
-/// OUT of the pass, RC-2; dumped anyway so the production truth is visible).
+/// OUT of the pass; dumped anyway so the production truth is visible).
 /// Reflection/const/attribute thunks stay out: hand-built via `FnCompiler`
 /// (`compile_const_thunk`, attribute thunks), the pass cannot touch them.
 /// Hook order is sorted by property name — `prop_info` is a HashMap and the
@@ -787,7 +783,7 @@ pub(super) fn dump_module_ops(m: &crate::bytecode::Module) {
     dump_module_to(&mut w, m);
 }
 
-/// The dump body, writer-parametric so the A-HE-100-4 coverage test can
+/// The dump body, writer-parametric so the coverage test can
 /// assert the scope against the Module without touching process stderr.
 pub(super) fn dump_module_to(w: &mut impl std::io::Write, m: &crate::bytecode::Module) {
     let _ = writeln!(w, "== unit {} ==", String::from_utf8_lossy(&m.file));
@@ -841,10 +837,10 @@ mod tests {
     use crate::builtin::Registry;
     use crate::bytecode::Module;
 
-    /// Compile col modo ESPLICITO (S-100): la batteria di emissione non
-    /// dipende dall'ambiente del processo — `compile` = modo OFF,
-    /// `compile_on` = il funnel VERO col pass acceso (hook compresi,
-    /// prop_init/thunk esclusi per costruzione: è compile_body a decidere).
+    /// Compile in an EXPLICIT mode: the emission battery does not depend on
+    /// the process environment — `compile` = mode OFF, `compile_on` = the
+    /// REAL funnel with the pass on (hooks included, prop_init/thunks
+    /// excluded by construction: compile_body decides).
     fn compile_mode(src: &[u8], reg_lower: bool) -> Module {
         let program = crate::lower_source(b"t.php", src).expect("lowers");
         crate::compile::compile_program_with_mode(&program, &Registry::default(), reg_lower)
@@ -859,20 +855,20 @@ mod tests {
         compile_mode(src, true)
     }
 
-    // S-100: il vecchio helper `lowered()` (mirror A MANO del funnel,
-    // fonte RC-2) è stato eliminato — il braccio flag-on dei test è ora il
-    // funnel VERO via `compile_on` (`compile_program_with_mode`).
+    // The old `lowered()` helper (a HAND-WRITTEN mirror of the funnel, and a
+    // source of drift) was removed — the flag-on arm of the tests is now the
+    // REAL funnel via `compile_on` (`compile_program_with_mode`).
 
-    /// A-HE-100-4: enumera OGNI corpo dal Module per DESTRUCTURING ESAUSTIVO
-    /// — un campo nuovo di `Module` (o di `CompiledClass`/`PropHooks` sotto)
-    /// che portasse corpi NON COMPILA finché non viene classificato qui
-    /// (stessa classe del dente S-96 in vm/liveness.rs). Classificazione:
-    /// - IN funnel `compile_body` (il pass li riscrive flag-on): main,
+    /// Enumerate EVERY body of the Module by EXHAUSTIVE DESTRUCTURING — a new
+    /// field of `Module` (or of `CompiledClass`/`PropHooks` below) that
+    /// carried bodies DOES NOT COMPILE until it is classified here (same
+    /// class of guard as the one in vm/liveness.rs). Classification:
+    /// - IN the `compile_body` funnel (the pass rewrites them flag-on): main,
     ///   functions, closures, methods, hook get/set.
-    /// - FUORI (costruiti a mano, il pass non li vede MAI): prop_init (RC-2),
-    ///   const-thunk (`consts[].func`), attribute-thunk (new/args), enum-case.
-    /// - Senza corpi compilati nel Module: i campi bound a `_` qui sotto
-    ///   (hir non ancora compilato, indici, metadati).
+    /// - OUT (hand-built, the pass NEVER sees them): prop_init, const-thunk
+    ///   (`consts[].func`), attribute-thunk (new/args), enum-case.
+    /// - No compiled bodies in the Module: the fields bound to `_` below
+    ///   (hir not yet compiled, indices, metadata).
     fn all_funcs(m: &Module) -> Vec<&Func> {
         let Module {
             main,
@@ -880,9 +876,9 @@ mod tests {
             conditional_fns: _,
             fn_ci: _,
             conditional_classes: _,
-            // hir non compilato: i corpi nascono al Declare, via compile_body
+            // uncompiled hir: the bodies are born at Declare, via compile_body
             conditional_traits: _,
-            // ri-lowered a runtime: ripassa da compile_body al suo punto di esecuzione
+            // re-lowered at runtime: goes through compile_body at its execution point
             deferred: _,
             closures,
             classes,
@@ -890,7 +886,7 @@ mod tests {
             class_index: _,
             static_count: _,
             strict: _,
-            // attribute-thunk: FnCompiler a mano, FUORI dal funnel
+            // attribute-thunk: hand-built FnCompiler, OUTSIDE the funnel
             const_attributes: _,
             elided: _,
         } = m;
@@ -905,16 +901,16 @@ mod tests {
                     all.extend(set.iter());
                 }
             }
-            // FUORI dal funnel ma corpi reali: inclusi comunque — la batteria
-            // flag-off asserisce «nessuna forma registro OVUNQUE», e per i
-            // corpi fuori-funnel l'assenza deve valere in ENTRAMBI i modi.
+            // OUTSIDE the funnel but real bodies: included anyway — the
+            // flag-off battery asserts "no register form ANYWHERE", and for
+            // the out-of-funnel bodies the absence must hold in BOTH modes.
             all.extend(c.prop_init.iter());
             all.extend(c.consts.iter().map(|k| &k.func));
         }
         all
     }
 
-    /// La classe della fixture (il Module include il prelude: si cerca per NOME).
+    /// The fixture's class (the Module includes the prelude: looked up by NAME).
     fn zoo_class(m: &Module) -> &crate::bytecode::CompiledClass {
         m.classes
             .iter()
@@ -922,8 +918,8 @@ mod tests {
             .expect("fixture: classe C nel Module")
     }
 
-    /// La fixture con UN corpo per specie: funzione, chiusura, metodo,
-    /// hook get/set, prop-init non costante, const di classe.
+    /// The fixture with ONE body per kind: function, closure, method,
+    /// hook get/set, non-constant prop-init, class const.
     const BODY_ZOO: &[u8] = br#"<?php
 function g($a){ $s=0; for($i=0;$i<9;$i++){ $s = $s + $i*3; } return $s+$a; }
 $h = function($x){ return $x+1; };
@@ -936,10 +932,10 @@ class C {
 }
 echo g(1), ($h)(2), C::K;"#;
 
-    /// A-HE-100-4: il dump copre ogni corpo del funnel `compile_body`
-    /// (hook COMPRESI — il punto cieco refutato da RC-1) più il prop-init
-    /// dichiarato fuori. La lista dei corpi viene dal Module (all_funcs,
-    /// destructuring esaustivo), non da un elenco a mano.
+    /// The dump covers every body of the `compile_body` funnel (hooks
+    /// INCLUDED — a former blind spot) plus the prop-init declared outside
+    /// it. The list of bodies comes from the Module (all_funcs, exhaustive
+    /// destructuring), not from a hand-written list.
     #[test]
     fn dump_scope_covers_every_funnel_body() {
         let m = compile(BODY_ZOO);
@@ -960,10 +956,10 @@ echo g(1), ($h)(2), C::K;"#;
         }
     }
 
-    /// RC-1 (Concilio WP-100): i corpi hook PASSANO da `compile_body`, il
-    /// pass li riscrive flag-on — helper e dump devono vederlo. Controllo
-    /// positivo: il get-hook con loop foldable mostra forme registro dopo
-    /// il pass, e il chunk hook del dump le mostra pure.
+    /// Hook bodies GO THROUGH `compile_body`, the pass rewrites them
+    /// flag-on — helper and dump must see it. Positive control: the get-hook
+    /// with a foldable loop shows register forms after the pass, and the
+    /// dump's hook chunk shows them too.
     #[test]
     fn hooks_are_lowered_and_visible_in_the_dump() {
         let l = compile_on(BODY_ZOO);
@@ -978,7 +974,7 @@ echo g(1), ($h)(2), C::K;"#;
             "il pass non riscrive il corpo del get-hook: RC-1 di nuovo cieco\n{:?}",
             get.ops
         );
-        // E il prop-init resta NON lowered anche nel helper (RC-2: fuori).
+        // And the prop-init stays NOT lowered in the helper too (outside the pass).
         let pi = zoo_class(&l).prop_init.as_ref().expect("prop-init");
         assert!(
             !pi.ops.iter().any(is_reg_form),
@@ -1017,8 +1013,8 @@ echo g(1), ($h)(2), C::K;"#;
                 | Op::BinaryDst { .. }
                 | Op::CmpJmpSS { .. }
                 | Op::CmpJmpSC { .. }
-                // S-106 H-A1 + lotto S-107: il dente flag-off vale anche per
-                // le forme nuove — la compilazione OFF non ne emette MAI una.
+                // The flag-off guard also covers the newer forms — the OFF
+                // compilation NEVER emits one.
                 | Op::BinarySTDst { .. }
                 | Op::BinaryTC { .. }
                 | Op::BinarySCSC { .. }
@@ -1027,12 +1023,12 @@ echo g(1), ($h)(2), C::K;"#;
                 | Op::PropGetSlot { .. }
                 | Op::PropSetPop { .. }
                 | Op::StringifySlot { .. }
-                // S-108 lotto-2: il dente flag-off copre anche queste.
+                // Second batch: the flag-off guard covers these too.
                 | Op::PropGetSlotRecv { .. }
                 | Op::BinaryTCPropSetPop { .. }
                 | Op::BinarySCSCDst { .. }
                 | Op::LoadVarPushConst { .. }
-                // S-109 lotto-3: e questa.
+                // Third batch: and this one.
                 | Op::ConcatNConst { .. }
         )
     }
@@ -1110,10 +1106,10 @@ echo g(1), ($h)(2), C::K;"#;
         assert_eq!(run(&m), run(&lm));
     }
 
-    /// S-97.1: a const-FIRST arithmetic window must NOT fold — the
+    /// A const-FIRST arithmetic window must NOT fold — the
     /// "Unsupported operand types" TypeError names its operands in order,
     /// so `3 + $x` and `$x + 3` are distinguishable when `$x` is an array.
-    /// (This is the WP-44 v3 commutative swap, dropped on soundness.)
+    /// (This is the original v3 commutative swap, dropped on soundness.)
     #[test]
     fn stage2v3_const_first_arith_does_not_fold() {
         let src = br#"<?php $a=5; $b = 3 + $a; $c = 3 * $a; echo $b, ",", $c;"#;
@@ -1130,12 +1126,12 @@ echo g(1), ($h)(2), C::K;"#;
         assert_eq!(run(&m), run(&lm));
     }
 
-    /// S-109 azione-2 revisore S-108 (DENTE, emissione INTESA pre-registrata):
-    /// sullo stream [LoadVar, PushConst, LoadVar, Cmp-specchiabile] il const
-    /// appartiene al fold SPECCHIO — W13 CEDE (guardia estesa S-109), il
-    /// LoadVar di testa resta nudo e l'emissione è quella lotto-1
-    /// (BinarySC specchiato). Prima della guardia W13 rubava il PushConst
-    /// (de-ottimizzazione a valore identico, revisione.md S-108 pista 4).
+    /// Guard with a pre-registered INTENDED emission: on the stream
+    /// [LoadVar, PushConst, LoadVar, mirrorable Cmp] the const belongs to
+    /// the MIRROR fold — W13 YIELDS (extended guard), the head LoadVar stays
+    /// bare and the emission is the first-batch one (mirrored BinarySC).
+    /// Before the guard, W13 stole the PushConst (a de-optimisation with an
+    /// identical value).
     #[test]
     fn w13_cede_al_fold_specchio() {
         let src = br#"<?php
@@ -1157,16 +1153,16 @@ echo g(1), ($h)(2), C::K;"#;
         assert_eq!(run(&m), run(&lm));
     }
 
-    /// S-109 lotto-3 (criterio s109-lotto3-criterio.out): il corpo str
-    /// `$s = substr($s . "abc", -30)` emette ConcatNConst (F2) e il
-    /// PushConst NEGATO senza Unary (F1); il modo OFF resta pila pura.
+    /// Third batch: the str body `$s = substr($s . "abc", -30)` emits
+    /// ConcatNConst (F2) and the NEGATED PushConst without a Unary (F1);
+    /// the OFF mode stays pure stack.
     #[test]
     fn lotto3_negfold_and_concatnconst() {
-        // Stessa forma del giudice str ma su funzione UTENTE (il run() della
-        // batteria non registra i builtin host): il PushConst del Neg segue
-        // ConcatN — fuori dalla portata di W13, F1 fonde. (Un Neg il cui
-        // const segue un LoadVar foldabile viene assorbito da W13 PRIMA:
-        // valore identico, il Neg resta a runtime — dichiarato nel verbale.)
+        // Same shape as the str judge but on a USER function (the battery's
+        // run() does not register the host builtins): the Neg's PushConst
+        // follows ConcatN — out of W13's reach, F1 fuses. (A Neg whose const
+        // follows a foldable LoadVar is absorbed by W13 FIRST: identical
+        // value, the Neg stays at runtime — a declared limitation.)
         let src = br#"<?php
             function keep($a, $b) { return $a . $b; }
             $s=''; for($i=0;$i<3;$i++){ $s = keep($s . "ab", -7); } echo $s;
@@ -1183,7 +1179,7 @@ echo g(1), ($h)(2), C::K;"#;
             "F1 atteso (Neg-fold via consts-append, niente Unary): {:#?}",
             lm.main.ops
         );
-        // INT_MIN non si fonde: la negazione promuove a float nel funnel.
+        // INT_MIN does not fuse: the negation promotes to float in the funnel.
         let edge = br#"<?php echo -9223372036854775808;"#;
         let me = compile(edge);
         let lme = compile_on(edge);
@@ -1255,10 +1251,10 @@ echo g(1), ($h)(2), C::K;"#;
         assert_eq!(std::mem::size_of::<Op>(), 48, "Op must not widen");
     }
 
-    /// Dual-mode guard: in modo OFF (ESPLICITO — S-100: la batteria non ha
-    /// più premesse ambientali, M5 è assorbita dal modo-parametro) la
-    /// compilazione non emette MAI una forma registro né BinaryAdd da
-    /// estensione, e il contratto di frame è invariato.
+    /// Dual-mode guard: in (EXPLICIT) OFF mode — the battery no longer has
+    /// environmental premises, the mode is a parameter — the compilation
+    /// NEVER emits a register form nor a BinaryAdd from the extension, and
+    /// the frame contract is unchanged.
     #[test]
     fn stage2v3_flag_off_emits_no_register_forms() {
         let m = compile(br#"<?php function f($a,$b){ $c=$a+$b; if($c>3){$c=$c*2;} return $c; } echo f(1,2);"#);
@@ -1271,10 +1267,10 @@ echo g(1), ($h)(2), C::K;"#;
         }
     }
 
-    /// L'entry di PRODUZIONE (`compile_program`) stampa il modo del
-    /// PROCESSO (`enabled()`, contratto value-parsed): il test vale in
-    /// QUALUNQUE modo giri la batteria — niente falso verde stesso-modo,
-    /// e il flip del default non inverte nessuna premessa (KS-HO-101-3).
+    /// The PRODUCTION entry (`compile_program`) follows the PROCESS mode
+    /// (`enabled()`, value-parsed contract): the test holds in WHATEVER
+    /// mode the battery runs — no same-mode false green, and a default flip
+    /// inverts no premise.
     #[test]
     fn production_entry_follows_process_mode() {
         let src = br#"<?php $s=0; for($i=0;$i<9;$i++){ $s = $s + $i*3; } echo $s;"#;
@@ -1291,42 +1287,42 @@ echo g(1), ($h)(2), C::K;"#;
         );
     }
 
-    /// Il contratto di modo (S-100 punto 1): grammatica value-parsed, lista
-    /// chiusa, testata PURA (nessun ambiente toccato). Il caso `=0` è la
-    /// trappola che ha motivato il contratto: sotto `is_some()` accendeva.
+    /// The mode contract: value-parsed grammar, closed list, tested PURE
+    /// (no environment touched). The `=0` case is the trap that motivated
+    /// the contract: under `is_some()` it turned the pass ON.
     #[test]
     fn mode_contract_grammar_is_value_parsed() {
         use std::ffi::OsStr;
         assert_eq!(mode_from_env(None), DEFAULT_ON, "assente => default nominato");
         assert!(mode_from_env(Some(OsStr::new("1"))), "`=1` => ON");
         assert!(!mode_from_env(Some(OsStr::new("0"))), "`=0` => OFF, MAI presence");
-        // Fuori grammatica: default (con warning su stderr, non asseribile qui).
+        // Outside the grammar: default (with a stderr warning, not assertable here).
         assert_eq!(mode_from_env(Some(OsStr::new(""))), DEFAULT_ON);
         assert_eq!(mode_from_env(Some(OsStr::new("on"))), DEFAULT_ON);
         assert_eq!(mode_from_env(Some(OsStr::new("true"))), DEFAULT_ON);
     }
 
-    /// Post-flip (S-100 punto 5) il default nominato è ON: chi lo
-    /// ri-invertisse deve dichiararsi QUI e ri-derivare denti e launcher
-    /// (KS-HO-101-3) — il braccio OFF resta collaudato a ogni rotazione
-    /// (KS-HE-101-3) via `PHPR_REG_LOWER=0` esplicito.
+    /// Post-flip the named default is ON: whoever inverts it again must
+    /// declare it HERE and re-derive the guards and the launcher — the OFF
+    /// arm stays exercised on every rotation via an explicit
+    /// `PHPR_REG_LOWER=0`.
     #[test]
     fn mode_contract_default_is_on_post_flip() {
         assert!(DEFAULT_ON, "default ri-invertito: ri-derivare denti anti-putenv, launcher e batteria PRIMA di spedire");
     }
 
-    /// A-HE-102-1 (Concilio WP-102, S-101 punto 5): il braccio OFF
-    /// in-process emette l'emissione di PRODUZIONE anche per l'add RESIDUO
-    /// DI PILA — il sito che `emit_binary` decideva col globale `enabled()`
-    /// invece di `ctx.reg_lower` (fix A-HO-102-1 @ b618e3a). Sotto OFF il
-    /// sito è `Binary(Add)` generico e `BinaryAdd` NON esiste; sotto ON,
-    /// stesso sorgente, il generico scompare (tripwire zero-`Binary(Add)`).
+    /// The in-process OFF arm emits the PRODUCTION emission even for the
+    /// RESIDUAL STACK add — the site that `emit_binary` used to decide with
+    /// the global `enabled()` instead of `ctx.reg_lower` (fixed in b618e3a).
+    /// Under OFF the site is a direct `BinaryAdd` and no generic
+    /// `Binary(Add)` exists; under ON, same source, the generic form
+    /// disappears (zero-`Binary(Add)` tripwire).
     #[test]
     fn in_process_off_arm_emits_production_stack_add() {
         use crate::hir::BinOp;
-        // `g($a+$b+$c)`: il primo add lascia il risultato in pila
-        // (argomento) — la classe residua che l'estensione H-B2 riscrive
-        // SOLO flag-on.
+        // `g($a+$b+$c)`: the first add leaves its result on the stack
+        // (argument) — the residual class that the `+` extension rewrites
+        // ONLY flag-on.
         let src = br#"<?php function g($x){ return $x; } $a=1;$b=2;$c=3; echo g($a+$b+$c);"#;
         let count = |m: &Module, pred: &dyn Fn(&Op) -> bool| -> usize {
             all_funcs(m)
@@ -1334,10 +1330,10 @@ echo g(1), ($h)(2), C::K;"#;
                 .map(|f| f.ops.iter().filter(|o| pred(o)).count())
                 .sum()
         };
-        // Produzione OFF (H-B2, S-98): emit_binary emette DIRETTAMENTE
-        // `BinaryAdd` quando `!ctx.reg_lower` — il bug A-HO-102-1 (lettura
-        // di `enabled()` col default ON) faceva cadere il sito nel ramo
-        // `Binary(Add)` generico. Il dente pinna la polarità VERA.
+        // Production OFF: emit_binary emits `BinaryAdd` DIRECTLY when
+        // `!ctx.reg_lower` — the old bug (reading `enabled()` with the
+        // default ON) dropped the site into the generic `Binary(Add)` arm.
+        // The guard pins the TRUE polarity.
         let off = compile(src);
         assert!(
             count(&off, &|o| matches!(o, Op::BinaryAdd)) >= 1,
@@ -1356,19 +1352,20 @@ echo g(1), ($h)(2), C::K;"#;
         );
     }
 
-    /// A-HE-103-1 (Concilio WP-103, S-102 punto 5): BODY_ZOO — il tripwire
-    /// zero-`Binary(Add)` esteso ai corpi FUORI funnel. `ctx.reg_lower` è UN
-    /// campo per l'intero Module, ma il pass registro visita solo i corpi
-    /// del funnel `compile_body`: prop_init (costruito a mano, RC-2) non lo
-    /// vede MAI.
-    /// ATTESA SCRITTA PRIMA (dalla lettura di emit_binary + RC-2):
-    /// - OFF: `!ctx.reg_lower` ⇒ emit_binary emette `BinaryAdd` diretto
-    ///   OVUNQUE, prop_init compreso ⇒ zero `Binary(Add)` nel modulo intero.
-    /// - ON: emit_binary emette `Binary(Add)` generico contando sul pass; in
-    ///   prop_init il pass non passa ⇒ il generico SOPRAVVIVE. L'invariante
-    ///   «zero-Binary(Add) modulo intero» sotto ON è FALSO fuori funnel: il
-    ///   residuo si pinna PER NOME (carve-out prop_init), non si nasconde.
-    ///   Semantica invariata (il generico è corretto, solo non specializzato).
+    /// BODY_ZOO — the zero-`Binary(Add)` tripwire extended to the bodies
+    /// OUTSIDE the funnel. `ctx.reg_lower` is ONE field for the whole
+    /// Module, but the register pass only visits the bodies of the
+    /// `compile_body` funnel: prop_init (hand-built) NEVER sees it.
+    /// EXPECTATION WRITTEN BEFOREHAND (from reading emit_binary):
+    /// - OFF: `!ctx.reg_lower` ⇒ emit_binary emits a direct `BinaryAdd`
+    ///   EVERYWHERE, prop_init included ⇒ zero `Binary(Add)` in the whole
+    ///   module.
+    /// - ON: emit_binary emits a generic `Binary(Add)` relying on the pass;
+    ///   in prop_init the pass does not run ⇒ the generic form SURVIVES. The
+    ///   "zero-Binary(Add) whole module" invariant under ON is FALSE outside
+    ///   the funnel: the residual is pinned BY NAME (prop_init carve-out),
+    ///   not hidden. Semantics unchanged (the generic form is correct, just
+    ///   not specialized).
     #[test]
     fn body_zoo_off_funnel_add_polarity() {
         use crate::hir::BinOp;
@@ -1388,8 +1385,8 @@ echo g(1), ($h)(2), C::K;"#;
             "OFF: nessun Binary(Add) generico in NESSUN corpo (prop_init compreso)"
         );
         let on = compile_on(src);
-        // Carve-out per NOME: il residuo generico sotto ON vive SOLO in
-        // prop_init (fuori funnel). I corpi del funnel restano a zero.
+        // Carve-out BY NAME: the generic residual under ON lives ONLY in
+        // prop_init (outside the funnel). The funnel bodies stay at zero.
         let funnel: Vec<&Func> = {
             let mut v: Vec<&Func> = vec![&on.main];
             v.extend(on.functions.iter().map(|f| f.as_ref()));
@@ -1414,15 +1411,13 @@ echo g(1), ($h)(2), C::K;"#;
         );
     }
 
-    /// A-KL-102-3 riscritto per R-HE-103-1 (Concilio WP-103, S-102 punto 5):
-    /// la vecchia metà «stessa emissione» era `f(x)==f(x)` — confrontava
-    /// `compile_mode(src, a)` con `compile_mode(src, b)` DOPO aver asserito
-    /// `a == b`: pinnava il DETERMINISMO del compilatore, non «assente ≡ =1»
-    /// (copertura fabbricata: un sito ambientale residuo colorerebbe i due
-    /// bracci allo stesso modo). Qui resta SOLO il contenuto reale del dente:
-    /// la riga di grammatica (A-HE-103-4). La coppia assente↔`=1` VERA vive
-    /// in SOTTOPROCESSO col dump-diff: php-cli/tests/absent_eq_one.rs
-    /// (A-HE-103-3).
+    /// Rewritten after review: the old "same emission" half was `f(x)==f(x)`
+    /// — it compared `compile_mode(src, a)` with `compile_mode(src, b)`
+    /// AFTER asserting `a == b`: it pinned the compiler's DETERMINISM, not
+    /// "absent ≡ =1" (fabricated coverage: a residual environmental site
+    /// would colour both arms the same way). Only the real content of the
+    /// guard remains here: the grammar line. The TRUE absent↔`=1` pair lives
+    /// in a SUBPROCESS with a dump diff: php-cli/tests/absent_eq_one.rs.
     #[test]
     fn absent_env_resolves_like_explicit_one() {
         use std::ffi::OsStr;

@@ -80,7 +80,7 @@ pub fn posix_getpid(_args: &[Zval], _ctx: &mut Ctx) -> Result<Zval, PhpError> {
 }
 
 /// `php_sapi_name()` — `cli`, or the name the web host installed at startup
-/// (`cli-server` under `phpr -S`).
+/// (`cli-server` under `ferro -S`).
 pub fn php_sapi_name(_args: &[Zval], _ctx: &mut Ctx) -> Result<Zval, PhpError> {
     Ok(Zval::Str(PhpStr::from_str(php_types::sapi::sapi_name())))
 }

@@ -1682,15 +1682,15 @@ impl<'a> super::FnCompiler<'a> {
     /// `fname` is the callee's display name and `pnames` its parameter names
     /// (indexed positionally) for that message.
     ///
-    /// CURA §3.15 (S-107; fixture fx21 riga 5; flip attesi variadic/by_ref.phpt
-    /// e variadic/by_ref_error.phpt): `variadic` è il flag by-ref del pack
-    /// quando l'ULTIMO parametro è `...$rest` (`None` senza variadico). Le
-    /// posizioni `i >= vslot` (vslot = ultimo indice della maschera) usano QUEL
-    /// flag — prima rispondevano `false` oltre la maschera e il pack viaggiava
-    /// by-value dalla seconda posizione. Il messaggio d'errore per una
-    /// posizione del pack OMETTE il nome del parametro (probe oracle 8.5.7:
-    /// `vref(): Argument #1 could not be passed by reference`, senza `($rs)`
-    /// anche alla PRIMA posizione del pack; un fisso lo conserva).
+    /// Variadic by-ref packs (covers variadic/by_ref.phpt and
+    /// variadic/by_ref_error.phpt): `variadic` is the pack's by-ref flag
+    /// when the LAST parameter is `...$rest` (`None` without a variadic).
+    /// Positions `i >= vslot` (vslot = last index of the mask) use THAT
+    /// flag — previously they answered `false` past the mask and the pack was
+    /// passed by value from the second position on. The error message for a
+    /// pack position OMITS the parameter name (oracle 8.5.7 probe:
+    /// `vref(): Argument #1 could not be passed by reference`, without `($rs)`
+    /// even at the FIRST pack position; a fixed parameter keeps it).
     pub(super) fn push_call_args(
         &mut self,
         args: &[Expr],
@@ -1699,8 +1699,8 @@ impl<'a> super::FnCompiler<'a> {
         pnames: &[Box<[u8]>],
         variadic: Option<bool>,
     ) -> R<()> {
-        // Il variadico è per grammatica l'ULTIMO parametro: il suo indice è
-        // l'ultima posizione della maschera.
+        // By grammar the variadic is the LAST parameter: its index is the
+        // last position of the mask.
         let vslot = variadic.map(|_| by_ref.len().saturating_sub(1));
         for (i, a) in args.iter().enumerate() {
             if matches!(a.kind, ExprKind::Spread(_)) {

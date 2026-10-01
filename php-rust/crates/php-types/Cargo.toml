@@ -5,16 +5,12 @@ edition.workspace = true
 license.workspace = true
 
 [features]
-# WP-37 attribution build (SSO groundwork): length-bucket counters on every
-# PhpStr allocation, dumped at process exit to $PHPR_STR_CENSUS (append).
-# Off by default — zero cost in normal builds (the hook is compiled out).
+# Instrumentation only; never in a measured or parity build.
+# Length-bucket counters on every PhpStr allocation, dumped to $PHPR_STR_CENSUS.
 str-census = []
-# WP-45 Fase 0 (FOOTPRINT_CPU_ROADMAP.md): byte-attribution per canale
-# (str/arr/obj/unit), dump su $PHPR_MEM_CENSUS. Misura-only, mai nei build
-# di parità o A/B.
+# Byte attribution per channel (str/arr/obj/unit), dumped to $PHPR_MEM_CENSUS.
 mem-census = []
-# WP-59 Ob.3 asse 2: SCAN_MAX 8→4 (metà superiore dello scan-mode torna
-# all'indice). Binario diagnostico, mai nei giudici standard.
+# Diagnostic binary: hashed arrays scan linearly up to 4 entries instead of 8.
 scan4 = []
 
 [dependencies]

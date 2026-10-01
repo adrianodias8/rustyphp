@@ -8,8 +8,8 @@
 # The census binary is for COUNTING only — never for timing.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CENSUS="${CENSUS:-/target/census/release/phpr}"
-PHPR="${PHPR:-/target/release/phpr}"
+CENSUS="${CENSUS:-/target/census/release/ferro}"
+PHPR="${PHPR:-/target/release/ferro}"
 PHP="${PHP_ORACLE:-$(command -v php)}"
 N1="${N1:-200000}"; N2="${N2:-400000}"
 T="$(mktemp -d)"

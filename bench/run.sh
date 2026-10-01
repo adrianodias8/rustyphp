@@ -6,7 +6,7 @@
 # Meant to run INSIDE the dev container:   docker/run.sh ../bench/run.sh
 #
 # Engines
-#   phpr          $PHPR (default /target/release/phpr)
+#   phpr          $PHPR (default /target/release/ferro)
 #   php-noopc     php -n -d opcache.enable_cli=0           (PLAN: "php -n")
 #   php-opc       php -d opcache.enable_cli=1              (PLAN: "php with opcache")
 #   php-opc-warm  php-opc + opcache.file_cache, primed     (extra: what a resident
@@ -20,7 +20,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
 PHP_SRC="${PHP_SRC:-$REPO/../php-src}"
-PHPR="${PHPR:-/target/release/phpr}"
+PHPR="${PHPR:-/target/release/ferro}"
 PHP="${PHP_ORACLE:-$(command -v php)}"
 R="${R:-5}"
 DATE="${DATE:-$(date -u +%Y-%m-%d)}"

@@ -5,53 +5,35 @@ edition.workspace = true
 license.workspace = true
 
 [features]
-# WP-33 T0: compile in the op-census hook (PHPR_OP_CENSUS). Off by default:
-# even a dead bool-branch per dispatch tick costs ~3% on op-dense workloads,
-# so the census exists only in dedicated instrumentation builds.
+# Every feature below builds an INSTRUMENTED or probe binary. None of them is
+# ever used for a timing figure or a parity run.
+# Op/bigram/type-pair frequency counters ($PHPR_OP_CENSUS). Even a dead branch
+# per dispatch costs ~3% on op-dense code, so it only exists in these builds.
 op-census = []
-# WP-39 leva E: GC-pipeline counters (PHPR_GC_CENSUS). Same convention as
-# op-census: only ever compiled into dedicated instrumentation builds.
+# GC pipeline counters ($PHPR_GC_CENSUS).
 gc-census = []
-# S-95.0 leva A-ZV1: contatori del MECCANISMO per «il clone che muore subito»
-# (PHPR_ZVAL_CENSUS). Contano quanti valori vengono materializzati da uno slot
-# e quanti di quelli portano un `Rc` (cioè pagano refcount++ / refcount--).
-# Stessa convenzione delle altre census: SOLO build di strumentazione — una
-# cifra verdict-grade non nasce mai da un binario con questa feature accesa.
+# Counters for values materialised from a slot and how many of them carry an
+# `Rc` (i.e. pay refcount++/--) — "the clone that dies immediately"
+# ($PHPR_ZVAL_CENSUS).
 zval-census = []
-# WP-45 Fase 0: byte-attribution census (PHPR_MEM_CENSUS) — see
-# FOOTPRINT_CPU_ROADMAP.md. Instrumentation builds only.
+# Byte attribution per channel ($PHPR_MEM_CENSUS).
 mem-census = ["php-types/mem-census"]
-# WP-62 M2.3: form-B pre-quote diagnostic — identity class-id remap + zero
-# static base in the hot arms (K-M1 arm-cost measurement). Never parity.
+# Diagnostic: identity class-id remap and zero static base in the hot arms,
+# to price the remap indirection.
 relbase-probe = []
-# S-79.0.3 (Council WP-80 A-TH2/A-BB10): compile-phase sub-channel counters
-# (a1 prelude / a3 include-compile) for the php-server census build. Same
-# convention as the other census features: instrumentation builds only —
-# verdict-grade figures never come from a build with this feature on.
+# Compile-phase counters (prelude / include-compile) for the server census.
 census-instrumentation = []
-# A-MS26/A-TH28 (Council WP-85): compile in the vm_gate_probe mint (mint 3,
-# hand-replicated lifecycle tests in php-server's worker_pool.rs). Never a
-# parity/campaign feature: a build without it does not CONTAIN the probe
-# symbol, so KH85-1's "pub mint reachable outside tests" cannot recur.
+# Compiles in the VmGate probe mint used by php-server's lifecycle tests; a
+# build without it does not contain the symbol at all.
 vm-gate-probe = []
-# S-103 leva-nulla (A-BA-103-4 → KS-BA-104-2, Council WP-104): a
-# SEMANTICALLY NULL text-layout perturbation — one never-called
-# #[inline(never)] #[no_mangle] pad function next to run_loop. Build arm B
-# of the layout A/B with this feature; arm A is the pin. Never a parity
-# feature; the measured |Δ| on the giudice IS the layout noise band.
+# Layout-noise probe: a never-called #[inline(never)] #[no_mangle] pad
+# function next to run_loop. An A/B against the same tree without it
+# measures the code-layout noise band.
 null-lever = []
-# S-139 az.rev. S-138 #2 (criterio s139-criterio-rmw-collaudo.md p.3): contatori
-# fill/hit della cella IC RMW (PHPR_IC_STATS). Stessa convenzione delle census:
-# SOLO build diagnostiche — mai nel pin; nessuna cifra di tempo da questa build.
+# Fill/hit counters of the read-modify-write inline cache ($PHPR_IC_STATS).
 ic-stats = []
-# S-145 sonda-B (modello wp145-harness/s145-sonda-b-modello.md): gate del SOLO
-# builtin `__phpr_sonda_b` (loop di prezzo clone/drop/gc_note/pair). Nessun
-# contatore: i cammini prezzati restano la forma di parità. Probe build only —
-# mai nel pin; i conteggi vivono nelle census (mem-census/zval-census).
-# S-152 p.1 (criterio wp152-harness/s152-criterio-sonde.md §2): il braccio
-# mi_heap (Leijen R2) del probe sonda vuole i binding mi_heap_* — la dep
-# libmimalloc-sys/extended entra SOLO con questa feature (il binario di
-# parità non la attiva; il crate è già nel lock come dep di mimalloc).
+# Price probe: only the `__phpr_sonda_b` builtin (clone/drop/gc_note/pair cost
+# loop); its mi_heap arm needs mimalloc's extended bindings, pulled in here only.
 sonda-price = ["dep:libmimalloc-sys"]
 
 [dependencies]
@@ -78,10 +60,7 @@ elsa = "=1.11.2"
 static_assertions.workspace = true
 libmimalloc-sys = { version = "0.1", features = ["extended"], optional = true }
 
-# A-AH29 (Council WP-83): the mem-census lib-test target could not LINK
-# (php_types::memcensus calls mi_* symbols that only the bin crates'
-# mimalloc provided) — the compile pin was structurally impossible and the
-# selftests had to live as pub fns run from bin tests. Dev-only: production
-# builds are untouched; the CI --no-run lane now bites for real.
+# The mem-census lib tests call mimalloc's mi_* symbols, which only the binary
+# crates provide; dev-only, production builds are untouched.
 [dev-dependencies]
 mimalloc.workspace = true

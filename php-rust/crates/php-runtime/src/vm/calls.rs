@@ -333,10 +333,9 @@ pub(super) fn decay_arg(a: Zval) -> Zval {
 /// receiver dispatched without a [`bind_params`] step (a generator/fiber/closure
 /// method, `__call`, an enum `from`), which always wants values.
 pub(super) fn decay_args(args: Vec<Zval>) -> Vec<Zval> {
-    // S-144 tranche-2: gemello del funnel vecargs di `bind_params` per il
-    // dispatch nativo/magic (perimetri disgiunti per costruzione — il
-    // chiamante usa l'uno O l'altro); altri path nativi restano FUORI
-    // perimetro, dichiarato nel criterio.
+    // Twin of the vecargs funnel in `bind_params`, for native/magic dispatch
+    // (disjoint perimeters by construction — a caller uses one OR the
+    // other); other native paths stay OUTSIDE the perimeter, by design.
     #[cfg(feature = "mem-census")]
     if args.capacity() > 0 {
         php_types::memcensus::s144_vecargs_note();
@@ -345,14 +344,14 @@ pub(super) fn decay_args(args: Vec<Zval>) -> Vec<Zval> {
 }
 
 pub(super) fn bind_params(frame: &mut Frame, args: Vec<Zval>) {
-    // S-105 H-D gate G2: arità al choke-point del perimetro della leva args.
-    // Solo build census: la build di parità non contiene la chiamata.
+    // Arity at the choke-point of the args perimeter. Census builds only: the
+    // parity build does not contain the call.
     #[cfg(feature = "mem-census")]
     php_types::memcensus::arity_note(args.len());
-    // S-144 tranche-2: una Vec argomenti CON buffer allocato che arriva al
-    // bind è un evento `vecargs` (capacity>0 ⟺ almeno un alloc a monte; la
-    // crescita sta nei realloc, disaggregati). Il path diretto stack→slot
-    // non alloca e correttamente non passa di qui.
+    // An argument Vec WITH an allocated buffer reaching the bind is a
+    // `vecargs` event (capacity>0 ⟺ at least one alloc upstream; growth
+    // lives in the reallocs, counted separately). The direct stack→slot path
+    // does not allocate and correctly does not come through here.
     #[cfg(feature = "mem-census")]
     if args.capacity() > 0 {
         php_types::memcensus::s144_vecargs_note();
@@ -1264,11 +1263,11 @@ impl<'m> Vm<'m> {
                         return Ok(());
                     }
                 }
-                // S-145 sonda-B: il builtin dei prezzi esiste SOLO nella
-                // build probe `sonda-price` (mai in HOST_BUILTIN_NAMES: in
-                // parità il nome resta undefined e get_defined_functions
-                // non lo elenca). Il driver lo chiama come string-callable,
-                // che arriva QUI per costruzione.
+                // The price-probe builtin exists ONLY in the `sonda-price`
+                // probe build (never in HOST_BUILTIN_NAMES: in parity the
+                // name stays undefined and get_defined_functions does not
+                // list it). The driver calls it as a string-callable, which
+                // lands HERE by construction.
                 #[cfg(feature = "sonda-price")]
                 if name == b"__phpr_sonda_b" {
                     let result = self.ho_sonda_b(args)?;

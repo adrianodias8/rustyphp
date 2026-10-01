@@ -1,6 +1,6 @@
 <?php
 // Worker-mode front controller for the Symfony benchmark app: boot once,
-// then serve. Runs under phpr (`phpr -S … --worker symfony-worker.php`) and
+// then serve. Runs under phpr (`ferro -S … --worker symfony-worker.php`) and
 // under FrankenPHP worker mode (`frankenphp_handle_request`) unchanged.
 //   SYMFONY_DIR = the directory holding vendor/ (default: /scratch/symfony-app)
 require __DIR__ . '/symfony-kernel.php';
@@ -9,7 +9,7 @@ use Symfony\Component\HttpFoundation\Request;
 
 $dir = getenv('SYMFONY_DIR') ?: '/scratch/symfony-app';
 $kernel = build_kernel($dir);
-$handle = function_exists('frankenphp_handle_request') ? 'frankenphp_handle_request' : 'phpr_handle_request';
+$handle = function_exists('frankenphp_handle_request') ? 'frankenphp_handle_request' : 'ferro_handle_request';
 
 $handler = static function () use ($kernel) {
     $request = Request::createFromGlobals();

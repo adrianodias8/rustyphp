@@ -1,23 +1,22 @@
-//! S-102 punto 4 (Concilio WP-103, A-BA-103-1 + A-GR-103-3) — census della
-//! MECCANICA DELLA PILA OPERANDI, per SITO-OPCODE e per PRIMITIVA.
+//! Census of the OPERAND-STACK MECHANICS, per OPCODE SITE and per PRIMITIVE.
 //!
-//! Perché esiste: il profilo inline-aware S-101 attribuisce ~26,6% del tempo
-//! phpr agli accessor `Vec<Zval>` dentro `run_loop`, ma l'attribuzione a
-//! campioni sui simboli inlined è DICHIARATA porosa (confine col 21,2%
-//! dispatch che perde nei due sensi; errore fattore ~2 a SEGNO IGNOTO,
-//! R-GR-103-1). L'unico arbitro è il CONTEGGIO: quanti transiti di pila
-//! (push/pop/peek/len/elem) fa DAVVERO ogni op del giudice per iterazione.
-//! VIETATO derivarne attesi via quota%×T (KS-GR-103-1 ≡ KS-BA-103-3): il
-//! costo/transito farà fede SOLO da un Δ_A/B ÷ transiti contati.
+//! Why it exists: the inline-aware profile attributes ~26.6% of phpr time
+//! to the `Vec<Zval>` accessors inside `run_loop`, but sample attribution
+//! on inlined symbols is admittedly porous (the boundary with the 21.2%
+//! dispatch leaks in both directions; a factor-~2 error of UNKNOWN SIGN).
+//! The only arbiter is the COUNT: how many stack transits
+//! (push/pop/peek/len/elem) each judge op REALLY performs per iteration.
+//! Deriving expectations via share%×T is FORBIDDEN: the cost per transit is
+//! trusted ONLY from a Δ_A/B ÷ counted transits.
 //!
-//! Convenzione identica a `zvalcensus`: SOLO dietro `zval-census`, nessuna
-//! build di parità la accende; dump appeso al file `PHPR_ZVAL_CENSUS` (riga
-//! propria `stackcensus …`, la riga storica resta byte-identica).
+//! Same convention as `zvalcensus`: ONLY behind `zval-census`, no parity
+//! build enables it; the dump is appended to the `PHPR_ZVAL_CENSUS` file
+//! (its own `stackcensus …` line, the historical line stays byte-identical).
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-/// Siti-opcode strumentati: gli op del loop del giudice prop.php (13 specie)
-/// + `Other` per ogni transito fuori perimetro che si volesse taggare.
+/// Instrumented opcode sites: the ops of the prop.php judge loop (13 kinds)
+/// + `Other` for any out-of-perimeter transit one might want to tag.
 #[derive(Clone, Copy)]
 #[repr(usize)]
 pub enum Site {
@@ -35,7 +34,7 @@ pub enum Site {
     PropGet = 11,
     PropSet = 12,
     Other = 13,
-    /// S-106 leva H-A1: la fusione RMW-su-slot (LoadSlot;Swap;BinaryDst).
+    /// The RMW-on-slot fusion (LoadSlot;Swap;BinaryDst).
     BinarySTDst = 14,
 }
 pub const SITES: usize = 15;
@@ -45,10 +44,10 @@ pub const SITE_NAMES: [&str; SITES] = [
     "PropSet", "Other", "BinarySTDst",
 ];
 
-/// Primitive di pila a livello SORGENTE (gli `as_slice`/`ptr::read` del
-/// profilo sono l'interno compilato di queste): `Push` = `Vec::push`,
+/// Stack primitives at SOURCE level (the profile's `as_slice`/`ptr::read`
+/// are the compiled internals of these): `Push` = `Vec::push`,
 /// `Pop` = `Vec::pop` (+`expect`), `Peek` = `last`/`last_mut`,
-/// `Len` = `len()` esplicito, `Elem` = accesso a elemento (`swap`, index).
+/// `Len` = explicit `len()`, `Elem` = element access (`swap`, index).
 #[derive(Clone, Copy)]
 #[repr(usize)]
 pub enum Prim {
@@ -57,10 +56,9 @@ pub enum Prim {
     Peek = 2,
     Len = 3,
     Elem = 4,
-    // S-103 drop-census (KS-BA-104-3 ≡ RC-LE-104-1): la fine-vita di uno
-    // Zval nell'arm, per SPECIE — la specie è il canale della leva H-C2
-    // (fast-out scalare). Classificata col predicato ESISTENTE
-    // `is_gc_container` (KS-MA-104-1: mai un secondo predicato).
+    // Drop census: the end of life of a Zval in the arm, per SPECIES — the
+    // species is the channel of the scalar fast-out lever. Classified with
+    // the EXISTING `is_gc_container` predicate (never a second predicate).
     DropS = 5,
     DropC = 6,
 }
@@ -68,37 +66,37 @@ pub const PRIMS: usize = 7;
 pub const PRIM_NAMES: [&str; PRIMS] =
     ["push", "pop", "peek", "len", "elem", "drop_s", "drop_c"];
 
-/// Esecuzioni per sito-opcode (chiude il ledger: transiti = Σ conteggi e
-/// l'assert conteggi↔dump confronta ops/iter col dump `{main}`).
+/// Executions per opcode site (closes the ledger: transits = Σ counts and
+/// the counts↔dump assert compares ops/iter against the `{main}` dump).
 static OPS: [AtomicU64; SITES] = [const { AtomicU64::new(0) }; SITES];
-/// Transiti per (sito, primitiva).
+/// Transits per (site, primitive).
 static ST: [[AtomicU64; PRIMS]; SITES] = [const { [const { AtomicU64::new(0) }; PRIMS] }; SITES];
 
-/// Una esecuzione dell'arm `site`.
+/// One execution of the `site` arm.
 #[inline]
 pub fn note_op(site: Site) {
     OPS[site as usize].fetch_add(1, Ordering::Relaxed);
 }
 
-/// `n` transiti della primitiva `prim` al sito `site` (sul SENTIERO eseguito:
-/// fast e slow path si contano dove eseguono, mai staticamente).
+/// `n` transits of primitive `prim` at site `site` (on the executed PATH:
+/// fast and slow paths are counted where they run, never statically).
 #[inline]
 pub fn note(site: Site, prim: Prim, n: u64) {
     ST[site as usize][prim as usize].fetch_add(n, Ordering::Relaxed);
 }
 
-/// Una fine-vita di Zval al sito `site`, classificata per specie (S-103
-/// drop-census). Si annota nel punto dell'arm dove la vita del valore
-/// finisce (pop scartato, operando consumato, bersaglio sovrascritto,
-/// temporaneo a fine arm) — sul sentiero ESEGUITO.
+/// One Zval end of life at site `site`, classified by species (drop
+/// census). Noted at the point of the arm where the value's life ends
+/// (discarded pop, consumed operand, overwritten target, temporary at end of
+/// arm) — on the EXECUTED path.
 #[inline]
 pub fn note_drop(site: Site, is_container: bool) {
     let p = if is_container { Prim::DropC } else { Prim::DropS };
     ST[site as usize][p as usize].fetch_add(1, Ordering::Relaxed);
 }
 
-/// Righe di dump: una per sito eseguito (`stackcensus site=… ops=… push=…`)
-/// + una riga di totali per primitiva.
+/// Dump lines: one per executed site (`stackcensus site=… ops=… push=…`)
+/// + one line of per-primitive totals.
 pub fn dump_lines() -> String {
     let mut out = String::new();
     let mut tot = [0u64; PRIMS];

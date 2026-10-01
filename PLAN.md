@@ -1,4 +1,8 @@
-# PLAN.md — Fork `phpr`, profile it, decide the kernel, aim at Drupal
+# PLAN.md — the original brief (2026-09-29): fork `phpr`, profile it, decide the kernel, aim at Drupal
+
+> Kept as written for the record. Where it says MIT, the license is PHP 3.01 (see `NOTICE.md`);
+> where it says "do not delete their docs", session 5 reversed that once the fork was published
+> under its own name. Status of every phase: `NOTES.md`; the decision: `DECISION_KERNEL.md`.
 
 You are working on a fork of `francescotinti/php-rust` (`phpr`, MIT): a from-scratch PHP 8.5 runtime
 in Rust. We are keeping its correctness foundation (phpt oracle, operator differential harness,
@@ -120,7 +124,7 @@ Also required in the decision doc:
 
 Exit: `drush site:install standard` succeeds against SQLite, then MySQL; the Drupal front page renders byte-identically to the oracle (diff the HTML with cache-busting tokens stripped); `core/phpunit.xml.dist` `Unit` suite passes at a reported percentage.
 
-Extensions Drupal needs beyond what upstream has (verify each against `phpr -m` first):
+Extensions Drupal needs beyond what upstream has (verify each against `ferro -m` first):
 | Extension | Approach |
 |---|---|
 | `intl` | Bind ICU (`rust_icu` or direct FFI). `Collator`, `NumberFormatter`, `IntlDateFormatter`, `Normalizer`, `Transliterator`, `Locale`, `MessageFormatter`. Match ICU version behaviour of the oracle's build. |

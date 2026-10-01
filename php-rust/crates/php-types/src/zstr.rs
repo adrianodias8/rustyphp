@@ -11,29 +11,30 @@ use std::ptr::NonNull;
 /// Mirrors `zend_string` (Zend/zend_types.h:393-398): lazy hash with 0 meaning
 /// "not yet computed", same convention as ZSTR_H (Zend/zend_string.h:114).
 ///
-/// WP-38: un SSO (enum Inline/Heap dentro questa struct) è stato provato e
-/// BOCCIATO dai dati — media reale +1,5% (cap 7, 24B totali via niche) /
-/// +2,5% (cap 15, 32B); i malloc small-bin di mimalloc costano meno delle
-/// copie inline + branch su ogni lettura. Restano i costruttori slice-fed
-/// (`new` accetta `&[u8]`), `concat2` e `from_i64`, che evitano round-trip
-/// inutili senza cambiare la rappresentazione. Da non riproporre senza
-/// nuovi dati (cfr. NaN-boxing WP-32).
+/// An SSO (Inline/Heap enum inside this struct) was tried and REJECTED by
+/// the data — real mean +1.5% (cap 7, 24B total via niche) / +2.5% (cap 15,
+/// 32B); mimalloc's small-bin mallocs cost less than the inline copies +
+/// branch on every read. What remains are the slice-fed constructors (`new`
+/// takes `&[u8]`), `concat2` and `from_i64`, which avoid useless round-trips
+/// without changing the representation. Not to be re-proposed without new
+/// data (cf. the NaN-boxing attempt).
 ///
-/// S-124 single-alloc: la coppia `Rc<PhpStr{hash, Vec<u8>}>` (2 malloc: RcBox
-/// + buffer del Vec) diventa UN blocco stile `zend_string`: questo header di
-/// 32 B `{rc, hash, len, cap}` con i byte in coda alla STESSA allocazione e
-/// refcount custom non-atomico (la VM è single-thread; `NonNull` tiene ZStr
-/// !Send/!Sync come lo era Rc). La lettura resta un deref — nessun branch SSO
-/// — ma sparisce un hop (offset fisso invece del puntatore del Vec) e l'header
-/// condivide la cache line coi primi byte. NON è l'SSO bocciato WP-38.
+/// Single-alloc: the pair `Rc<PhpStr{hash, Vec<u8>}>` (2 mallocs: RcBox +
+/// the Vec's buffer) becomes ONE `zend_string`-style block: this 32 B header
+/// `{rc, hash, len, cap}` with the bytes trailing in the SAME allocation and
+/// a custom non-atomic refcount (the VM is single-threaded; `NonNull` keeps
+/// ZStr !Send/!Sync as Rc did). A read is still a deref — no SSO branch —
+/// but one hop disappears (fixed offset instead of the Vec's pointer) and
+/// the header shares the cache line with the first bytes. This is NOT the
+/// rejected SSO.
 ///
-/// WP-55 (invariata nella sostanza): l'append-in-place di `.=` (mirror di
-/// `zend_string_extend`) vive in [`ZStr::try_append`]: SOLO quando la stringa
-/// è unica (rc == 1) il blocco cresce con `realloc` ammortizzato ×2 invece di
-/// riallocare+copiare l'intera stringa (canale O(n²), probe WP-54: 244× vs
-/// oracle). I costruttori restano exact-size (`cap == len`); solo il path
-/// append lascia slack di crescita. Le stringhe condivise restano
-/// copy-on-write per costruzione (fallback `concat2` al sito di chiamata).
+/// In-place append of `.=` (mirror of `zend_string_extend`) lives in
+/// [`ZStr::try_append`]: ONLY when the string is unique (rc == 1) the block
+/// grows with an amortized ×2 `realloc` instead of reallocating+copying the
+/// whole string (an O(n²) channel: a probe measured 244× vs the oracle).
+/// Constructors stay exact-size (`cap == len`); only the append path leaves
+/// growth slack. Shared strings remain copy-on-write by construction
+/// (`concat2` fallback at the call site).
 #[repr(C)]
 pub struct PhpStr {
     /// Non-atomic refcount, mirrors `Rc`'s strong count (no weak field).
@@ -182,9 +183,8 @@ impl Drop for ZStr {
         let n = self.rc.get() - 1;
         self.rc.set(n);
         if n == 0 {
-            // S-124 B2 (guardia calls del giudice v3, −3,94 0/5): il path di
-            // morte resta FUORI linea come Rc::drop_slow — inlinearlo gonfiava
-            // OGNI sito di drop Zval e run_loop è icache-bound (WP-104).
+            // The death path stays OUT of line like Rc::drop_slow — inlining
+            // it bloated EVERY Zval drop site, and run_loop is icache-bound.
             unsafe { zstr_drop_slow(self.ptr) }
         }
     }

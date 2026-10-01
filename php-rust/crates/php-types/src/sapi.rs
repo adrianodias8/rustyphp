@@ -1,4 +1,4 @@
-//! SAPI request context — the bridge between a web SAPI host (phpr -S, the
+//! SAPI request context — the bridge between a web SAPI host (ferro -S, the
 //! cli-server work-alike) and the engine/builtins.
 //!
 //! The host parses one HTTP request, fills a [`WebRequest`], and installs it
@@ -57,7 +57,7 @@ thread_local! {
     static UPLOADED_FILES: RefCell<Vec<Vec<u8>>> = const { RefCell::new(Vec::new()) };
 }
 
-/// Worker mode (fork, DECISION_KERNEL.md §5): what `phpr_handle_request()`
+/// Worker mode (fork, DECISION_KERNEL.md §5): what `ferro_handle_request()`
 /// hands back to the host for one request.
 pub struct WorkerResponse {
     pub status: i64,

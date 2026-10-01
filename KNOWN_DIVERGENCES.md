@@ -6,8 +6,8 @@ One entry per divergence found by the fork and not yet fixed. Each has a minimal
 reports any test that starts passing: fixing a divergence means moving its test to
 `baseline/repro/` (where the gate requires a pass) and deleting the row here.
 
-Upstream keeps its own list in `php-rust/PHPR_DIVERGENCES_FROM_PHP.md` (principle
-"correct-or-absent"); this file is the fork's, for what the fork found.
+Upstream's own register (`PHPR_DIVERGENCES_FROM_PHP.md` at the tag `upstream-9d4ef5ba`,
+principle "correct-or-absent") is not carried here; this file is for what the fork found.
 
 Not listed: performance-only findings (they live in `NOTES.md`), and the two session-2 flags
 that did not reproduce — a diagnostic raised while evaluating call arguments reporting the

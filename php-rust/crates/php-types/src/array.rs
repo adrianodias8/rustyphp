@@ -93,9 +93,8 @@ const _: () = assert!(
 // (criterion VOID by construction), never drift silently.
 const _: () = assert!(std::mem::size_of::<Zval>() == 16);
 // KS-HE-105-1 (Council WP-105, S-104): size alone does not pin the layout —
-// the H-C2 criterion also records align and the definition fingerprint
-// (wp104-harness/hc2-criterio-v2.out); a repack at constant size must not
-// drift silently either.
+// the H-C2 criterion also records align and the definition fingerprint;
+// a repack at constant size must not drift silently either.
 const _: () = assert!(std::mem::align_of::<Zval>() == 8);
 // A-HO-107-1 ≡ A-KL-107-2 (Council WP-107, S-106-D-11): type-seal on the
 // trivial arms, rewritten on the VARIANT CONSTRUCTORS. The A-HO-106-1 form
@@ -137,7 +136,7 @@ const SLOT_TOMB: u32 = u32::MAX - 1;
 const HOLDS_BIT: u32 = 1 << 31;
 const CURSOR_MASK: u32 = HOLDS_BIT - 1;
 
-/// WP-58 (leva C): hashed arrays whose entry table (live + tombstones) fits
+/// WP-58 (lever C): hashed arrays whose entry table (live + tombstones) fits
 /// in this many slots carry NO index at all (`KeyIndex::slots` empty) — a
 /// lookup linearly scans the entries, which is the same key comparison the
 /// probe path performs on its candidate, minus the mix/probe/maintenance
@@ -147,8 +146,8 @@ const CURSOR_MASK: u32 = HOLDS_BIT - 1;
 /// `entries`, and a key is unique by invariant, so scan and probe find the
 /// same slot. The index materializes once the table would exceed this
 /// bound and only goes away again through `build` (compaction).
-// WP-59 Ob.3 asse 2: binario diagnostico `scan4` per l'attribuzione della
-// regressione full-only (il pool-off ne ha spiegato ~0,6% su +1..+2,5%).
+// Diagnostic `scan4` binary for attributing the full-only regression
+// (pool-off explained ~0.6% of the +1..+2.5%).
 const SCAN_MAX: usize = if cfg!(feature = "scan4") { 4 } else { 8 };
 
 /// Murmur3 fmix64: spreads the (cached) key hash over all bits so the
@@ -505,16 +504,15 @@ impl Drop for PhpArray {
     fn drop(&mut self) {
         #[cfg(feature = "mem-census")]
         crate::memcensus::free(crate::memcensus::CH_ARR, self.accounted.get());
-        // L-RD1 (S-141, criterio s141-criterio-rd1.md): teardown INLINE degli
-        // elementi. La glue pagava una call outlined per OGNI elemento
-        // (`drop_in_place<Option<Zval>>`), scalari inclusi; il drain manuale
-        // col match esaustivo fa svanire gli scalari senza call e raggiunge il
-        // dec dell'Rc inline per i portatori. ORDINE INVARIATO rispetto alla
-        // glue (avanti; Key prima del valore); PROFONDITÀ di ricorsione
-        // INVARIATA (drop_bounded governa Props/Captures, non gli array).
-        // `set_len(0)` PRIMA del drain: su panic al peggio LEAK, mai
-        // double-free. I Vec svuotati e il KeyIndex liberano i buffer dalla
-        // glue di coda come prima.
+        // INLINE teardown of the elements. The drop glue paid an outlined
+        // call for EVERY element (`drop_in_place<Option<Zval>>`), scalars
+        // included; the manual drain with the exhaustive match makes scalars
+        // vanish without a call and reaches the inline Rc dec for the
+        // carriers. ORDER UNCHANGED vs the glue (forward; Key before value);
+        // recursion DEPTH UNCHANGED (drop_bounded governs Props/Captures,
+        // not arrays). `set_len(0)` BEFORE the drain: on panic at worst a
+        // LEAK, never a double-free. The emptied Vecs and the KeyIndex free
+        // their buffers from the trailing glue as before.
         match &mut self.repr {
             Repr::Packed(slots) => unsafe {
                 let len = slots.len();
@@ -554,8 +552,8 @@ impl Drop for PhpArray {
     }
 }
 
-/// L-RD1: drop di UN valore col dispatch inline sulla variante — match
-/// ESAUSTIVO (disciplina S-96: una variante nuova di `Zval` NON compila qui).
+/// Drop of ONE value with inline dispatch on the variant — EXHAUSTIVE match
+/// (a new `Zval` variant does NOT compile here).
 #[inline(always)]
 fn rd1_drop_val(v: Zval) {
     match v {
@@ -595,8 +593,8 @@ impl PhpArray {
     #[inline]
     pub(crate) fn census_sync(&self) {
         let cb = self.census_bytes();
-        // S-143: prima transizione corpo 0→>0 = creazione del buffer (evento
-        // raw dell'allocatore attribuibile ad arr).
+        // First body 0→>0 transition = creation of the buffer (raw allocator
+        // event attributable to arr).
         if self.accounted.get() <= crate::memcensus::ARR_OVERHEAD
             && cb > crate::memcensus::ARR_OVERHEAD
         {
@@ -684,7 +682,7 @@ impl PhpArray {
     /// Convert a packed array to the hashed representation. Slot positions
     /// (and therefore the cursor) and tombstones are preserved exactly.
     fn to_hashed(&mut self) {
-        // S-148 (census): interni container (hashbrown/Vec) nel tag `arrgrow`.
+        // Census: container internals (hashbrown/Vec) under the `arrgrow` tag.
         #[cfg(feature = "mem-census")]
         let _s148 = crate::memcensus::s148_scope(crate::memcensus::S148_ARRGROW);
         let Repr::Packed(slots) = &mut self.repr else {
@@ -834,7 +832,7 @@ impl PhpArray {
     /// vivify-Null-then-overwrite, which would mis-flag scalar-only arrays
     /// and feed a spurious Null to gc_note) and returns `None`.
     pub fn set_returning_displaced(&mut self, key: Key, val: Zval) -> LeafWrite {
-        // S-148 (census): interni container (hashbrown/Vec) nel tag `arrgrow`.
+        // Census: container internals (hashbrown/Vec) under the `arrgrow` tag.
         #[cfg(feature = "mem-census")]
         let _s148 = crate::memcensus::s148_scope(crate::memcensus::S148_ARRGROW);
         #[cfg(feature = "mem-census")]
@@ -904,7 +902,7 @@ impl PhpArray {
     /// Fails only when that slot is occupied (possible after saturation at
     /// i64::MAX), matching Zend's "next element is already occupied" error.
     pub fn append(&mut self, val: Zval) -> Result<(), ArrayAppendError> {
-        // S-148 (census): interni container (hashbrown/Vec) nel tag `arrgrow`.
+        // Census: container internals (hashbrown/Vec) under the `arrgrow` tag.
         #[cfg(feature = "mem-census")]
         let _s148 = crate::memcensus::s148_scope(crate::memcensus::S148_ARRGROW);
         #[cfg(feature = "mem-census")]
@@ -922,7 +920,7 @@ impl PhpArray {
     /// reference cell. `None` when that slot is occupied (saturation), matching
     /// [`Self::append`].
     pub fn append_default(&mut self) -> Option<&mut Zval> {
-        // S-148 (census): interni container (hashbrown/Vec) nel tag `arrgrow`.
+        // Census: container internals (hashbrown/Vec) under the `arrgrow` tag.
         #[cfg(feature = "mem-census")]
         let _s148 = crate::memcensus::s148_scope(crate::memcensus::S148_ARRGROW);
         #[cfg(feature = "mem-census")]
@@ -1634,7 +1632,7 @@ mod tests {
         }
     }
 
-    /// WP-58 leva C: hashed arrays within SCAN_MAX slots carry no index
+    /// WP-58 lever C: hashed arrays within SCAN_MAX slots carry no index
     /// allocation; the index materializes exactly when the 9th slot
     /// arrives, and correctness holds across the boundary, removals, and
     /// compaction back under the bound.

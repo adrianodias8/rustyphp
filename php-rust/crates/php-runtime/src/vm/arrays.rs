@@ -1,15 +1,15 @@
 //! VM arrays logic, extracted from vm/mod.rs (no semantic change).
 use super::*;
 
-/// S-138 «FD1-ext RMW»: argomento dell'op per `field_rmw_fast` — il binop
-/// tiene il rhs in prestito (sul MISS resta al chiamante per il pieno).
+/// Op argument for `field_rmw_fast` — the binop borrows the rhs (on a MISS it
+/// stays with the caller for the full path).
 pub(super) enum RmwArg<'a> {
     Bin(crate::hir::BinOp, &'a Zval),
     IncDec { inc: bool, pre: bool },
 }
 
-/// Esito di `field_rmw_fast`: `Hit(v)` = scritto, `v` da pushare;
-/// `Miss(keys)` = cammino pieno INVARIATO con le keys restituite.
+/// Outcome of `field_rmw_fast`: `Hit(v)` = written, `v` to push;
+/// `Miss(keys)` = UNCHANGED full path with the keys handed back.
 pub(super) enum RmwFastOut {
     Hit(Zval),
     Miss(Vec<Zval>),
@@ -886,12 +886,12 @@ fn field_unset_prop_step(
 /// Read a local cell's value, following a reference and mapping an unset slot to
 /// NULL.
 pub(super) fn read_slot(cell: &Zval) -> Zval {
-    // S-95.0 A-ZV1: qui si MATERIALIZZA un valore che nello slot resta vivo.
-    // Per le varianti che portano un `Rc` è refcount++ e, quando la copia muore
-    // subito dopo (il caso caldo: operando di un'operazione binaria),
-    // refcount--: lavoro netto zero pagato a ogni esecuzione. Il contatore
-    // misura il MECCANISMO prima dell'orologio ed è compilato via fuori dalle
-    // build di strumentazione.
+    // Here a value that stays alive in the slot is MATERIALIZED. For the
+    // variants carrying an `Rc` that is a refcount++ and, when the copy dies
+    // right after (the hot case: operand of a binary operation), a
+    // refcount--: zero net work paid on every execution. The counter measures
+    // the MECHANISM before the clock and is compiled out outside the
+    // instrumentation builds.
     #[cfg(feature = "zval-census")]
     super::zvalcensus::note_slot_read(super::zvalcensus::zval_holds_rc(cell));
     match cell {
@@ -1470,18 +1470,18 @@ impl<'m> Vm<'m> {
         self.field_set_mode(base, top, steps, keys, value, false, false)
     }
 
-    /// S-136 «FD1 fast-path dim-write» (criterio s136-criterio-dimwrite.md
-    /// p.1): `$o->prop[k] = v` con IC hit — salta walk-driver, resolve e
-    /// guardie i cui fatti di classe sono PROVATI al fill (slot dichiarato
-    /// key==name, non readonly, asym-write ok per lo scope cachato, classe
-    /// senza prop-hooks dal ramo F4). Perimetro: `steps == [Prop, Index]`,
-    /// base oggetto plain (no lazy/proxy/enum, borrow libero) e slot child
-    /// GIÀ `Zval::Array` (peek). Il passo Index è `field_write_walk`
-    /// RIUSATO (stesso codice del pieno: ensure/make_mut/coerce/set) con la
-    /// replica letterale del driver-loop di `field_write` per i boundary
-    /// token; gc_note/drain_aa nell'ordine di `field_set_mode`.
-    /// `Ok(None)` = scritto; `Ok(Some((keys, value)))` = MISS, restituiti
-    /// al cammino pieno INVARIATO.
+    /// Fast-path dim-write: `$o->prop[k] = v` with an IC hit — skips the
+    /// walk-driver, the resolve and the guards whose class facts are PROVEN
+    /// at fill time (declared slot with key==name, not readonly, asym-write
+    /// ok for the cached scope, class without prop-hooks from the F4 arm).
+    /// Perimeter: `steps == [Prop, Index]`, plain object base (no
+    /// lazy/proxy/enum, free borrow) and child slot ALREADY `Zval::Array`
+    /// (peek). The Index step is `field_write_walk` REUSED (same code as the
+    /// full path: ensure/make_mut/coerce/set) with a literal replica of the
+    /// `field_write` driver loop for the boundary tokens; gc_note/drain_aa in
+    /// the order of `field_set_mode`. `Ok(None)` = written;
+    /// `Ok(Some((keys, value)))` = MISS, handed back to the UNCHANGED full
+    /// path.
     pub(super) fn field_assign_fast(
         &mut self,
         base: FieldBase,
@@ -1515,8 +1515,8 @@ impl<'m> Vm<'m> {
         let Some(Zval::Object(o)) = cell else { return Ok(Some((keys, value))) };
         let o = Rc::clone(o);
         let Ok(mut obj) = o.try_borrow_mut() else {
-            // Base mid-write su questo stesso statement: il pieno ha la sua
-            // rotta contata (cell_skip) — qui si cade al pieno che la esegue.
+            // Base mid-write on this same statement: the full path has its own
+            // counted route (cell_skip) — fall back to the full path that runs it.
             return Ok(Some((keys, value)));
         };
         if obj.class_id as u32 + 1 != cid1
@@ -1546,8 +1546,8 @@ impl<'m> Vm<'m> {
             )
         };
         drop(obj);
-        // Replica letterale del loop di `field_write` (boundary token dopo il
-        // rilascio del borrow, discipline M-71.1 invariata).
+        // Literal replica of the `field_write` loop (boundary token after the
+        // borrow is released, same discipline as the full path).
         let mut werr = None;
         let mut walk = match walk0 {
             Ok(w) => w,
@@ -1601,21 +1601,21 @@ impl<'m> Vm<'m> {
         Ok(None)
     }
 
-    /// S-138 «FD1-ext RMW» (criterio s138-criterio-rmw.md): fast path a
-    /// IC-hit per `$o->prop[k] op= rhs` e `$o->prop[k]++/--`. Il pieno paga
-    /// DUE walk (read `field_value` + write `field_set_op`) più il preludio
-    /// byref/indirect/lazy; qui: admission IDENTICA a `field_assign_fast`
-    /// (stessa cella NP, stessi fatti provati al fill) + peek dell'entry +
-    /// op SILENTE per perimetro + `field_write_walk` RIUSATO sul child
-    /// (leaf identico per costruzione, disciplina S-136).
-    /// PERIMETRO (tutto il resto → `Miss`, pieno INVARIATO): 1 chiave
-    /// {Long, Str} con coercizione silente ≡ diag; entry PRESENTE (assente:
-    /// il pieno emette il suo warning); old (deref) {Long, Double};
-    /// AssignOp solo {Add, Sub, Mul} con rhs {Long, Double}; IncDec con old
-    /// {Long, Double} (string-increment deprecato resta al pieno). Gli op
-    /// ammessi sono puri e senza diagnostica: nessun codice utente gira tra
-    /// peek e write-back e il borrow dell'oggetto resta VIVO per l'intera
-    /// finestra (lo stato non può cambiare sotto i piedi).
+    /// RMW fast path at IC-hit for `$o->prop[k] op= rhs` and
+    /// `$o->prop[k]++/--`. The full path pays TWO walks (read `field_value`
+    /// + write `field_set_op`) plus the byref/indirect/lazy prelude; here:
+    /// admission IDENTICAL to `field_assign_fast` (same NP cell, same facts
+    /// proven at fill) + peek of the entry + op SILENT by perimeter +
+    /// `field_write_walk` REUSED on the child (identical leaf by
+    /// construction, same discipline as the dim-write fast path).
+    /// PERIMETER (everything else → `Miss`, full path UNCHANGED): 1 key
+    /// {Long, Str} whose silent coercion ≡ the diagnosed one; entry PRESENT
+    /// (absent: the full path emits its warning); old (deref) {Long,
+    /// Double}; AssignOp only {Add, Sub, Mul} with rhs {Long, Double};
+    /// IncDec with old {Long, Double} (the deprecated string-increment stays
+    /// on the full path). The admitted ops are pure and diagnostic-free: no
+    /// user code runs between peek and write-back and the object borrow
+    /// stays ALIVE for the whole window (the state cannot change underfoot).
     pub(super) fn field_rmw_fast(
         &mut self,
         base: FieldBase,
@@ -1675,8 +1675,8 @@ impl<'m> Vm<'m> {
         let Some(Zval::Object(o)) = cell else { return Ok(RmwFastOut::Miss(keys)) };
         let o = Rc::clone(o);
         let Ok(mut obj) = o.try_borrow_mut() else {
-            // Base mid-write: come in field_assign_fast, la rotta contata
-            // (cell_skip) appartiene al pieno.
+            // Base mid-write: as in field_assign_fast, the counted route
+            // (cell_skip) belongs to the full path.
             return Ok(RmwFastOut::Miss(keys));
         };
         if obj.class_id as u32 + 1 != cid1
@@ -1718,7 +1718,7 @@ impl<'m> Vm<'m> {
                 return Ok(RmwFastOut::Miss(keys));
             };
             let Some(entry) = a.get(&k) else {
-                // Chiave assente: il warning "Undefined array key" è del pieno.
+                // Absent key: the "Undefined array key" warning belongs to the full path.
                 drop(obj);
                 return Ok(RmwFastOut::Miss(keys));
             };
@@ -1728,8 +1728,8 @@ impl<'m> Vm<'m> {
             drop(obj);
             return Ok(RmwFastOut::Miss(keys));
         }
-        // Op silente per perimetro: nessuna diagnostica, nessun codice utente
-        // (il borrow di `obj` resta vivo: `o` è un Rc locale, non `self`).
+        // Op silent by perimeter: no diagnostics, no user code (the `obj`
+        // borrow stays alive: `o` is a local Rc, not `self`).
         let (result, push) = match rmw {
             RmwArg::Bin(op, rhs) => {
                 let r = self.apply_binop_ovl(op, &old, rhs)?;
@@ -1752,7 +1752,7 @@ impl<'m> Vm<'m> {
         let mut keys_it;
         let walk0 = {
             let Some(child) = obj.props.get_slot_mut(si) else {
-                // Irraggiungibile (borrow tenuto): il pieno resta corretto.
+                // Unreachable (borrow held): the full path stays correct.
                 drop(obj);
                 return Ok(RmwFastOut::Miss(keys));
             };
@@ -1763,8 +1763,8 @@ impl<'m> Vm<'m> {
             )
         };
         drop(obj);
-        // Replica letterale del loop di `field_write` (boundary token dopo il
-        // rilascio del borrow, discipline M-71.1 invariata).
+        // Literal replica of the `field_write` loop (boundary token after the
+        // borrow is released, same discipline as the full path).
         let mut werr = None;
         let mut walk = match walk0 {
             Ok(w) => w,
@@ -1818,12 +1818,12 @@ impl<'m> Vm<'m> {
         Ok(RmwFastOut::Hit(push))
     }
 
-    /// Fill della cella FD1 (criterio p.2) — chiamato SOLO dal ramo F4 del
-    /// cammino pieno a esito Ok (classe senza prop-hooks già provata dal
-    /// prelude-skip). Cachea (classe, scope) → slot|NP se e solo se: la
-    /// resolve stampa uno Slot con `key == name` e slot-index, la prop NON è
-    /// readonly e l'asym-write passa per QUESTO scope — i due fatti che il
-    /// container-guard (`prop_indirect_guard`) fa rispettare sul pieno.
+    /// Fill of the dim-write IC cell — called ONLY from the F4 arm of the
+    /// full path on an Ok outcome (class without prop-hooks already proven by
+    /// the prelude-skip). Caches (class, scope) → slot|NP if and only if: the
+    /// resolve yields a Slot with `key == name` and a slot-index, the prop is
+    /// NOT readonly and the asym-write passes for THIS scope — the two facts
+    /// the container-guard (`prop_indirect_guard`) enforces on the full path.
     pub(super) fn field_assign_fill(
         &self,
         base: FieldBase,

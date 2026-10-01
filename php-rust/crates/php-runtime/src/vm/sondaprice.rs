@@ -1,13 +1,12 @@
-//! S-145 sonda-B, lato PREZZI (modello wp145-harness/s145-sonda-b-modello.md,
-//! regola madre s144-criterio-B.md p.2–3): loop di prezzo per-movimento
-//! dentro il binario `--features sonda-price`. La feature gate SOLO questo
-//! modulo e il suo braccio di dispatch: nessun contatore census è attivo,
-//! quindi i cammini clone/drop/gc_note prezzati sono la forma di parità.
-//! Ogni iterazione dei segmenti mv_* è una COPPIA clone+drop (il drop del
-//! clone chiude l'iterazione): il segmento prezza il ciclo di vita di UN
-//! movimento. Tutti i contrasti (seg−cal, seg_classe−seg_scalar) vivono in
-//! QUESTO binario. MAI una cifra verdict-grade da una build col builtin ma
-//! con una census accesa.
+//! Price probe (the "cost" side of the value-movement probe): per-movement
+//! timing loops inside the `--features sonda-price` binary. The feature gates
+//! ONLY this module and its dispatch arm: no census counter is active, so the
+//! clone/drop/gc_note paths being priced are the parity form. Every iteration
+//! of the mv_* segments is a clone+drop PAIR (dropping the clone closes the
+//! iteration): the segment prices the lifecycle of ONE movement. All the
+//! contrasts (seg−cal, seg_class−seg_scalar) live in THIS binary. NEVER take
+//! a verdict-grade figure from a build that has the builtin but also a census
+//! switched on.
 
 use super::*;
 
@@ -23,11 +22,11 @@ fn bench(n: u64, mut f: impl FnMut(u64)) -> f64 {
 }
 
 impl<'m> Vm<'m> {
-    /// `__phpr_sonda_b($str, $arr, $obj)` (builtin nascosto, solo probe):
-    /// scrive i prezzi grezzi (cal NON sottratto: la sottrazione è del
-    /// parser, così il raw resta auditabile) sul file `PHPR_SONDA_OUT`.
-    /// Ritorna `true` se ha scritto tutte le chiavi, `false` su argomenti
-    /// della specie sbagliata (lo smoke pretende `true` + chiavi presenti).
+    /// `__phpr_sonda_b($str, $arr, $obj)` (hidden builtin, probe only):
+    /// writes the raw prices (cal NOT subtracted: the subtraction belongs to
+    /// the parser, so the raw stays auditable) to the file `PHPR_SONDA_OUT`.
+    /// Returns `true` if it wrote every key, `false` on arguments of the
+    /// wrong kind (the smoke test expects `true` + the keys present).
     pub(super) fn ho_sonda_b(&mut self, args: Vec<Zval>) -> Result<Zval, PhpError> {
         use std::io::Write;
         let mut it = args.into_iter();
@@ -77,10 +76,10 @@ impl<'m> Vm<'m> {
                 self.gc_note(std::hint::black_box(&v));
             })
         };
-        // Una nota fuori misura bufferizza l'oggetto: il loop prezza il
-        // braccio REPEAT (borrow + flag, early-out), quello che i conteggi
-        // gcnote_cont pagano in stragrande maggioranza (il sovrapprezzo
-        // first-note resta NON prezzato, dichiarato nel modello).
+        // One note outside the measurement buffers the object: the loop then
+        // prices the REPEAT arm (borrow + flag, early-out), which is what the
+        // vast majority of gcnote_cont counts pay (the first-note surcharge
+        // stays UNpriced, by design).
         self.gc_note(&vobj);
         let note_cont_repeat = bench(N_MV, |_| {
             self.gc_note(std::hint::black_box(&vobj));
@@ -93,10 +92,10 @@ impl<'m> Vm<'m> {
             let b = Rc::new(php_types::PhpArray::new());
             std::hint::black_box(&b);
         });
-        // S-149 p.2 (sonda-prezzo pair, wp149-harness/s149-criterio-pair.md):
-        // coppia malloc+free alla TAGLIA del churn reale della testa hostcall
-        // (shape s148: ≤16 B 98,8M · ≤48 B 107,9M) via Vec::with_capacity
-        // esatta; il drop a fine iterazione chiude la coppia.
+        // Allocation-pair prices: malloc+free pairs at the SIZE of the real
+        // hostcall-head churn (measured shape: ≤16 B 98.8M · ≤48 B 107.9M)
+        // via an exact Vec::with_capacity; the drop at the end of the
+        // iteration closes the pair.
         let pair16 = bench(N_PAIR, |_| {
             let v: Vec<Zval> = Vec::with_capacity(1);
             std::hint::black_box(&v);
@@ -109,10 +108,10 @@ impl<'m> Vm<'m> {
             let v: Vec<Zval> = Vec::with_capacity(3);
             std::hint::black_box(&v);
         });
-        // Pattern pop_keys ESATTO (run.rs): push×3 sullo stack sorgente poi
-        // `split_off` NON in testa (un elemento di fondo tiene at=1: il ramo
-        // at==0 di std fa mem::replace e NON riprodurrebbe la coppia) =
-        // malloc(48)+memcpy(3×Zval)+drop-glue+free per iterazione.
+        // EXACT pop_keys pattern (run.rs): push×3 onto the source stack, then
+        // `split_off` NOT at the head (one bottom element keeps at=1: std's
+        // at==0 branch does mem::replace and would NOT reproduce the pair) =
+        // malloc(48)+memcpy(3×Zval)+drop-glue+free per iteration.
         let splitoff3 = {
             let mut src: Vec<Zval> = Vec::with_capacity(8);
             src.push(Zval::Long(0));
@@ -125,12 +124,12 @@ impl<'m> Vm<'m> {
             })
         };
 
-        // S-152 p.1 (sonde-prezzo canali, wp152-harness/s152-criterio-sonde.md):
-        // prezzi CORRENTI dei canali census C1/C2/C3 sull'handle Object REALE
-        // + prezzi del SOSTITUTIVO mock store-indicizzato (forma A3 ratificata:
-        // bucket+free-list, incref sullo slot, gen-check). Il mock è su slot
-        // CALDO = lower bound OTTIMISTICO del sostitutivo, DICHIARATO nel
-        // criterio (§2/§6): niente modello cache/working-set qui.
+        // Channel prices: CURRENT prices of the census channels C1/C2/C3 on
+        // the REAL Object handle + prices of the store-indexed mock
+        // REPLACEMENT (the ratified form: bucket+free-list, incref on the
+        // slot, gen-check). The mock runs on a HOT slot = an OPTIMISTIC lower
+        // bound for the replacement, by design: no cache/working-set model
+        // here.
         let Zval::Object(orc) = &vobj else {
             return Ok(Zval::Bool(false));
         };
@@ -146,10 +145,10 @@ impl<'m> Vm<'m> {
             let g = std::hint::black_box(orc).borrow_mut();
             std::hint::black_box(&*g);
         });
-        // C3: coppia malloc+free alla taglia della cella condivisa
-        // RefCell<Object> (il payload dell'Rc). Header Rc (2×usize) NON
-        // incluso: proxy per DIFETTO dichiarato; init campi/props INVARIANTI
-        // tra i mondi, fuori dal netto per costruzione.
+        // C3: malloc+free pair at the size of the shared RefCell<Object>
+        // cell (the Rc payload). The Rc header (2×usize) is NOT included: a
+        // deliberate UNDER-estimating proxy; field/prop init is INVARIANT
+        // across both worlds, outside the net by construction.
         let obj_size = std::mem::size_of::<RefCell<Object>>();
         let c3_size_pair = bench(N_PAIR, |_| {
             let v: Vec<u8> = Vec::with_capacity(std::hint::black_box(obj_size));
@@ -177,9 +176,9 @@ impl<'m> Vm<'m> {
             std::hint::black_box(&s.rc);
             s.rc.set(s.rc.get() - 1);
         });
-        // Drop sostitutivo (coda decrementi, Matsakis): push dell'id sulla
-        // coda riusata; il clear ammortizzato resta DENTRO la misura. Il
-        // decref applicato al drenaggio è già prezzato da mock_dup_rel.
+        // Replacement drop (decrement queue, Matsakis): push the id onto the
+        // reused queue; the amortized clear stays INSIDE the measurement. The
+        // decref applied on drain is already priced by mock_dup_rel.
         let mock_decq = {
             let mut q: Vec<u32> = Vec::with_capacity(1024);
             bench(N_MV, |i| {
@@ -189,8 +188,8 @@ impl<'m> Vm<'m> {
                 }
             })
         };
-        // Alloc sostitutivo di C3: pop free-list + gen-bump + push di ritorno
-        // (slot riusato, NESSUN malloc sul cammino).
+        // Replacement alloc for C3: free-list pop + gen-bump + push back
+        // (reused slot, NO malloc on the path).
         let (mock_alloc, miheap_pair) = {
             let mut free_ids: Vec<u32> = (0..1024).collect();
             let mut store2: Vec<(u32, [u64; 4])> = vec![(0, [0; 4]); 1024];
@@ -201,9 +200,10 @@ impl<'m> Vm<'m> {
                 std::hint::black_box(&slot.1);
                 free_ids.push(id);
             });
-            // Braccio mi_heap (Leijen R2): coppia alloc+free a taglia Object
-            // su heap mimalloc DEDICATO (il per-richiesta di A3); new/destroy
-            // dell'heap fuori misura = ammortizzati sul blocco, dichiarato.
+            // mi_heap arm (Leijen R2): alloc+free pair at Object size on a
+            // DEDICATED mimalloc heap (the per-request heap of the
+            // replacement design); heap new/destroy are outside the
+            // measurement = amortized over the block, by design.
             let mh = unsafe {
                 let heap = libmimalloc_sys::mi_heap_new();
                 let v = bench(N_PAIR, |_| {

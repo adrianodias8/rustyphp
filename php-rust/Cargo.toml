@@ -31,19 +31,18 @@ mimalloc = "0.1"
 # class/function/constant tables): stands in for Zend's precomputed
 # zend_string hashes. NOT used by Vm::unit_fp (own DefaultHasher).
 rustc-hash = "2"
-# Compile-time (only) thread-safety invariants: RetainSet must stay !Send+!Sync
-# (A-MS3, Council WP-78); removing an assert requires a Council deliberation
-# (KS-MS-1), never an in-session edit.
+# Compile-time (only) thread-safety invariants: RetainSet must stay !Send+!Sync;
+# removing an assert is a deliberate, reviewed decision, never a casual edit.
 static_assertions = "1.1"
 
-# A' stage-1 pipeline (S-117, council mandate wp117-harness/COUNCIL_WP117_REVIEWS.md):
-# fat LTO + single codegen unit — the 16 default CGUs are themselves a source of
-# the layout lottery the null-lever bands measured (up to 10 ns/iter).
+# Release pipeline: fat LTO + single codegen unit — the 16 default CGUs are
+# themselves a source of the layout lottery the null-lever bands measured
+# (up to 10 ns/iter).
 [profile.release]
 lto = "fat"
 codegen-units = 1
 
-# Development profile (S-182, user decision 2026-09-29): inherits release but
+# Development profile: inherits release but
 # keeps the incremental cache alive (fat LTO + 1 CGU disable it). Output goes to
 # target/dev-release/ and is NEVER a pin, a measurement arm or a CI artifact:
 # the pin recipe stays `cargo build --release` above, byte for byte.

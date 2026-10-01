@@ -1,50 +1,49 @@
-//! S-95.0 A-ZV2 fase F1 — analisi di ULTIMO USO per slot, in SOLA MISURA
-//! (`wp95-harness/design95-liveness.md`).
+//! Phase F1 — per-slot LAST-USE analysis, MEASUREMENT ONLY.
 //!
-//! Risponde a una sola domanda, per ogni `LoadSlot`/`LoadVar` di ogni funzione
-//! compilata: *dopo questa lettura, esiste un cammino che rilegge lo slot prima
-//! che venga riscritto?* Se no, la lettura è un ultimo uso e il valore si
-//! POTREBBE spostare (`TakeSlot`) invece di clonarlo. Qui non si sposta nulla:
-//! il risultato alimenta solo i contatori `would_take*` di [`super::zvalcensus`].
+//! Answers a single question for every `LoadSlot`/`LoadVar` of every compiled
+//! function: *after this read, is there a path that reads the slot again before
+//! it is overwritten?* If not, the read is a last use and the value COULD be
+//! moved (`TakeSlot`) instead of cloned. Nothing is moved here: the result
+//! only feeds the `would_take*` counters of [`super::zvalcensus`].
 //!
-//! PERIMETRO F1 (voluto, non dimenticato — design95-liveness.md): questa è
-//! l'analisi dataflow NUDA. I modi in cui PHP osserva uno slot fuori dal
-//! flusso lineare — `compact()`/`extract()`/`get_defined_vars()`, `$$x`,
-//! `eval`/`include`, closure by-ref, generatori, `Zval::Ref` condivisi,
-//! l'ordine dei distruttori — sono i predicati di RINUNCIA della fase F2:
-//! la differenza fra il conteggio F1 e quello F2 è «quanto costa la prudenza».
+//! F1 SCOPE (intentional, not an oversight): this is the BARE dataflow
+//! analysis. The ways PHP observes a slot outside the linear flow —
+//! `compact()`/`extract()`/`get_defined_vars()`, `$$x`, `eval`/`include`,
+//! by-ref closures, generators, shared `Zval::Ref`s, destructor order — are
+//! the phase-F2 RENOUNCE predicates: the difference between the F1 and F2
+//! counts is "what caution costs".
 //!
-//! Direzione degli errori di modello (documentata perché è una scelta):
-//! - una SCRITTURA non modellata (es. `extract`, `StoreVarDyn`) rende vivo ciò
-//!   che è morto → SOTTOconta i movibili (conservativo, accettato);
-//! - una LETTURA non modellata sovraconta: le uniche letture fuori modello
-//!   sono esattamente quelle del perimetro F2 (per nome, qui sopra);
-//! - gli op `*Global(s)` toccano gli slot di `frames[0]`: contarli come USO
-//!   dello slot locale `s` è corretto nel main e spurio (ma sottocontante,
-//!   quindi innocuo) dentro una funzione.
+//! Direction of model errors (documented because it is a choice):
+//! - an unmodelled WRITE (e.g. `extract`, `StoreVarDyn`) makes something dead
+//!   look live → UNDER-counts movable reads (conservative, accepted);
+//! - an unmodelled READ over-counts: the only reads outside the model are
+//!   exactly those of the F2 scope (listed by name above);
+//! - `*Global(s)` ops touch the slots of `frames[0]`: counting them as a USE
+//!   of local slot `s` is correct in main and spurious (but under-counting,
+//!   hence harmless) inside a function.
 //!
-//! Convenzione identica a `zvalcensus`: compilato SOLO dietro `zval-census`,
-//! nessun bit del binario di parità cambia.
+//! Same convention as `zvalcensus`: compiled ONLY behind `zval-census`, so
+//! not a single bit of the parity binary changes.
 
 use crate::bytecode::{DimBase, FieldBase, Func, Op};
 
-/// Esito dell'analisi su una funzione: `movable[i]` è vero sse `ops[i]` è un
-/// `LoadSlot`/`LoadVar` la cui lettura è un ultimo uso (F1, senza rinunce F2);
-/// `movable_safe[i]` applica in più il PERIMETRO CONSERVATIVO F2.
+/// Result of the analysis of one function: `movable[i]` is true iff `ops[i]` is
+/// a `LoadSlot`/`LoadVar` whose read is a last use (F1, no F2 renounces);
+/// `movable_safe[i]` additionally applies the CONSERVATIVE F2 scope.
 pub struct Analysis {
     pub movable: Vec<bool>,
-    /// F2: movibile E fuori da ogni predicato di rinuncia (vedi [`renounce`]).
+    /// F2: movable AND outside every renounce predicate (see [`renounce`]).
     pub movable_safe: Vec<bool>,
-    /// Siti statici `LoadSlot`/`LoadVar` totali nella funzione.
+    /// Total static `LoadSlot`/`LoadVar` sites in the function.
     pub sites_total: u64,
-    /// Quanti di quei siti sono marcati movibili.
+    /// How many of those sites are marked movable.
     pub sites_movable: u64,
-    /// Quanti restano movibili sotto il perimetro F2.
+    /// How many stay movable under the F2 scope.
     pub sites_safe: u64,
 }
 
-/// Insieme di slot come bitset a parole. Le funzioni PHP hanno decine di slot,
-/// non migliaia: la semplicità batte la raffinatezza in una build di misura.
+/// Set of slots as a word bitset. PHP functions have tens of slots, not
+/// thousands: simplicity beats sophistication in a measurement build.
 #[derive(Clone, PartialEq)]
 struct Bits(Vec<u64>);
 
@@ -58,8 +57,8 @@ impl Bits {
     fn clear(&mut self, i: u32) {
         self.0[(i / 64) as usize] &= !(1 << (i % 64));
     }
-    /// Fuori intervallo = falso (i bitset F2 possono essere più stretti di
-    /// quelli dell'analisi: mai indicizzare nel vuoto in una build di misura).
+    /// Out of range = false (F2 bitsets may be narrower than the analysis
+    /// ones: never index out of bounds in a measurement build).
     fn get(&self, i: u32) -> bool {
         self.0.get((i / 64) as usize).is_some_and(|w| w & (1 << (i % 64)) != 0)
     }
@@ -75,18 +74,18 @@ impl Bits {
     }
 }
 
-/// Effetto di un op sul dataflow degli slot. `edges` sono i successori NON di
-/// fall-through; `fall` dice se `ip+1` è successore. Ogni edge porta il suo
-/// insieme di def PER-ARCO (es. `IterNext` definisce `value`/`key` solo sul
-/// ramo che entra nel corpo, non su quello di uscita).
+/// Effect of an op on the slot dataflow. `edges` are the NON-fall-through
+/// successors; `fall` says whether `ip+1` is a successor. Each edge carries its
+/// own PER-EDGE def set (e.g. `IterNext` defines `value`/`key` only on the
+/// branch that enters the body, not on the exit branch).
 struct Effect {
     uses: Vec<u32>,
     defs: Vec<u32>,
     uses_all: bool,
     fall: bool,
-    /// Def che valgono solo sull'arco di fall-through (IterNext/IterNextRef).
+    /// Defs that hold only on the fall-through edge (IterNext/IterNextRef).
     fall_defs: Vec<u32>,
-    /// (target, def-per-arco)
+    /// (target, per-edge defs)
     edges: Vec<(usize, Vec<u32>)>,
 }
 
@@ -104,9 +103,9 @@ fn field_base_use(b: &FieldBase, uses: &mut Vec<u32>) {
     }
 }
 
-/// Classifica `op`. `park_targets` sono TUTTI i bersagli di `ParkJump` della
-/// funzione: un `EndFinally` può riprendere uno qualunque di quei salti
-/// parcheggiati, quindi li riceve tutti come successori (conservativo).
+/// Classifies `op`. `park_targets` are ALL the `ParkJump` targets of the
+/// function: an `EndFinally` may resume any of those parked jumps, so it gets
+/// all of them as successors (conservative).
 fn effect(op: &Op, park_targets: &[usize]) -> Effect {
     let mut e = Effect {
         uses: Vec::new(),
@@ -117,12 +116,12 @@ fn effect(op: &Op, park_targets: &[usize]) -> Effect {
         edges: Vec::new(),
     };
     match op {
-        // ----- letture di slot (i due bersagli della leva + i lettori puri) -----
+        // ----- slot reads (the two optimization targets + the pure readers) -----
         Op::LoadSlot(s) => e.uses.push(*s),
         Op::LoadVar { slot, .. } => e.uses.push(*slot),
-        // Forme registro (WP-44 v3, riarmate S-97.1): leggono gli operandi
-        // per indice (uso) e le forme *Dst scrivono `dst` per intero (def,
-        // stessa classificazione di StoreSlot). Le CmpJmp* portano un arco.
+        // Register forms: they read their operands by index (use) and the
+        // *Dst forms overwrite `dst` entirely (def, same classification as
+        // StoreSlot). The CmpJmp* forms carry an edge.
         Op::BinarySS { l, r, .. } => {
             e.uses.push(*l as u32);
             e.uses.push(*r as u32);
@@ -138,18 +137,16 @@ fn effect(op: &Op, park_targets: &[usize]) -> Effect {
             e.defs.push(*dst as u32);
         }
         Op::BinaryDst { dst, .. } => e.defs.push(*dst as u32),
-        // S-107 lotto superistruzioni: letture per indice (uso), la coppia
-        // IncDec* è lettura+scrittura sullo stesso slot; IncDecSlotJmp è un
-        // Jump incondizionato (fall=false, arco verso addr).
+        // Superinstructions: reads by index (use); the IncDec* pair is a
+        // read+write of the same slot; IncDecSlotJmp is an unconditional
+        // Jump (fall=false, edge to addr).
         Op::BinarySCSC { la, lb, .. } => {
             e.uses.push(*la as u32);
             e.uses.push(*lb as u32);
         }
-        // S-106 H-A1 / S-108 lotto-2 — classificazione EMENDATA in S-108: la
-        // build zval-census non compilava da S-106 (BinarySTDst/BinaryTC/
-        // PropSetPop mai classificati qui — il dente A-TH-97-2 morde solo
-        // quando la feature viene compilata, e nessuna sessione l'ha ricompilata
-        // dopo H-A1). Dichiarato nel verbale lotto-2 (wp108-harness).
+        // Amended classification: the zval-census build had stopped compiling
+        // because BinarySTDst/BinaryTC/PropSetPop were never classified here
+        // (the exhaustiveness check only bites when the feature is compiled).
         Op::BinarySTDst { l, dst, .. } => {
             e.uses.push(*l as u32);
             e.defs.push(*dst as u32);
@@ -168,9 +165,9 @@ fn effect(op: &Op, park_targets: &[usize]) -> Effect {
         Op::PropGetSlot { slot, .. } | Op::StringifySlot { slot } => {
             e.uses.push(*slot as u32)
         }
-        // S-145 FR1: legge lo slot; il salto implicito `ip+3` non è
-        // esprimibile come edge assoluto qui (effect non vede il pc) —
-        // conservativo: uses_all, il tool non specula oltre (misura-only).
+        // Reads the slot; the implicit `ip+3` jump cannot be expressed as an
+        // absolute edge here (effect does not see the pc) — conservative:
+        // uses_all, the tool does not speculate further (measurement only).
         Op::PropDimGetConst { slot, .. } => {
             e.uses.push(*slot as u32);
             e.uses_all = true;
@@ -206,7 +203,7 @@ fn effect(op: &Op, park_targets: &[usize]) -> Effect {
             }
         }
 
-        // ----- scritture pure -----
+        // ----- pure writes -----
         Op::StoreSlot(s) => e.defs.push(*s),
         Op::StaticAlias { slot, .. } => e.defs.push(*slot),
         Op::CallHostBuiltinOut { out_slot, out_slot2, .. } => {
@@ -222,7 +219,7 @@ fn effect(op: &Op, park_targets: &[usize]) -> Effect {
             e.defs.extend(0..*n);
         }
 
-        // ----- lettura+scrittura sullo stesso slot -----
+        // ----- read+write on the same slot -----
         Op::ConcatAssignSlot(s) | Op::IncDecSlot { slot: s, .. } | Op::CoerceParam { slot: s, .. } => {
             e.uses.push(*s);
             e.defs.push(*s);
@@ -240,7 +237,7 @@ fn effect(op: &Op, park_targets: &[usize]) -> Effect {
             }
         }
 
-        // ----- alias fra due posti nominati -----
+        // ----- alias between two named places -----
         Op::BindRef { target, source } => {
             dim_base_use(source, &mut e.uses);
             match target {
@@ -250,8 +247,8 @@ fn effect(op: &Op, park_targets: &[usize]) -> Effect {
             }
         }
         Op::BindRefTo { base, steps } | Op::BindRefToChecked { base, steps } => {
-            // Base senza step: sovrascritta per intero (def). Con step: si
-            // naviga DENTRO il contenitore tenuto dallo slot (uso).
+            // Base with no steps: overwritten entirely (def). With steps: we
+            // navigate INSIDE the container held by the slot (use).
             if steps.is_empty() {
                 match base {
                     FieldBase::Local(t) => e.defs.push(*t),
@@ -263,7 +260,7 @@ fn effect(op: &Op, park_targets: &[usize]) -> Effect {
             }
         }
 
-        // ----- op che passano DENTRO il contenitore di uno slot (uso, mai def) -----
+        // ----- ops that go INSIDE the container of a slot (use, never def) -----
         Op::MakeRef { base, .. } | Op::PushArgPlace { base, .. } => field_base_use(base, &mut e.uses),
         Op::FieldAssign { base, .. }
         | Op::FieldAssignOp { base, .. }
@@ -287,15 +284,15 @@ fn effect(op: &Op, park_targets: &[usize]) -> Effect {
             }
         }
 
-        // ----- $GLOBALS per slot: nel main sono gli slot correnti (uso) -----
+        // ----- $GLOBALS by slot: in main they are the current slots (use) -----
         Op::LoadGlobal(s) | Op::IncDecGlobal { slot: s, .. } => e.uses.push(*s),
-        // La scrittura di un global NON deve uccidere lo slot locale omonimo
-        // dentro una funzione (sarebbe un sovraconteggio): uso, mai def.
+        // Writing a global must NOT kill the same-named local slot inside a
+        // function (that would be an over-count): use, never def.
         Op::StoreGlobal(s) => e.uses.push(*s),
-        // Nome dinamico / snapshot dell'intero scope: ogni slot è potenzialmente letto.
+        // Dynamic name / snapshot of the whole scope: every slot is potentially read.
         Op::LoadGlobals | Op::GlobalsDynAssign | Op::BindGlobalDyn => e.uses_all = true,
 
-        // ----- controllo di flusso -----
+        // ----- control flow -----
         Op::Jump(a) => {
             e.fall = false;
             e.edges.push((*a as usize, Vec::new()));
@@ -307,8 +304,8 @@ fn effect(op: &Op, park_targets: &[usize]) -> Effect {
         | Op::CmpJmp { addr: a, .. }
         | Op::CmpJmpConst { addr: a, .. }
         | Op::ParkJump(a) => {
-            // ParkJump di per sé cade oltre (il salto avverrà all'EndFinally),
-            // ma dare l'arco anche qui è solo conservativo.
+            // ParkJump by itself falls through (the jump happens at the
+            // EndFinally), but giving it the edge here too is only conservative.
             e.edges.push((*a as usize, Vec::new()));
         }
         Op::FillDefault { slot, skip } => {
@@ -325,14 +322,14 @@ fn effect(op: &Op, park_targets: &[usize]) -> Effect {
         }
         Op::StaticGuard { skip, .. } => e.edges.push((*skip as usize, Vec::new())),
         Op::CatchMatch { var, body, .. } => {
-            // `var` è definita solo sull'arco preso verso il corpo del catch.
+            // `var` is defined only on the edge taken into the catch body.
             let edge_defs: Vec<u32> = var.iter().copied().collect();
             e.edges.push((*body as usize, edge_defs));
         }
         Op::IterNext { value, key, end } | Op::IterNextRef { value, key, end } => {
-            // value/key sono definiti solo entrando nel corpo (fall-through);
-            // sull'arco di uscita lo slot conserva l'ultimo valore (il gotcha
-            // documentato di PHP), quindi lì NIENTE def.
+            // value/key are defined only when entering the body (fall-through);
+            // on the exit edge the slot keeps its last value (PHP's documented
+            // gotcha), so NO def there.
             e.fall_defs.push(*value);
             e.fall_defs.extend(key.iter().copied());
             e.edges.push((*end as usize, Vec::new()));
@@ -344,27 +341,26 @@ fn effect(op: &Op, park_targets: &[usize]) -> Effect {
             }
         }
 
-        // ----- terminatori -----
+        // ----- terminators -----
         Op::Ret | Op::Throw | Op::Rethrow | Op::Exit { .. } | Op::Fatal(_) => e.fall = false,
 
-        // ----- nessun effetto sugli slot PER INDICE, fall-through -----
-        // A-TH-97-2 / A-SK-97-2 (Concilio WP-97): l'elenco e' ESPLICITO e il
-        // match ESAUSTIVO. Il vecchio `_ => {}` era un buco di soundness a
-        // futura memoria: qualunque variante NUOVA di `Op` che leggesse o
-        // scrivesse uno slot sarebbe stata classificata «nessun effetto» in
-        // silenzio, e l'invariante di testata non era presidiata da nulla.
-        // Ora una variante nuova NON COMPILA finche' qualcuno non la
-        // classifica a mano — il decadimento silenzioso diventa rumoroso.
+        // ----- no effect on slots BY INDEX, fall-through -----
+        // The list is EXPLICIT and the match EXHAUSTIVE. The old `_ => {}`
+        // was a soundness hole waiting to happen: any NEW `Op` variant that
+        // read or wrote a slot would have been silently classified as "no
+        // effect", and the header invariant was guarded by nothing. Now a
+        // new variant does NOT COMPILE until someone classifies it by hand —
+        // silent decay becomes noisy.
         //
-        // Audit una-tantum dell'elenco di oggi (A-TH-97-2, richiesto):
-        // `CallBuiltinRefCell` NON porta uno slot — la cella by-ref sta sulla
-        // pila, prodotta da `MakeRef`, la cui base e' gia' marcata in
-        // `renounce()`; `NewAnonDeferred`/`DeclareDeferred` rileggono i
-        // locali del chiamante per NOME e non per indice, quindi la loro
-        // sede e' la rinuncia INTERA (A-SK-97-1); `Yield`/`YieldFrom`,
-        // `Eval`/`Include`, `LoadVarDyn`/`StoreVarDyn` sono qui perche' il
-        // loro effetto e' sull'intera funzione, non su uno slot nominato, e
-        // vive anch'esso in `renounce()`.
+        // One-off audit of today's list: `CallBuiltinRefCell` carries NO
+        // slot — the by-ref cell sits on the stack, produced by `MakeRef`,
+        // whose base is already marked in `renounce()`;
+        // `NewAnonDeferred`/`DeclareDeferred` re-read the caller's locals by
+        // NAME and not by index, so their home is the WHOLE-function
+        // renounce; `Yield`/`YieldFrom`, `Eval`/`Include`,
+        // `LoadVarDyn`/`StoreVarDyn` are here because their effect is on the
+        // whole function, not on a named slot, and also lives in
+        // `renounce()`.
         Op::Alloc { .. }
         | Op::AllocDynamic { .. }
         | Op::AllocStatic { .. }
@@ -373,11 +369,10 @@ fn effect(op: &Op, park_targets: &[usize]) -> Effect {
         | Op::ArrayInsert { .. }
         | Op::ArrayPush { .. }
         | Op::Binary { .. }
-        // S-101: `BinaryAdd` (S-100, H-B2) è la forma pura-pila di
-        // `Binary(Add)`: stessi effetti (nessuno slot per indice).
+        // `BinaryAdd` is the pure-stack form of `Binary(Add)`: same effects
+        // (no slot by index).
         | Op::BinaryAdd
-        // S-107/S-108: forme pure-pila (const inlined, nessuno slot per
-        // indice) — classificate nell'emendamento S-108 (vedi sopra).
+        // Pure-stack forms (const inlined, no slot by index).
         | Op::BinaryTC { .. }
         | Op::BinaryTCPropSetPop { .. }
         | Op::Call { .. }
@@ -404,7 +399,7 @@ fn effect(op: &Op, park_targets: &[usize]) -> Effect {
         | Op::ClosureStatic { .. }
         | Op::CoalesceFetchDim { .. }
         | Op::ConcatN { .. }
-        // S-109 F2: come ConcatN — solo pila, nessun effetto slot.
+        // Like ConcatN — stack only, no slot effect.
         | Op::ConcatNConst { .. }
         | Op::ConstFetch { .. }
         | Op::DeclareClass { .. }
@@ -498,13 +493,12 @@ fn effect(op: &Op, park_targets: &[usize]) -> Effect {
     e
 }
 
-/// Builtin che OSSERVANO lo scope del chiamante per nome: la loro presenza
-/// rinuncia all'intera funzione (design95-liveness.md, elenco F2).
+/// Builtins that OBSERVE the caller's scope by name: their presence renounces
+/// the whole function (the F2 list).
 fn observes_scope(name: &[u8]) -> bool {
-    // A-DS-97-5 / A-MS-97-5 (Concilio WP-97): `debug_zval_refcount` mancava
-    // pur essendo nell'elenco F2 di design95-liveness.md — osserva il
-    // refcount di un valore, che e' esattamente cio' che lo spostamento
-    // cambia. `debug_zval_dump` per la stessa ragione.
+    // `debug_zval_refcount` was missing even though it belongs to the F2
+    // list — it observes a value's refcount, which is exactly what moving
+    // changes. `debug_zval_dump` for the same reason.
     const NAMES: [&[u8]; 9] = [
         b"compact",
         b"extract",
@@ -519,16 +513,16 @@ fn observes_scope(name: &[u8]) -> bool {
     NAMES.iter().any(|n| name.eq_ignore_ascii_case(n))
 }
 
-/// F2 — il perimetro conservativo. Restituisce `(rinuncia_funzione,
-/// slot_rinunciati)`: la prima scatta sui modi in cui PHP vede TUTTI i locali
-/// fuori dal flusso (eval/include, `$$x`, `compact` & co., generatori — lo
-/// stato sopravvive alla sospensione); il secondo sui singoli slot che
-/// possono diventare CONDIVISI (`Zval::Ref`): `&$x`, `global $x`, `static $x`,
-/// closure `use (&$x)`, `foreach ... as &$v`, parametri by-ref — spostare un
-/// valore da uno slot condiviso sarebbe osservabile altrove.
+/// F2 — the conservative scope. Returns `(whole_function_renounced,
+/// renounced_slots)`: the first fires on the ways PHP sees ALL the locals
+/// outside the flow (eval/include, `$$x`, `compact` & co., generators — the
+/// state survives suspension); the second on the individual slots that can
+/// become SHARED (`Zval::Ref`): `&$x`, `global $x`, `static $x`, closure
+/// `use (&$x)`, `foreach ... as &$v`, by-ref parameters — moving a value out
+/// of a shared slot would be observable elsewhere.
 fn renounce(func: &Func) -> (bool, Bits) {
     let mut nbits = (func.n_slots + func.max_temps) as usize;
-    // Le stesse difese di larghezza di `analyze`.
+    // The same width defenses as `analyze`.
     for op in &func.ops {
         if let Op::LoadSlot(s) | Op::LoadVar { slot: s, .. } = op {
             nbits = nbits.max(*s as usize + 1);
@@ -552,13 +546,12 @@ fn renounce(func: &Func) -> (bool, Bits) {
             Op::LoadVarDyn | Op::StoreVarDyn | Op::BindGlobalDyn | Op::GlobalsDynAssign | Op::LoadGlobals => {
                 whole = true
             }
-            // A-SK-97-1 (Klabnik, Concilio WP-97 — buco di matrice): gli
-            // argomenti del costruttore di `NewAnonDeferred` si RI-VALUTANO
-            // «nel bridged scope del chiamante» (bytecode.rs §deferred): legge
-            // i locali per NOME a runtime, esattamente come `eval`, e cadeva
-            // nel wildcard di entrambe le funzioni. `DeclareDeferred` e' la
-            // stessa strada di ri-lowering: rinuncia per prudenza, non perche'
-            // sia provato che legga lo scope.
+            // The constructor arguments of `NewAnonDeferred` are RE-EVALUATED
+            // "in the caller's bridged scope" (bytecode.rs §deferred): it reads
+            // the locals by NAME at runtime, exactly like `eval`, and used to
+            // fall into the wildcard of both functions. `DeclareDeferred` is
+            // the same re-lowering route: renounced out of caution, not
+            // because it is proven to read the scope.
             Op::NewAnonDeferred { .. } | Op::DeclareDeferred { .. } => whole = true,
             Op::CallBuiltin { name, .. }
             | Op::CallBuiltinSpread { name, .. }
@@ -603,10 +596,10 @@ fn renounce(func: &Func) -> (bool, Bits) {
                     }
                 }
             }
-            // A-TH-97-2 / A-SK-97-2: esaustivo anche qui. Una variante nuova
-            // che rende CONDIVISO uno slot non deve poter entrare in silenzio
-            // dal wildcard — il perimetro conservativo e' proprio la cosa che
-            // non si accorge di essere diventata meno conservativa.
+            // Exhaustive here too. A new variant that makes a slot SHARED must
+            // not be able to slip in silently through the wildcard — the
+            // conservative scope is precisely the thing that would not notice
+            // it had become less conservative.
             Op::Alloc { .. }
             | Op::AllocDynamic { .. }
             | Op::AllocStatic { .. }
@@ -617,13 +610,13 @@ fn renounce(func: &Func) -> (bool, Bits) {
             | Op::AssignOpPath { .. }
             | Op::AssignPath { .. }
             | Op::Binary { .. }
-            // S-101: forma pura-pila di `Binary(Add)` (S-100, H-B2) — opera
-            // solo sulla pila, non rende CONDIVISO alcuno slot.
+            // Pure-stack form of `Binary(Add)` — operates only on the stack,
+            // makes no slot SHARED.
             | Op::BinaryAdd
-            // Forme registro (S-97.1): leggono per VALORE e scrivono per
-            // intero via il write-through di StoreSlot — nessuna delle
-            // sette rende uno slot CONDIVISO (il Ref-handling resta dentro
-            // il funnel generico, che non installa alias).
+            // Register forms: they read by VALUE and write whole via the
+            // StoreSlot write-through — none of the seven makes a slot SHARED
+            // (Ref-handling stays inside the generic funnel, which installs
+            // no alias).
             | Op::BinarySS { .. }
             | Op::BinarySSDst { .. }
             | Op::BinarySC { .. }
@@ -631,10 +624,8 @@ fn renounce(func: &Func) -> (bool, Bits) {
             | Op::BinaryDst { .. }
             | Op::CmpJmpSS { .. }
             | Op::CmpJmpSC { .. }
-            // S-106 H-A1 + lotti S-107/S-108 — classificazione EMENDATA in
-            // S-108 (stessa scoperta dell'effect() qui sopra: la build
-            // zval-census non compilava da S-106). Stessa ragione delle
-            // forme registro: helper condivisi, nessun alias installato.
+            // Later superinstruction batches — same reason as the register
+            // forms: shared helpers, no alias installed.
             | Op::BinarySTDst { .. }
             | Op::BinaryTC { .. }
             | Op::BinarySCSC { .. }
@@ -797,8 +788,8 @@ fn renounce(func: &Func) -> (bool, Bits) {
     (whole, slots)
 }
 
-/// Analizza una funzione compilata. Costo O(ops × slot-words × iterazioni):
-/// build di misura, la semplicità è un pregio.
+/// Analyzes one compiled function. Cost O(ops × slot-words × iterations):
+/// measurement build, simplicity is a virtue.
 pub fn analyze(func: &Func) -> Analysis {
     let ops = &func.ops;
     let n = ops.len();
@@ -811,8 +802,8 @@ pub fn analyze(func: &Func) -> Analysis {
         .collect();
     let effects: Vec<Effect> = ops.iter().map(|o| effect(o, &park_targets)).collect();
 
-    // Larghezza del bitset: gli slot dichiarati più i temp registro, allargata
-    // se un op referenzia oltre (difensivo: mai indicizzare fuori).
+    // Bitset width: the declared slots plus the register temps, widened if
+    // an op references beyond (defensive: never index out of bounds).
     let mut nbits = (func.n_slots + func.max_temps) as usize;
     for e in &effects {
         for s in e.uses.iter().chain(&e.defs).chain(&e.fall_defs) {
@@ -820,8 +811,8 @@ pub fn analyze(func: &Func) -> Analysis {
         }
     }
 
-    // Archi eccezionali: ogni op dentro una regione protetta può saltare al
-    // suo handler (nessun def d'arco).
+    // Exceptional edges: every op inside a protected region may jump to its
+    // handler (no per-edge def).
     let mut exc_edges: Vec<Vec<usize>> = vec![Vec::new(); n];
     for r in &func.exc_table {
         let (start, end) = (r.start as usize, (r.end as usize).min(n));
@@ -833,7 +824,7 @@ pub fn analyze(func: &Func) -> Analysis {
     let mut live_in: Vec<Bits> = (0..n).map(|_| Bits::new(nbits)).collect();
     let mut live_out: Vec<Bits> = (0..n).map(|_| Bits::new(nbits)).collect();
 
-    // Punto fisso all'indietro. La terminazione è garantita: i live set solo crescono.
+    // Backward fixed point. Termination is guaranteed: the live sets only grow.
     let mut changed = true;
     while changed {
         changed = false;
@@ -856,17 +847,17 @@ pub fn analyze(func: &Func) -> Analysis {
                     out.or_assign(&t);
                 }
             }
-            // A-TH-97-1 (Hoare, Concilio WP-97 — REFUTAZIONE CAPITALE): il
-            // contributo dell'arco eccezionale NON deve subire il kill delle
-            // def di `i`. Quando l'eccezione parte, la def puo' non essere
-            // ancora avvenuta: `CallHostBuiltinOut { out_slot: $m }` che lancia
-            // un TypeError PRIMA di scrivere l'out lascia `$m` col vecchio
-            // valore, e il `catch` lo legge. Fondendo il contributo exc DENTRO
-            // `out` e poi sottraendo le def, `$m` spariva da `live_out` del
-            // lettore precedente e diventava «spostabile»: con `TakeSlot` il
-            // catch avrebbe visto `Undef` dove Zend stampa il valore.
-            // Quindi: `out` (che e' il giudice della movibilita') porta il
-            // contributo exc, ma `inb` lo riceve DOPO il kill, mai prima.
+            // The exceptional edge's contribution must NOT undergo the kill of
+            // the defs of `i`. When the exception fires, the def may not have
+            // happened yet: a `CallHostBuiltinOut { out_slot: $m }` that
+            // throws a TypeError BEFORE writing the out leaves `$m` with the
+            // old value, and the `catch` reads it. Merging the exc
+            // contribution INTO `out` and then subtracting the defs made `$m`
+            // vanish from the previous reader's `live_out` and become
+            // "movable": with `TakeSlot` the catch would have seen `Undef`
+            // where Zend prints the value. So: `out` (the judge of
+            // movability) carries the exc contribution, but `inb` receives it
+            // AFTER the kill, never before.
             let mut inb = out.clone();
             for d in &e.defs {
                 inb.clear(*d);
@@ -891,11 +882,11 @@ pub fn analyze(func: &Func) -> Analysis {
         }
     }
 
-    // F2: il perimetro conservativo sopra il dataflow F1. `in_region[i]` è la
-    // rinuncia sulle regioni protette (design95: un salto non locale può
-    // rendere vivo ciò che il flusso lineare dava per morto — l'analisi QUI
-    // modella già quegli archi, ma la prudenza F2 rinuncia lo stesso e la
-    // differenza F1−F2 dice quanto costa).
+    // F2: the conservative scope on top of the F1 dataflow. `in_region[i]` is
+    // the renounce on protected regions (a non-local jump can make live what
+    // the linear flow gave up for dead — the analysis HERE already models
+    // those edges, but F2 caution renounces anyway, and the F1−F2 difference
+    // says what it costs).
     let (whole_renounced, slots_renounced) = renounce(func);
     let mut in_region = vec![false; n];
     for r in &func.exc_table {

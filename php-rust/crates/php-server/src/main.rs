@@ -1,7 +1,7 @@
 //! `php-server` — HTTP front end for phpr engine.
 //!
 //! Two modes:
-//! 1. `--cli-server` (default): Reuses the CLI SAPI from `phpr -S`
+//! 1. `--cli-server` (default): Reuses the CLI SAPI from `ferro -S`
 //! 2. `--axum`: Axum HTTP front end + worker-actor pool (WP-77.6, retimed
 //!    S-78.1.5): N OS worker threads; each REQUEST gets a fresh RetainSet
 //!    (P-2 unit-module pin, dies with the request — the per-worker arena
@@ -59,36 +59,36 @@ pub mod mem_alloc {
 
     pub struct MemCountingMi;
 
-    // S-93.0 B1 (huge-trace): con PHPR_HUGE_TRACE=1 ogni allocazione
-    // >= 512 KiB stampa size + backtrace su stderr — il canale che NOMINA
-    // i sei blocchi huge per worker (wp92-harness/huge-worker.out:
-    // 39.911.424 B in 6 blocchi, mai liberati). Env-gated: senza la env il
-    // costo è un confronto su size per le sole allocazioni sopra soglia.
-    // La guardia di rientranza evita la ricorsione del force_capture (che
-    // alloca a sua volta, ma sotto soglia).
-    // A-TH-73/A-TH-74 (Concilio WP-95, A4): dentro un GlobalAlloc non si
-    // legge l'ambiente e non si prende un percorso che possa panicare —
-    // `std::env::var_os` prende il lock dell'environment (e allocare mentre
-    // quel lock è tenuto è un deadlock latente), e `thread::current()`
-    // panica se il TLS del thread è già in distruzione. Un panic in un
-    // GlobalAlloc è UB da contratto, e questo è il canale che genera le
-    // MISURE: qui un difetto non produce un errore, produce una cifra.
-    // Quindi: la env si legge UNA volta in `main()` prima di ogni spawn
-    // (`init_huge_trace`), e il thread si nomina con un id numerico
-    // assegnato dal thread_local già presente, letto con `try_with` (mai
-    // `with`: su TLS distrutto `with` panica, `try_with` restituisce Err).
+    // Huge-trace: with PHPR_HUGE_TRACE=1 every allocation >= 512 KiB
+    // prints size + backtrace on stderr — the channel that NAMES the six
+    // huge blocks per worker (measured: 39,911,424 B in 6 blocks, never
+    // freed). Env-gated: without the env the cost is one size compare for
+    // the above-threshold allocations only. The re-entrancy guard avoids
+    // recursion from force_capture (which itself allocates, but below the
+    // threshold).
+    // Inside a GlobalAlloc we neither read the environment nor take any
+    // path that can panic — `std::env::var_os` takes the environment lock
+    // (and allocating while that lock is held is a latent deadlock), and
+    // `thread::current()` panics if the thread's TLS is already being
+    // destroyed. A panic in a GlobalAlloc is UB by contract, and this is
+    // the channel that produces MEASUREMENTS: a defect here yields a
+    // figure, not an error. So: the env is read ONCE in `main()` before
+    // any spawn (`init_huge_trace`), and the thread is named with a
+    // numeric id assigned by the existing thread_local, read with
+    // `try_with` (never `with`: on destroyed TLS `with` panics, `try_with`
+    // returns Err).
     use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
-    static HUGE_TRACE: AtomicU8 = AtomicU8::new(0); // 1=on, 0=off (fail-closed finché main non decide)
+    static HUGE_TRACE: AtomicU8 = AtomicU8::new(0); // 1=on, 0=off (fail-closed until main decides)
     static NEXT_THR_ID: AtomicU64 = AtomicU64::new(0);
     const HUGE_MIN: usize = 512 * 1024;
     thread_local! {
         static IN_TRACE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
         static THR_ID: std::cell::Cell<u64> = const { std::cell::Cell::new(u64::MAX) };
     }
-    /// Da chiamare in `main()` PRIMA di qualunque spawn: è l'unico punto in
-    /// cui si legge `PHPR_HUGE_TRACE`. Senza questa chiamata il trace resta
-    /// spento — un canale di misura muto è un fatto dichiarato nel banner,
-    /// una env letta dall'allocatore è un deadlock che non si dichiara.
+    /// Call from `main()` BEFORE any spawn: it is the only place where
+    /// `PHPR_HUGE_TRACE` is read. Without this call the trace stays off — a
+    /// silent measurement channel is a fact declared in the banner, an env
+    /// read from the allocator is a deadlock that declares nothing.
     pub fn init_huge_trace() {
         let on = std::env::var_os("PHPR_HUGE_TRACE").map(|v| v == "1").unwrap_or(false);
         HUGE_TRACE.store(on as u8, Ordering::Relaxed);
@@ -140,7 +140,7 @@ pub mod mem_alloc {
             unsafe { mimalloc::MiMalloc.alloc_zeroed(l) }
         }
         unsafe fn realloc(&self, p: *mut u8, l: Layout, n: usize) -> *mut u8 {
-            // S-103 (A-LE-104-1): realloc disaggregato, come in php-cli.
+            // realloc counted separately, as in php-cli.
             php_types::memcensus::grealloc_note(l.size(), n);
             huge_note("realloc", n);
             unsafe { mimalloc::MiMalloc.realloc(p, l, n) }
@@ -326,7 +326,7 @@ mod axum_handler {
                 // HTTP-complete ≠ request_end-complete: the sequential curl
                 // proves the response left, not that the worker finished its
                 // teardown. A-PP-66≡A-MS-57 + A-PP-67 + A-MS-56 (Council
-                // WP-93, team-misura UNIFIED row): the witness is a PAIR
+                // WP-93, UNIFIED measurement row): the witness is a PAIR
                 // around the dump, not an instant — outstanding==0 at a
                 // single load certifies teardown-complete AT THAT INSTANT
                 // only; a request can enter (and even fully complete)
@@ -566,13 +566,13 @@ mod axum_handler {
 
 fn main() -> ExitCode {
     php_runtime::logging::init();
-    // A-PE-100-2: sigillo eager del modo register-lowering al bootstrap del
-    // processo — nel server la finestra lazy era REALE (una richiesta con
-    // putenv("PHPR_REG_LOWER=1") prima della prima compile avrebbe deciso
-    // il modo dell'intero processo per sempre).
+    // Eager seal of the register-lowering mode at process bootstrap — in
+    // the server the lazy window was REAL (a request calling
+    // putenv("PHPR_REG_LOWER=1") before the first compile would have decided
+    // the mode of the whole process forever).
     php_runtime::seal_reg_lower_mode();
 
-    // A-TH-73: la sola lettura di PHPR_HUGE_TRACE, qui, prima di ogni spawn.
+    // The only read of PHPR_HUGE_TRACE, here, before any spawn.
     #[cfg(all(feature = "mem-census", not(feature = "census-instrumentation")))]
     mem_alloc::init_huge_trace();
 

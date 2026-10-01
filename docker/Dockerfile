@@ -8,7 +8,7 @@ FROM composer:2 AS composer
 
 FROM php:${PHP_VERSION}-cli
 
-# System libs: zlib/gd/tidy/xslt are linked by phpr via FFI (same list as
+# System libs: zlib/gd/tidy/xslt are linked by ferro via FFI (same list as
 # upstream's .github/workflows/ci.yml); the rest is build + measurement tooling.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential pkg-config cmake clang git curl ca-certificates unzip \

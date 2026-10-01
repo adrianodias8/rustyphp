@@ -9,7 +9,7 @@
 #   docker/run.sh /work/php-rust/bench/path-sensitivity.sh [phpr] [bench] [R]
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BIN="${1:-/target/release/phpr}"; B="${2:-oop}"; R="${3:-3}"
+BIN="${1:-/target/release/ferro}"; B="${2:-oop}"; R="${3:-3}"
 SECTIONS="${SECTIONS:-prop_rmw_1m|prop_write_1m|static_method_call_1m}"
 S="${SCRATCH:-/scratch}/path-sens"; rm -rf "$S"; mkdir -p "$S"
 for d in a bench-work-ab a_much_longer_directory_name_for_the_same_script; do

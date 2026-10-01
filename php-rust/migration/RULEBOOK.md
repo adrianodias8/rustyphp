@@ -7,7 +7,7 @@
 > since its start — they lived in session memory and scattered docs; this file
 > makes them explicit and citable. It is read-only inside any working loop:
 > amendments require the project owner's sign-off and are recorded in the
-> session handoff (NEXT_SESSION_WORDPRESS.md).
+> session log (`NOTES.md`).
 
 ## 0. Scope and posture
 
@@ -25,7 +25,7 @@
     re-implementations of such libs are banned for byte-compared output
     (measured: zlib crates diverge from system zlib).
 - **Correct-or-absent**: a builtin that cannot be implemented faithfully is
-  left ABSENT and catalogued in `PHPR_DIVERGENCES_FROM_PHP.md` — never
+  left ABSENT and catalogued in `KNOWN_DIVERGENCES.md` — never
   approximated silently. `function_exists()` must tell the truth.
 - **Unsafe policy**: zero `unsafe` in the value core (Zval / PhpStr /
   PhpArray / Props). Owner decision, re-confirmed twice against measured
@@ -77,7 +77,7 @@ flagged changes — the port's job is fidelity.
 are marked greppable — `BUG(port):` (bug-for-bug site with repro note),
 `PERF(port):` (known slow-but-faithful), `TODO(port):` (conservative
 translation pending a rule). Burndown = grep; the catalogue of *behavioral*
-declared residues stays `PHPR_DIVERGENCES_FROM_PHP.md`.
+declared residues stays `KNOWN_DIVERGENCES.md`.
 
 ## 3. The judge (runs continuously — old code is the spec)
 
@@ -140,7 +140,7 @@ declared residues stays `PHPR_DIVERGENCES_FROM_PHP.md`.
 
 ## Deviation log
 
-Priced, catalogued divergences live in `PHPR_DIVERGENCES_FROM_PHP.md`
+Priced, catalogued divergences live in `KNOWN_DIVERGENCES.md`
 (§3.x) and in the per-name fail-set baselines. Notable engine-level ones:
 in-function destructor timing (Zend frees at return, phpr at the enclosing
 statement sweep), cycle-collector destructor order, backtraces of

@@ -5,14 +5,13 @@
 # addition once left `cargo test` uncompilable for several sessions) and
 # platform drift.
 #
-# S-139 fase 1 (decisione utente 2026-08-14): file SPOSTATO da
-# php-rust/.github/workflows/ (dove GitHub non lo eseguiva: i workflow vivono
-# solo alla RADICE del repo — inerte dalla scrittura, zero run) con i SOLI
-# adattamenti: working-directory php-rust, cache scoping, deps di sistema
-# estese in via difensiva, concurrency, paths-filter, workflow_dispatch.
-# Le corsie (matrice quintetto, census, grep-gate) sono INVARIATE.
-# Rete di ALLARME PRECOCE: pin e promozione restano sugli script locali
-# canonici (REGOLE §2/§5/§6); nessuna cifra di tempo esce da qui.
+# This file was MOVED from php-rust/.github/workflows/ (where GitHub never ran
+# it: workflows only live at the repo ROOT — inert since it was written, zero
+# runs) with the ONLY adaptations being: working-directory php-rust, cache
+# scoping, defensively extended system deps, concurrency, paths-filter,
+# workflow_dispatch. The lanes (quintet matrix, census, grep-gate) are
+# UNCHANGED. This is an EARLY-WARNING net: pins and promotion stay on the
+# canonical local scripts; no timing figure comes out of here.
 name: CI
 
 on:
@@ -51,18 +50,19 @@ jobs:
           workspaces: php-rust
       # libz-sys links the SYSTEM zlib (deliberate: byte-identical deflate needs
       # PHP's exact library); zlib1g-dev ships on the runner image, this is a
-      # guard for image changes. gd/tidy/xslt added defensively (S-139: on
-      # macOS the build links them via homebrew -L paths; first green run is
-      # the judge of what Linux actually needs).
+      # guard for image changes. gd/tidy/xslt added defensively (on macOS the
+      # build links them via homebrew -L paths; the first green run is the
+      # judge of what Linux actually needs).
       - name: System deps
         run: sudo apt-get update && sudo apt-get install -y zlib1g-dev pkg-config libgd-dev libtidy-dev libxslt1-dev
       - name: Build (release)
         run: cargo build --release --workspace
-      # Il test differenziale (php-builtins) pretende l'oracle PHP 8.5.7 e su
-      # runner Linux non c'è: skip ESPLICITO con la valvola prevista dal test
-      # stesso (primo run S-139: panic "PHP oracle non trovato" con istruzioni).
-      # Installare un PHP di distro ≠ 8.5.7 brew pinnato darebbe rossi spuri:
-      # il differenziale resta gate LOCALE (header).
+      # The differential test (php-builtins) requires the PHP 8.5.7 oracle,
+      # which the Linux runner does not have: EXPLICIT skip through the valve
+      # the test itself provides (the first run panicked "PHP oracle not
+      # found" with instructions). Installing a distro PHP other than the
+      # pinned 8.5.7 would give spurious reds: the differential stays a LOCAL
+      # gate (see header).
       - name: Unit tests
         run: cargo test --release --workspace
         env:

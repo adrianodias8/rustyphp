@@ -254,7 +254,7 @@ fn parse_blocks(output: &str) -> std::collections::HashMap<String, String> {
 #[test]
 fn differential_operators_vs_oracle() {
     let Some(php) = oracle() else {
-        // Audit Sol 2026-07-30 P1.2: mai un "ok" senza confronti.
+        // Never report "ok" without having compared anything.
         if std::env::var_os("PHPR_ALLOW_MISSING_ORACLE").is_some() {
             eprintln!("SKIPPED-BY-ENV: differential senza oracle");
             return;

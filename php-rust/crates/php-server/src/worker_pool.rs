@@ -194,11 +194,11 @@ mod implementation {
         /// watermark of 1, so pipelined overlap is invisible here. Any
         /// closed-sequential claim from this watermark alone is ADVISORY
         /// (KH81-1); the verdict-grade observable is OUTSTANDING below.
-        // NB (S-139): sotto mem-census-ONLY i sei item marcati allow qui
-        // sotto sono DORMIENTI PER DESIGN (A-PP-63: «QUEUE_DEPTH ops and the
-        // per-request census row stay census-instrumentation-only») — i loro
-        // consumatori sono cfg census-instrumentation. L'allow dichiara la
-        // dormienza; il cfg stretto romperebbe reset_depth_stats nei test.
+        // NB: under mem-census ONLY, the six items marked allow below are
+        // DORMANT BY DESIGN ("QUEUE_DEPTH ops and the per-request census
+        // row stay census-instrumentation-only") — their consumers are cfg
+        // census-instrumentation. The allow declares the dormancy; a
+        // tighter cfg would break reset_depth_stats in the tests.
         #[allow(dead_code)]
         pub static QUEUE_DEPTH: AtomicUsize = AtomicUsize::new(0);
         /// High-watermark of QUEUE_DEPTH since process start.
@@ -314,7 +314,7 @@ mod implementation {
     /// clean-window claim. Read-only: the witness never perturbs the
     /// counter.
     #[cfg(any(feature = "census-instrumentation", feature = "mem-census"))]
-    #[allow(dead_code)] // consumata SOLO dalle patch-sonda (vedi re-export in coda al file)
+    #[allow(dead_code)] // consumed ONLY by probe patches (see re-export at the end of the file)
     pub fn census_outstanding_now() -> usize {
         census::OUTSTANDING.load(std::sync::atomic::Ordering::Acquire)
     }
@@ -322,7 +322,7 @@ mod implementation {
     /// A-PP-67 (Council WP-93): monotone arrivals, read-only for the
     /// unified witness row (arr_pre/arr_post).
     #[cfg(any(feature = "census-instrumentation", feature = "mem-census"))]
-    #[allow(dead_code)] // consumata SOLO dalle patch-sonda (vedi re-export in coda al file)
+    #[allow(dead_code)] // consumed ONLY by probe patches (see re-export at the end of the file)
     pub fn census_arrivals_now() -> u64 {
         census::ARRIVALS.load(std::sync::atomic::Ordering::Relaxed)
     }
@@ -525,13 +525,13 @@ mod implementation {
             // an ordinary docroot lookup.
             let test_panic = std::env::var_os("PHPR_TEST_WORKER_PANIC").is_some();
 
-            // S-93.0 B3 (LEVER-2, arm A/B same-binary): PHPR_PRELUDE_COLLECT=1
-            // arma un mi_collect(true) ON-THREAD dopo la PRIMA richiesta del
-            // worker — il preludio è appena stato parsato e la sua arena
-            // bumpalo droppata (sei chunk huge, 39.4MB, LIBERATI: trace
-            // S-93.0); senza collect il theap li tiene committed e lo slope
-            // fisico paga ~19MB/worker. Disarmato = binaria identica al
-            // controllo (una branch per richiesta).
+            // A/B arm in the same binary: PHPR_PRELUDE_COLLECT=1 arms an
+            // ON-THREAD mi_collect(true) after the worker's FIRST request —
+            // the prelude has just been parsed and its bumpalo arena dropped
+            // (six huge chunks, 39.4MB, FREED per the huge-trace); without
+            // the collect the thread heap keeps them committed and the
+            // physical slope pays ~19MB/worker. Unarmed = binary identical
+            // to the control (one branch per request).
             #[cfg(feature = "mem-census")]
             let prelude_collect =
                 std::env::var_os("PHPR_PRELUDE_COLLECT").map(|v| v == "1").unwrap_or(false);
@@ -639,8 +639,8 @@ mod implementation {
                         );
                     }
                 }
-                // S-93.0 B3 LEVER-2: collect DOPO la send (nessuna latenza
-                // aggiunta alla risposta), una sola volta per thread.
+                // Prelude collect AFTER the send (no latency added to the
+                // response), once per thread.
                 #[cfg(feature = "mem-census")]
                 if prelude_collect && !prelude_collected {
                     prelude_collected = true;
@@ -715,7 +715,7 @@ mod implementation {
                 census::note_outstanding(o);
                 // A-PP-67: monotone arrival mark — inc at dispatch, never
                 // decremented; pairs with arr_pre/arr_post on the unified
-                // witness row (Council WP-93, team-misura).
+                // witness row (Council WP-93).
                 census::ARRIVALS.fetch_add(1, Ordering::Relaxed);
             }
 
@@ -1067,8 +1067,8 @@ mod implementation {
             );
         }
 
-        // A-PP4/A-TH5/A-DS4: runtime fatal → 500 (was an accidental 200; the
-        // KS-M3 verbale claimed 500 — now true). Body stays byte-parity.
+        // Runtime fatal → 500 (was an accidental 200; the earlier record
+        // claimed 500 — now true). Body stays byte-parity.
         let status = if fatal.is_some() {
             StatusCode::INTERNAL_SERVER_ERROR
         } else {
@@ -2062,10 +2062,10 @@ pub use implementation::{
     REQ_NS, WorkerHandlerMeta, WorkerPool, WorkerPoolContext, WorkerTask, census_probe_active,
     req_ns_armed,
 };
-// API di testimonianza per le PATCH-SONDA di sessione (WP-93 A-PP-67):
-// nessun consumatore in-tree per costruzione — le sonde si applicano come
-// patch temporanee in finestra di misura. L'allow è la DICHIARAZIONE:
-// il primo run vivo della corsia census (S-139) ha svelato il dead-code.
+// Witness API for measurement PROBE PATCHES: no in-tree consumer by
+// construction — the probes are applied as temporary patches during a
+// measurement window. The allow is the DECLARATION: the first live run of
+// the census CI lane exposed the dead code.
 #[cfg(any(feature = "census-instrumentation", feature = "mem-census"))]
 #[allow(unused_imports)]
 pub use implementation::census_outstanding_now;

@@ -427,12 +427,11 @@ impl<'m> super::Vm<'m> {
         let Some((m, decl, is_abstract)) = self.find_method_reflect(cid, &mname) else {
             return Ok(Zval::Bool(false));
         };
-        // WP-54 (owner della cardinalità, WP-47/53): il descrittore è funzione
-        // PURA di (declaring class, metodo) — la chiave è (decl, mname), non
-        // (cid, mname): i duplicati ereditati (ogni mock PHPUnit = un cid
-        // nuovo che eredita quasi tutto) collassano sulla voce del declarante
-        // (census WP-54: inserts inherited = 96,3%). La resolve gira sempre
-        // (prima girava sull'88% delle chiamate: hit-rate 11,7%).
+        // The descriptor is a PURE function of (declaring class, method) — the
+        // key is (decl, mname), not (cid, mname): inherited duplicates (every
+        // PHPUnit mock = a new cid inheriting almost everything) collapse onto
+        // the declarer's entry (census: 96.3% of inserts were inherited). The
+        // resolve always runs (before, it ran on 88% of calls: 11.7% hit-rate).
         let cache_key = (decl, mname.to_ascii_lowercase());
         if let Some(hit) = self.reflect_method_info_cache.get(&cache_key) {
             #[cfg(feature = "gc-census")]

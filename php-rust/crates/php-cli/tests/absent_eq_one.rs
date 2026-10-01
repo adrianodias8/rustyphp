@@ -1,20 +1,20 @@
-//! A-HE-103-3 (Concilio WP-103, S-102 punto 5): il dente VERO su
-//! «assente ≡ `=1`» — in SOTTOPROCESSO, giudicato dal dump-diff.
+//! The real regression test for "absent ≡ `=1`" — run in a SUBPROCESS and
+//! judged by a dump diff.
 //!
-//! La vecchia metà in-process era `f(x)==f(x)` (R-HE-103-1, copertura
-//! fabbricata): compilava due volte con lo stesso bool nello stesso env.
-//! Qui i due bracci sono DUE PROCESSI del binario vero con ambienti
-//! DIVERSI (env costruito, mai ereditato — apparato A-SK-93..97): uno con
-//! `PHPR_REG_LOWER` ASSENTE, uno con `=1`. Giudice: dump BYTE-identico
-//! (`PHPR_DUMP_OPS=1`, modulo intero su BODY_ZOO) + stdout identico +
-//! CONTROLLO POSITIVO (il dump contiene le forme registro: un dump vuoto o
-//! un env mai propagato non può dare un verde).
-//! Nota di copertura: il corpus «nei 2 modi» esercita default(assente) e
-//! `=0`; la coppia assente↔`=1` end-to-end la esercita SOLO questo dente.
-//! Emendato S-103 (Concilio WP-104): braccio `=0` DISCRIMINANTE
-//! (A-HE-104-1: prova che l'env viaggia — dump diverso, stdout uguale),
-//! controllo positivo fuori-funnel `Z::{prop-init}` nel dump (A-HE-104-2)
-//! e residuo `Binary(Add)` pinnato `==1` ESATTO (A-HE-103-1 emendato).
+//! The old in-process half was effectively `f(x)==f(x)` (fabricated
+//! coverage): it compiled twice with the same bool in the same env. Here
+//! the two arms are TWO PROCESSES of the real binary with DIFFERENT
+//! environments (env built from scratch, never inherited): one with
+//! `PHPR_REG_LOWER` ABSENT, one with `=1`. Judge: BYTE-identical dump
+//! (`PHPR_DUMP_OPS=1`, whole module over BODY_ZOO) + identical stdout +
+//! a POSITIVE CONTROL (the dump contains register forms: an empty dump or
+//! an env that never propagated cannot produce a green).
+//! Coverage note: the "both modes" corpus exercises default(absent) and
+//! `=0`; the absent↔`=1` pair end-to-end is exercised ONLY by this test.
+//! Amended later: a DISCRIMINATING `=0` arm (proves the env travels —
+//! different dump, same stdout), an out-of-funnel positive control
+//! (`Z::{prop-init}` in the dump), and the residual `Binary(Add)` pinned
+//! to EXACTLY `==1`.
 
 use std::process::Command;
 
@@ -30,9 +30,9 @@ echo f(9), ":", $z->m(3, 4), ":", $z->p, "\n";
 "#;
 
 fn run_arm(src_path: &std::path::Path, reg_lower: Option<&str>) -> (Vec<u8>, Vec<u8>) {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_phpr"));
-    // Ambiente COSTRUITO con lista chiusa (A-SK-93): niente eredita' dal
-    // processo di test — l'assenza di PHPR_REG_LOWER e' PER COSTRUZIONE.
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_ferro"));
+    // Environment BUILT from a closed list: nothing is inherited from the
+    // test process — the absence of PHPR_REG_LOWER holds BY CONSTRUCTION.
     cmd.env_clear()
         .env("PATH", "/usr/bin:/bin")
         .env("PHPR_DUMP_OPS", "1")
@@ -49,11 +49,10 @@ fn run_arm(src_path: &std::path::Path, reg_lower: Option<&str>) -> (Vec<u8>, Vec
     (out.stdout, out.stderr)
 }
 
-/// A-HE-105-1 (Concilio WP-105): conteggio PER CORPO di un op nel dump di
-/// PHPR_DUMP_OPS. I corpi aprono con l'intestazione `-- NOME n_slots=… --`;
-/// l'op si riconosce ANCORATO come secondo token di una riga-istruzione
-/// (`0003 Binary(Add)`), mai come substring nuda (un ipotetico
-/// `XBinary(Add)` non conta).
+/// PER-BODY count of an op in the PHPR_DUMP_OPS dump. Bodies open with the
+/// header `-- NAME n_slots=… --`; the op is recognised ANCHORED as the
+/// second token of an instruction line (`0003 Binary(Add)`), never as a
+/// bare substring (a hypothetical `XBinary(Add)` does not count).
 fn per_body_op_counts(dump: &str, op_token: &str) -> std::collections::BTreeMap<String, usize> {
     let mut cur = String::from("<fuori-corpo>");
     let mut map = std::collections::BTreeMap::new();
@@ -83,35 +82,34 @@ fn absent_env_subprocess_dump_identical_to_explicit_one() {
     let (out_zero, dump_zero) = run_arm(&src, Some("0"));
     let _ = std::fs::remove_dir_all(&dir);
 
-    // Controllo positivo PRIMA del verdetto: il braccio assente e' davvero
-    // nel modo default-ON — il dump esiste e mostra le forme registro nel
-    // {main}/f (il loop scalare le produce). Senza questa prova, due dump
-    // vuoti o due env morti darebbero un verde indistinguibile (recidiva
-    // A-PE-102-1: il modo si PROVA, non si presume).
+    // Positive control BEFORE the verdict: the absent arm really is in the
+    // default-ON mode — the dump exists and shows register forms in
+    // {main}/f (the scalar loop produces them). Without this proof, two
+    // empty dumps or two dead envs would give an indistinguishable green
+    // (the mode is PROVEN, not assumed).
     let d = String::from_utf8_lossy(&dump_absent);
     assert!(
         d.contains("BinaryDst") || d.contains("CmpJmpSC") || d.contains("BinarySS"),
         "controllo positivo: il dump del braccio ASSENTE non mostra forme \
          registro — dump morto o modo non-default?\n{d}"
     );
-    // Output del programma identico (parita' funzionale dei due bracci).
+    // Identical program output (functional parity of the two arms).
     assert_eq!(
         out_absent, out_one,
         "stdout diverso tra assente e `=1` (parita' funzionale rotta)"
     );
-    // A-HE-104-2 (Concilio WP-104): il claim «modulo intero» si PROVA —
-    // il dump deve contenere il corpo FUORI-FUNNEL dell'inizializzatore
-    // di proprieta' (`Z::{prop-init}`), non solo {main}/fn.
+    // The "whole module" claim is PROVEN — the dump must contain the
+    // OUT-OF-FUNNEL body of the property initializer (`Z::{prop-init}`),
+    // not just {main}/fn.
     assert!(
         d.contains("Z::{prop-init}"),
         "controllo positivo fuori-funnel: il dump non contiene il corpo \
          `Z::{{prop-init}}` — il «modulo intero» non e' provato\n{d}"
     );
-    // A-HE-105-1 (Concilio WP-105, supera il «==1 GLOBALE» di A-HE-103-1):
-    // il residuo `Binary(Add)` si giudica PER CORPO, ancorato al token-op —
-    // un residuo nuovo esce col NOME del corpo invece di conflazionare tre
-    // cause (prelude cambiato / funnel allargato / residuo nuovo) in un
-    // conteggio globale.
+    // Replaces the older GLOBAL `==1` check: the residual `Binary(Add)` is
+    // judged PER BODY, anchored on the op token — a new residual shows up
+    // with the body NAME instead of conflating three causes (changed
+    // prelude / widened funnel / new residual) into one global count.
     let adds = per_body_op_counts(&d, "Binary(Add)");
     let residui: Vec<String> = adds.iter().map(|(k, v)| format!("{k}: {v}")).collect();
     assert_eq!(
@@ -124,18 +122,17 @@ fn absent_env_subprocess_dump_identical_to_explicit_one() {
         1,
         "Binary(Add) residuo FUORI da Z::{{prop-init}} — corpi con residuo: {residui:?}"
     );
-    // Tripwire di enumerazione (primo passo verso A-HE-105-3): i corpi
-    // dello zoo compaiono TUTTI per NOME nel dump del braccio assente.
+    // Enumeration tripwire: ALL the zoo bodies appear BY NAME in the dump
+    // of the absent arm.
     for body in ["{main}", "fn f", "Z::m", "Z::{prop-init}"] {
         assert!(
             d.lines().any(|l| l.strip_prefix("-- ").is_some_and(|r| r.trim_start().starts_with(body))),
             "corpo '{body}' assente dal dump: lo zoo non e' piu' enumerato"
         );
     }
-    // A-HE-104-1 (Concilio WP-104): braccio `=0` DISCRIMINANTE — due
-    // bracci uguali-per-costruzione non possono fallire per modo; il
-    // terzo braccio prova che l'env viaggia: stdout identico ma dump
-    // DIVERSO (emissione a pila, zero forme registro).
+    // DISCRIMINATING `=0` arm — two arms equal-by-construction cannot fail
+    // on mode; the third arm proves the env travels: identical stdout but
+    // a DIFFERENT dump (stack emission, zero register forms).
     assert_eq!(out_zero, out_absent, "stdout `=0` diverso (parita' funzionale rotta)");
     let dz = String::from_utf8_lossy(&dump_zero);
     assert_ne!(
@@ -147,13 +144,12 @@ fn absent_env_subprocess_dump_identical_to_explicit_one() {
         !dz.contains("BinaryDst") && !dz.contains("CmpJmpSC") && !dz.contains("BinarySS"),
         "forme registro nel dump `=0`: il modo OFF non e' off\n{dz}"
     );
-    // A-HE-105-2 (Concilio WP-105): controllo POSITIVO del braccio `=0` —
-    // un env che sotto `=0` uccidesse il dumping intero passerebbe i check
-    // negativi sopra. Il dump OFF deve contenere Z::{prop-init} e le forme
-    // PILA vive: `BinaryAdd` ancorato > 1. (Rosso di nascita ARCHIVIATO in
-    // wp104-harness/denti-rossi/absent-eq-one-he105-2-rosso.txt: la prima
-    // attesa contava il generico `Binary(Add)`, ma il loop in pila emette
-    // l'op DEDICATO `BinaryAdd` — il generico vive solo fuori-funnel.)
+    // POSITIVE control of the `=0` arm — an env that killed dumping
+    // entirely under `=0` would pass the negative checks above. The OFF
+    // dump must contain Z::{prop-init} and live STACK forms: anchored
+    // `BinaryAdd` > 1. (The first expectation counted the generic
+    // `Binary(Add)`, but the stack loop emits the DEDICATED `BinaryAdd` op
+    // — the generic one only lives outside the funnel.)
     assert!(
         dz.contains("Z::{prop-init}"),
         "controllo positivo `=0`: manca Z::{{prop-init}} nel dump OFF"
@@ -163,7 +159,7 @@ fn absent_env_subprocess_dump_identical_to_explicit_one() {
         n_off > 1,
         "controllo positivo `=0`: attesi BinaryAdd di pila > 1, trovati {n_off}"
     );
-    // Il VERDETTO: dump BYTE-identico sul modulo intero.
+    // The VERDICT: BYTE-identical dump over the whole module.
     assert_eq!(
         dump_absent, dump_one,
         "dump-diff: assente e `=1` NON emettono lo stesso modulo\n--- assente ---\n{}\n--- =1 ---\n{}",

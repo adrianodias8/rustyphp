@@ -349,8 +349,8 @@ fn encode_string(s: &[u8], flags: i64, out: &mut Vec<u8>) -> Result<(), ()> {
             c if (c as u32) < 0x20 => unicode_escape(c as u32, out),
             c if (c as u32) < 0x80 => out.push(c as u8),
             c => {
-                // U+2028/U+2029 restano escapati anche sotto UNESCAPED_UNICODE
-                // finché non c'è JSON_UNESCAPED_LINE_TERMINATORS (json.c 7.1+).
+                // U+2028/U+2029 stay escaped even under UNESCAPED_UNICODE
+                // unless JSON_UNESCAPED_LINE_TERMINATORS is set (json.c 7.1+).
                 if flags & UNESCAPED_UNICODE != 0
                     && (!matches!(c, '\u{2028}' | '\u{2029}')
                         || flags & UNESCAPED_LINE_TERMINATORS != 0)

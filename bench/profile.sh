@@ -19,7 +19,7 @@ REPO="$(cd "$HERE/.." && pwd)"
 PHP_SRC="${PHP_SRC:-$REPO/../php-src}"
 SCRATCH="${SCRATCH:-/scratch}"
 PROF_TARGET="${PROF_TARGET:-/target/prof}"
-PHPR_PROF="$PROF_TARGET/release/phpr"
+PHPR_PROF="$PROF_TARGET/release/ferro"
 FREQ="${FREQ:-2999}"
 ONLY="${ONLY:-zend_bench arrays oop symfony-boot symfony-steady strings autoload}"
 # OUT: where the folded stacks / flamegraphs / bucket tables go. The default is

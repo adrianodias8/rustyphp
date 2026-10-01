@@ -178,36 +178,34 @@ fn ic_epoch() -> u64 {
     IC_EPOCH.with(|e| e.get())
 }
 
-/// Monomorphic per-op-site property cache (WP-29, lo Zend inline cache;
-/// SCOPE-AWARE dal WP-35): `(epoch, class_id + 1, scope_id + 1 | 0, slot)`
-/// dell'ultima risoluzione cache-abile; `class_id+1 == 0` = vuota, epoch ≠
-/// corrente = stantia (id di un run precedente). Lo SCOPE chiamante fa
-/// parte della CHIAVE: un hit vale solo per la stessa coppia
-/// (classe receiver, scope) che ha riempito la cella, quindi anche gli
-/// esiti private/protected sono cache-abili — `Closure::bind` che porta un
-/// altro scope sul sito produce un MISS, mai un hit errato (la lezione
-/// WP-29 "mai cachare visibilità non-public" valeva per celle keyed sulla
-/// sola classe receiver). Le letture (GET/ISSET) fillano qualunque
-/// visibilità purché il canale hook sia strutturalmente assente per
-/// (classe, prop); le scritture restano `plain_set_props`-only.
+/// Monomorphic per-op-site property cache (the Zend inline cache;
+/// SCOPE-AWARE): `(epoch, class_id + 1, scope_id + 1 | 0, slot)` of the
+/// last cacheable resolution; `class_id+1 == 0` = empty, epoch ≠ current =
+/// stale (an id from a previous run). The calling SCOPE is part of the KEY:
+/// a hit is valid only for the same (receiver class, scope) pair that
+/// filled the cell, so private/protected outcomes are cacheable too —
+/// `Closure::bind` bringing another scope to the site produces a MISS,
+/// never a wrong hit (the earlier lesson "never cache non-public
+/// visibility" applied to cells keyed on the receiver class alone). Reads
+/// (GET/ISSET) fill for any visibility as long as the hook channel is
+/// structurally absent for (class, prop); writes stay `plain_set_props`-only.
 ///
-/// La cella è `Rc`-condivisa: il clone dell'op deve puntare alla STESSA
-/// cache perché i fill persistano sul sito. Lo stato resta invisibile
-/// all'uguaglianza strutturale (`Func` è `PartialEq` per la unit-cache:
-/// due compilazioni identiche DEVONO confrontare uguali qualunque cosa la
-/// VM abbia cachato).
+/// The cell is `Rc`-shared: an op's clone must point to the SAME cache so
+/// the fills persist on the site. The state stays invisible to structural
+/// equality (`Func` is `PartialEq` for the unit cache: two identical
+/// compilations MUST compare equal whatever the VM has cached).
 #[derive(Debug)]
 pub struct PropIc(Rc<std::cell::Cell<(u64, u32, u32, u32)>>);
 
 impl PropIc {
-    /// S-134 «IC non-plain»: bit alti dello slot cachato dalle SCRITTURE.
-    /// `NP` marca una entry riempita dal cammino pieno di `prop_set_entry`
-    /// (classe non `plain_set_props`; fatti di classe provati al fill:
-    /// nessun set-hook né virtual-hook, `__set` assente, asym superato, non
-    /// readonly, key == name). `TY` impone la coercizione typed al hit. Lo
-    /// slot vero sta nei 30 bit bassi (`SLOT_MASK`). Emenda dichiarata del
-    /// contratto sopra: le scritture non sono più plain-only — il ramo NP
-    /// mantiene per-scrittura presenza slot, coercizione e typed_refs.
+    /// "Non-plain IC": high bits of the slot cached by WRITES. `NP` marks an
+    /// entry filled by the full `prop_set_entry` path (class not
+    /// `plain_set_props`; class facts proven at fill time: no set-hook nor
+    /// virtual hook, `__set` absent, asymmetric visibility passed, not
+    /// readonly, key == name). `TY` enforces the typed coercion on a hit.
+    /// The real slot lives in the low 30 bits (`SLOT_MASK`). A declared
+    /// amendment of the contract above: writes are no longer plain-only —
+    /// the NP arm keeps per-write slot presence, coercion and typed_refs.
     pub const NP: u32 = 1 << 31;
     pub const TY: u32 = 1 << 30;
     pub const SLOT_MASK: u32 = Self::TY - 1;
@@ -254,16 +252,15 @@ impl Clone for PropIc {
     }
 }
 
-/// Monomorphic per-op-site METHOD cache (WP-30, il gemello di [`PropIc`] per
-/// il dispatch): `(epoch, receiver class_id + 1, defining ClassId, method
-/// idx)` dell'ultima risoluzione cache-abile. Riempita SOLO per esiti
-/// scope-indipendenti: vincitore **public** e — per le chiamate d'istanza —
-/// nessun antenato proprio che dichiari un metodo `private` omonimo
-/// (altrimenti `parent_private_rebind` renderebbe la risoluzione dipendente
-/// dallo scope chiamante, e `Closure::bind` può portare QUALSIASI scope su
-/// questo sito). Stesso contratto di PropIc: cella `Rc`-condivisa tra i
-/// cloni dell'op, stato invisibile all'uguaglianza strutturale, epoch
-/// per-run contro gli id stantii.
+/// Monomorphic per-op-site METHOD cache (the twin of [`PropIc`] for
+/// dispatch): `(epoch, receiver class_id + 1, defining ClassId, method
+/// idx)` of the last cacheable resolution. Filled ONLY for
+/// scope-independent outcomes: a **public** winner and — for instance
+/// calls — no proper ancestor declaring a `private` method of the same name
+/// (otherwise `parent_private_rebind` would make the resolution depend on
+/// the calling scope, and `Closure::bind` can bring ANY scope to this
+/// site). Same contract as PropIc: `Rc`-shared cell across the op's clones,
+/// state invisible to structural equality, per-run epoch against stale ids.
 #[derive(Debug)]
 pub struct MethodIc(Rc<std::cell::Cell<(u64, u32, u32, u32)>>);
 
@@ -672,15 +669,15 @@ pub enum Op {
     // ----- operators (semantics delegated to php_types::ops / ::convert) -----
     /// `[lhs, rhs] -> [result]` — pop rhs then lhs, push `lhs <op> rhs`.
     Binary(BinOp),
-    /// `[lhs, rhs] -> [result]` — `Binary(Add)` specialized at emission
-    /// (H-B2, S-98.0): the Long+Long pair adds in place on the stack top
+    /// `[lhs, rhs] -> [result]` — `Binary(Add)` specialized at emission:
+    /// the Long+Long pair adds in place on the stack top
     /// (overflow promotes to Double exactly like `binary_fast`); any other
     /// tag pair falls back to the full `binary_value_ab` funnel. Two
-    /// producers: the flag-off emission specializes every `+` here (H-B2);
+    /// producers: the flag-off emission specializes every `+` here;
     /// flag-on the emission stays `Binary(Add)` so the pass windows keep
     /// fusing it, and the PASS itself rewrites every window-surviving
-    /// `Binary(Add)` into this form (S-100 A-MA-101-3, decisione misurata:
-    /// il flip non ritira H-B2 dai siti stack non coperti).
+    /// `Binary(Add)` into this form (a measured decision: the default flip
+    /// does not withdraw the specialization from uncovered stack sites).
     BinaryAdd,
     /// `[v] -> [result]` — unary `-`, `+`, `!`, `~`.
     Unary(UnOp),
@@ -708,11 +705,11 @@ pub enum Op {
     /// `Binary`/`CmpJmp` (binary_value_ab) — a literal push has no effects,
     /// so eliding its dispatch and stack round-trip is unobservable.
     CmpJmpConst { op: BinOp, cidx: ConstIdx, addr: Addr, when: bool, const_lhs: bool },
-    // ----- register-form fusions (Leva B stage 2 v3, WP-44 "raw registers",
-    // re-armed S-97.1 under the micro-category judge) -----
+    // ----- register-form fusions (stage 2 v3 "raw registers" of the
+    // register bytecode plan, re-armed under the micro-category judge) -----
     // Specialized MONOMORPHIC shapes with bare u16 indices — no runtime
     // operand dispatch (the enum-operand hybrid v1/v2 measured +1.2%
-    // consistent on A/B; see sessions/WP_SESSION_44.md). Emitted ONLY by the
+    // consistent on A/B). Emitted ONLY by the
     // register-lowering pass (compile/reg_lower.rs, behind PHPR_REG_LOWER).
     // A slot READ carries LoadVar semantics (queue the "Undefined variable"
     // warning — the pass folds only when the slot's name is byte-identical
@@ -728,8 +725,8 @@ pub enum Op {
     BinarySSDst { op: BinOp, l: u16, r: u16, dst: u16 },
     /// `[] -> [slots[slot] <op> consts[cidx]]` (const is ALWAYS rhs: a
     /// written const-lhs is folded only for mirrorable comparisons —
-    /// Lt↔Gt, Le↔Ge, Eq-family — rewritten at fold time; the WP-44
-    /// commutative-arith swap was DROPPED in S-97.1: `3 + $x` with a
+    /// Lt↔Gt, Le↔Ge, Eq-family — rewritten at fold time; the original v3
+    /// commutative-arith swap was DROPPED: `3 + $x` with a
     /// non-numeric `$x` reports "int + array", the swapped form would
     /// report "array + int").
     BinarySC { op: BinOp, slot: u16, cidx: u16 },
@@ -740,8 +737,8 @@ pub enum Op {
     /// `Binary,Dup,StoreSlot,Pop` collapse here.
     BinaryDst { op: BinOp, dst: u16 },
     /// `[r] -> []` — `slots[l] ⊕ pop`, result sunk into `slots[dst]`: the
-    /// compound-assign prefix `LoadSlot(l), Swap` fused over `BinaryDst`
-    /// (S-106 leva H-A1, `wp106-harness/ha1-criterio.out`). Semantics are
+    /// compound-assign prefix `LoadSlot(l), Swap` fused over `BinaryDst`.
+    /// Semantics are
     /// BinaryDst's by construction: same silent `read_slot` lhs read, same
     /// `binary_value_ab`, same `reg_store_slot` sink.
     BinarySTDst { op: BinOp, l: u16, dst: u16 },
@@ -751,10 +748,10 @@ pub enum Op {
     /// `[] -> []` — compare `slots[slot] <op> consts[cidx]` (const always
     /// rhs, mirrored at fold time like [`Op::BinarySC`]), then jump.
     CmpJmpSC { op: BinOp, slot: u16, cidx: u16, addr: Addr, when: bool },
-    // ----- lotto superistruzioni S-107 (census-driven, wp107-harness/
-    // s107-census-derive.out): stesse regole v3 — forme MONOMORFE, indici
-    // u16 nudi, ogni handler riusa gli helper del braccio non fuso (zero
-    // biforcazione), slot READ = semantica LoadVar via `unit_slot_name`. -----
+    // ----- first superinstruction batch (census-driven): same v3 rules —
+    // MONOMORPHIC forms, bare u16 indices, every handler reuses the helpers
+    // of the unfused arm (zero forking), slot READ = LoadVar semantics via
+    // `unit_slot_name`. -----
     /// `[lhs] -> [lhs <op> consts[cidx]]` — literal rhs inlined on a STACK
     /// lhs (bigram PushConst→Binary): the [`Op::BinarySC`] shape for sites
     /// whose lhs is not a foldable slot (e.g. a PropGet result). Const is
@@ -784,16 +781,15 @@ pub enum Op {
     /// via `unit_slot_name`, then the exact PropGet entry (shared method,
     /// IC + fallback).
     PropGetSlot { slot: u16, name: Rc<[u8]>, ic: PropIc },
-    /// `[] -> [elem]` — S-145 «FR1»: fusione peephole del triplo
-    /// `PropGetSlot ; PushConst(key) ; FetchDim` a chiave COSTANTE
-    /// (criterio wp145-harness/s145-criterio-fr1.md). Sostituisce il
-    /// `PropGetSlot` IN PLACE e condivide la sua cella `PropIc`
-    /// (Rc-condivisa: il fill resta del composito). Su IC-hit con prop
-    /// Array (anche via Ref) e chiave Long/Str PRESENTE legge l'elemento
-    /// through-borrow — l'`Rc<PhpArray>` della prop non viene clonato —
-    /// e salta il composito (`ip+3`); su QUALSIASI miss esegue il braccio
-    /// `PropGetSlot` verbatim e cade nel composito intatto (fallback per
-    /// costruzione: magic, warning, string-offset, chiave assente).
+    /// `[] -> [elem]` — peephole fusion of the triple
+    /// `PropGetSlot ; PushConst(key) ; FetchDim` with a CONSTANT key.
+    /// Replaces the `PropGetSlot` IN PLACE and shares its `PropIc` cell
+    /// (Rc-shared: the fill stays with the composite). On an IC hit with an
+    /// Array prop (also via Ref) and a PRESENT Long/Str key it reads the
+    /// element through a borrow — the prop's `Rc<PhpArray>` is not cloned —
+    /// and skips the composite (`ip+3`); on ANY miss it runs the
+    /// `PropGetSlot` arm verbatim and falls into the intact composite
+    /// (fallback by construction: magic, warning, string offset, absent key).
     PropDimGetConst { slot: u16, name: Rc<[u8]>, key: ConstIdx, ic: PropIc },
     /// `[obj, value] -> []` — fused `PropSet; Pop`: the assigned value is
     /// not pushed (the Pop discarded it). Every other effect — hooks,
@@ -804,42 +800,42 @@ pub enum Op {
     /// interpolation): LoadVar warning parity, then the exact Stringify
     /// entry (shared method — `__toString` frames included).
     StringifySlot { slot: u16 },
-    // ----- lotto-2 superistruzioni S-108 (census secondo giro,
-    // wp108-harness/s108-census-derive.out): stesse regole v3 del lotto
-    // S-107. Vincolo NUOVO nominato nell'emendamento del criterio: una
-    // finestra fusa TERMINA al primo helper sospendibile (prop_get_entry/
-    // prop_set_entry possono rientrare nella VM via frame __get/hook — le
-    // op residue di una finestra che proseguisse oltre andrebbero perse). -----
+    // ----- second superinstruction batch (second census round): same v3
+    // rules as the first batch. NEW constraint named in the amended
+    // criterion: a fused window ENDS at the first suspendable helper
+    // (prop_get_entry/prop_set_entry can re-enter the VM via a __get/hook
+    // frame — the residual ops of a window that continued past it would be
+    // lost). -----
     /// `[] -> [recv, value]` — fused `LoadSlot(recv); LoadVar(slot); PropGet`
-    /// (testa RMW del giudice prop, `$o->c = $o->c + …`): push SILENTE del
-    /// ricevitore (LoadSlot esatto), poi la semantica PropGetSlot intera
-    /// (parità warning + `prop_get_entry` condivisa come ULTIMO passo: una
-    /// sospensione magic/hook riprende esattamente come nello stream non fuso,
-    /// col ricevitore già in pila).
+    /// (the RMW head of the prop judge, `$o->c = $o->c + …`): SILENT push of
+    /// the receiver (exact LoadSlot), then the whole PropGetSlot semantics
+    /// (warning parity + shared `prop_get_entry` as the LAST step: a
+    /// magic/hook suspension resumes exactly as in the unfused stream, with
+    /// the receiver already on the stack).
     PropGetSlotRecv { recv: u16, slot: u16, name: Rc<[u8]>, ic: PropIc },
-    /// `[obj, lhs] -> []` — fused `BinaryTC(op,cidx); PropSet; Pop` (coda RMW
-    /// del giudice prop): il funnel const-rhs ESATTO di BinaryTC (flat —
-    /// `binary_value_ab` non sospende, precedente BinarySCSC), poi l'entry
-    /// PropSet DISCARD condivisa come ULTIMO passo.
+    /// `[obj, lhs] -> []` — fused `BinaryTC(op,cidx); PropSet; Pop` (the RMW
+    /// tail of the prop judge): the EXACT const-rhs funnel of BinaryTC (flat
+    /// — `binary_value_ab` does not suspend, precedent BinarySCSC), then the
+    /// shared PropSet DISCARD entry as the LAST step.
     BinaryTCPropSetPop { op: BinOp, cidx: u16, name: Rc<[u8]>, ic: PropIc },
-    /// `[] -> []` — fused `BinarySCSC(…); BinarySTDst(opd,l,dst)` (l'intero
-    /// statement del giudice arith, `$s opd= (la opa ca) op (lb opb cb)`):
-    /// i tre funnel dell'albero SCSC nell'ordine originale (a, b, combine),
-    /// poi la coda BinarySTDst ESATTA sul risultato senza transito di pila —
-    /// stessa `read_slot` silenziosa del lhs, stesso `binary_value_ab` (la
-    /// coda non ha fast path, come l'op non fusa), stesso `reg_store_slot`.
+    /// `[] -> []` — fused `BinarySCSC(…); BinarySTDst(opd,l,dst)` (the whole
+    /// statement of the arith judge, `$s opd= (la opa ca) op (lb opb cb)`):
+    /// the three funnels of the SCSC tree in the original order (a, b,
+    /// combine), then the EXACT BinarySTDst tail on the result with no stack
+    /// transit — same silent `read_slot` of the lhs, same `binary_value_ab`
+    /// (the tail has no fast path, like the unfused op), same
+    /// `reg_store_slot`.
     BinarySCSCDst { opa: BinOp, la: u16, ca: u16, opb: BinOp, lb: u16, cb: u16, op: BinOp, opd: BinOp, l: u16, dst: u16 },
-    /// `[] -> [var, const]` — fused `LoadVar(slot); PushConst(cidx)` (la
-    /// coppia di push-argomenti dei giudici calls/arr/re): pura coppia di
-    /// push, nessun effetto eliso — parità warning LoadVar via
-    /// `reg_load_slot` (guardia fold_slot), poi il const.
+    /// `[] -> [var, const]` — fused `LoadVar(slot); PushConst(cidx)` (the
+    /// argument-push pair of the calls/arr/re judges): a pure pair of
+    /// pushes, no effect elided — LoadVar warning parity via
+    /// `reg_load_slot` (fold_slot guard), then the const.
     LoadVarPushConst { slot: u16, cidx: u16 },
-    /// `[s1..s(n-1)] -> [s]` — fused `PushConst(cidx); ConcatN(n)` (S-109
-    /// F2): la parte literal del join (SOLO `Const::Str`, guardia della
-    /// finestra) è l'ULTIMA parte; il corpo è lo stesso `concat_n` di
-    /// `ConcatN` (helper condiviso, zero biforcazione). ConcatN è puro per
-    /// costruzione — nessun helper sospendibile nella finestra (vincolo
-    /// S-108).
+    /// `[s1..s(n-1)] -> [s]` — fused `PushConst(cidx); ConcatN(n)`: the
+    /// literal part of the join (ONLY `Const::Str`, the window's guard) is
+    /// the LAST part; the body is the same `concat_n` as `ConcatN` (shared
+    /// helper, zero forking). ConcatN is pure by construction — no
+    /// suspendable helper inside the window (a standing constraint).
     ConcatNConst { n: u32, cidx: u16 },
     /// `[s1..sn] -> [s]` — join `n` already-stringified parts (WP-34): the
     /// compiler emits each part through `Stringify` (or as a Str literal), so
@@ -1446,16 +1442,15 @@ pub enum Op {
     /// `[keys…, value] -> [value]` — write `value` through `base` then `steps`
     /// (`Index` steps consume the pushed keys in source order). Objects navigate
     /// in place, arrays auto-vivify + copy-on-write (à la `write_into`).
-    /// S-136 «FD1»: la cella IC cacha (classe, scope) → slot con bit NP per il
-    /// fast path `[Prop, Index]` (criterio s136-criterio-dimwrite.md).
+    /// The IC cell caches (class, scope) → slot with the NP bit for the
+    /// `[Prop, Index]` fast path.
     FieldAssign { base: FieldBase, steps: Rc<[FieldStep]>, ic: PropIc },
     /// `[keys…, rhs] -> [result]` — compound `place op= rhs`: read the place (NULL
     /// if absent), apply `op`, write back, leave the result.
-    /// S-138 «FD1-ext RMW»: stessa cella IC di `FieldAssign` per il fast path
-    /// `[Prop, Index]` (criterio s138-criterio-rmw.md).
+    /// Same IC cell as `FieldAssign` for the `[Prop, Index]` fast path.
     FieldAssignOp { base: FieldBase, steps: Rc<[FieldStep]>, op: BinOp, ic: PropIc },
     /// `[keys…] -> [result]` — `++`/`--` on a mixed place (read, apply, write back).
-    /// S-138 «FD1-ext RMW»: cella IC come sopra.
+    /// IC cell as above.
     FieldIncDec { base: FieldBase, steps: Rc<[FieldStep]>, inc: bool, pre: bool, ic: PropIc },
     /// `[keys…] -> [bool]` — `isset()` of a mixed place: true iff every level
     /// exists and the leaf is non-null (silent).
@@ -1526,8 +1521,8 @@ pub enum Op {
     Nop,
 }
 
-/// Where a hot op sources (or sinks) a value under the register-bytecode plan
-/// (Leva B, doc/plans-archive/REGISTER_BYTECODE_PLAN.md §4): operand sourcing on the HOT ops,
+/// Where a hot op sources (or sinks) a value under the register-bytecode plan:
+/// operand sourcing on the HOT ops,
 /// not a second ISA. `Stack` is the legacy form — pop/push a clone through the
 /// operand stack; the direct forms read by borrow from a named slot, a
 /// register temp (`Func::max_temps` slots past `n_slots`), or the function's
@@ -1579,8 +1574,8 @@ pub struct Func {
     /// from the source [`crate::hir::FnDecl::slots`] length (or
     /// [`crate::hir::Program::slots`] for the script body).
     pub n_slots: u32,
-    /// Number of *register* temp slots past `n_slots` (Leva B,
-    /// doc/plans-archive/REGISTER_BYTECODE_PLAN.md §4): a "register" is an ordinary frame slot
+    /// Number of *register* temp slots past `n_slots` (register bytecode
+    /// plan): a "register" is an ordinary frame slot
     /// with a static index in `n_slots..n_slots + max_temps`, assigned by the
     /// register-lowering pass ([`crate::compile::reg_lower`]). The frame is
     /// sized `n_slots + max_temps`; recycle/drop machinery covers these slots
@@ -1734,15 +1729,14 @@ impl Func {
         s
     }
 
-    /// S-145 «FR1» (criterio wp145-harness/s145-criterio-fr1.md): fusione
-    /// peephole del triplo `PropGetSlot ; PushConst(k) ; FetchDim` a chiave
-    /// Long/Str — il `PropGetSlot` è SOSTITUITO in place da
-    /// [`Op::PropDimGetConst`] con la STESSA cella `PropIc` (Rc-condivisa:
-    /// il fill resta del composito, che rimane intatto come fallback).
-    /// Nessuna inserzione/rimozione: gli indirizzi di salto non cambiano, e
-    /// un salto che atterrasse sul fuso produce lo stesso stato di stack del
-    /// triplo originale. Chiamata da [`Func::shrink`]: una volta per compile,
-    /// mai sul cammino di esecuzione.
+    /// Peephole fusion of the triple `PropGetSlot ; PushConst(k) ; FetchDim`
+    /// with a Long/Str key — the `PropGetSlot` is REPLACED in place by
+    /// [`Op::PropDimGetConst`] with the SAME `PropIc` cell (Rc-shared: the
+    /// fill stays with the composite, which remains intact as the fallback).
+    /// No insertion/removal: jump addresses do not change, and a jump that
+    /// landed on the fused op produces the same stack state as the original
+    /// triple. Called from [`Func::shrink`]: once per compile, never on the
+    /// execution path.
     fn fuse_prop_dim_reads(&mut self) {
         for i in 0..self.ops.len().saturating_sub(2) {
             let (Op::PropGetSlot { slot, name, ic }, Op::PushConst(k), Op::FetchDim) =
@@ -2225,7 +2219,7 @@ pub struct CompiledClass {
     /// per-write prop_info lookup (WP-26 quick win: the WP-25 deny cost
     /// showed up as an unconditional hash lookup per declared write).
     pub has_asym_set: bool,
-    /// L-OL1-F1 «stampo» (S-127): the class's COMPLETE per-instance property
+    /// The "template": the class's COMPLETE per-instance property
     /// table, snapshotted once and cloned by every later allocation. Filled at
     /// the first `alloc_object` when every default is constant (`prop_init`
     /// None); for a class WITH a `prop_init` thunk, filled at the thunk's
