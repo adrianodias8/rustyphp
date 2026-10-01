@@ -191,7 +191,7 @@ fn visit_addrs(op: &mut Op, f: &mut impl FnMut(&mut Addr)) {
         | Op::StaticPropOpSetDynamic { .. } | Op::StaticPropIncDecDynamic { .. }
         | Op::FieldAssign { .. } | Op::FieldAssignOp { .. }
         | Op::FieldIncDec { .. } | Op::FieldIsset { .. } | Op::FieldEmpty { .. }
-        | Op::FieldUnset { .. } | Op::Fatal { .. } | Op::EmitNotice { .. }
+        | Op::FieldUnset { .. } | Op::Fatal { .. } | Op::EmitNotice { .. } | Op::RefArgOrNotice { .. } | Op::GlobalRefDyn { .. } | Op::StaticPropBindRef { .. }
         | Op::Exit { .. } | Op::SuppressBegin { .. } | Op::SuppressEnd { .. }
         | Op::Sweep { .. } | Op::Nop { .. } => {}
     }
@@ -446,7 +446,7 @@ fn bin_op_of(op: &Op) -> Option<BinOp> {
         | Op::StaticPropOpSetDynamic { .. } | Op::StaticPropIncDecDynamic { .. }
         | Op::FieldAssign { .. } | Op::FieldAssignOp { .. }
         | Op::FieldIncDec { .. } | Op::FieldIsset { .. } | Op::FieldEmpty { .. }
-        | Op::FieldUnset { .. } | Op::Fatal { .. } | Op::EmitNotice { .. }
+        | Op::FieldUnset { .. } | Op::Fatal { .. } | Op::EmitNotice { .. } | Op::RefArgOrNotice { .. } | Op::GlobalRefDyn { .. } | Op::StaticPropBindRef { .. }
         | Op::Exit { .. } | Op::SuppressBegin { .. } | Op::SuppressEnd { .. }
         | Op::Sweep { .. } | Op::Nop { .. } => None,
     }

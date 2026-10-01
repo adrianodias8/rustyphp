@@ -1803,9 +1803,18 @@ fn parse_enc_list(v: &Zval, ctx: &mut Ctx) -> Vec<Vec<u8>> {
     };
     // Drop empty/whitespace-only entries so `''` parses to zero encodings (PHP
     // then raises "must specify at least one encoding").
+    // `auto` expands to the detect order of the neutral language, ASCII and
+    // UTF-8 (php_mb_parse_encoding_list; egulias/email-validator passes it).
     names
         .into_iter()
         .filter(|n| !n.trim_ascii().is_empty())
+        .flat_map(|n| {
+            if n.trim_ascii().eq_ignore_ascii_case(b"auto") {
+                vec![b"ASCII".to_vec(), b"UTF-8".to_vec()]
+            } else {
+                vec![n]
+            }
+        })
         .collect()
 }
 
@@ -1813,6 +1822,34 @@ fn parse_enc_list(v: &Zval, ctx: &mut Ctx) -> Vec<Vec<u8>> {
 /// `$string` from `$from_encoding` (UTF-8 by default, or detected from a
 /// list/comma string) to `$to_encoding`.
 pub fn mb_convert_encoding(args: &[Zval], ctx: &mut Ctx) -> Result<Zval, PhpError> {
+    // An array converts element by element (php_mb_convert_encoding_recursive):
+    // string keys and values are converted, nested arrays recurse, other
+    // values are copied (Symfony Console's splitStringByWidth passes its lines).
+    if let Some(Zval::Array(a)) = args.first().map(|v| v.deref_clone()) {
+        let mut out = PhpArray::new();
+        let mut sub: Vec<Zval> = args.to_vec();
+        for (k, v) in a.iter() {
+            let key = match k {
+                php_types::Key::Str(ks) => {
+                    sub[0] = Zval::Str(ks.clone());
+                    match mb_convert_encoding(&sub, ctx)? {
+                        Zval::Str(c) => php_types::Key::Str(c),
+                        _ => php_types::Key::Str(ks),
+                    }
+                }
+                k => k,
+            };
+            let val = match v.deref_clone() {
+                v @ (Zval::Str(_) | Zval::Array(_)) => {
+                    sub[0] = v;
+                    mb_convert_encoding(&sub, ctx)?
+                }
+                v => v,
+            };
+            out.insert(key, val);
+        }
+        return Ok(Zval::Array(std::rc::Rc::new(out)));
+    }
     let s = arg_str(args, "mb_convert_encoding", ctx)?;
     let to_raw = convert::to_zstr(
         args.get(1).ok_or_else(|| {

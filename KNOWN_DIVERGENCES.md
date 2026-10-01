@@ -31,6 +31,13 @@ relocation (the scenario passes; `baseline/repro/static-prop-ref-across-include.
 | D-14 | `ini_set('precision', '5')` returns `false` and has no effect (`ini_get` and float rendering keep 14; upstream's `ini.rs` marks engine-hardwired directives read-only) | takes effect: `14\|14\|5\|0.33333` | `ini-set-precision.phpt` | session 5 (worker isolation battery) |
 | D-15 | an uncaught `TypeError` raised by a builtin (`sort(NULL)`) has no frame for the builtin in its trace (`#0 {main}`) | `#0 file(2): sort(NULL)` then `#1 {main}` | `builtin-frame-in-trace.phpt` | session 6 |
 | D-16 | float-offset diagnostics on an array write (`$b[1.5] = 3`, `[NAN => 1]`) are reported with the line of the NEXT statement, after its output; `[$k => 1]` with `$k = 1e30` misses the not-representable warning; `isset($a[NAN])` is silent (upstream behaves the same) | reported on the write's own line; every out-of-range float offset warns | `nan-array-key-warning.phpt` | session 6 |
+| D-17 | XPath `namespace::` axis evaluates to an empty node-set (the engine has no namespace nodes) | the in-scope namespace nodes, `xml` included | `xpath-namespace-axis.phpt` | session 7 |
+| D-18 | a builtin's TypeError names a `false` argument `bool given` | `false given` (zend_zval_value_name) | `false-given-type-name.phpt` | session 7 |
+| D-19 | a TypeError for a user callback invoked from prelude code (an SPL iterator) appends `, called in <user file> on line <prelude line>` | no `called in` clause: the caller is internal | `internal-caller-no-called-in.phpt` | session 7 |
+| D-20 | `get_defined_constants()` is undefined | returns every constant (`categorize` groups them) | `get-defined-constants.phpt` | session 7 |
+| D-21 | `exp("abc")` / `sqrt([])`: the TypeError names the parameter type `int\|float` | `float` (the declared type of the math builtins) | `math-param-type-name.phpt` | session 7 |
+| D-22 | `preg_match_all()` ignores its `$offset` argument (matches from 0) | matching starts at the byte offset | `preg-match-all-offset.phpt` | session 7 |
+| D-23 | `f(...$args)` where the KNOWN function `f` has by-reference parameters is a compile error ("spread call to a by-reference function") | binds the reference elements (dynamic `$f(...$args)` already does) | `spread-to-known-byref-function.phpt` | session 7 |
 
 Fixed by the fork (tests in `baseline/repro/`): `count()` on a `Countable` through any dynamic
 call; `isset(Class::$static)`; `.=` quadratic for every non-local target and non-string operand;

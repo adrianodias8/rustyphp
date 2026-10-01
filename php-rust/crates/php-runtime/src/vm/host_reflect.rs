@@ -765,25 +765,22 @@ impl<'m> super::Vm<'m> {
         let Some(&cid) = self.class_index.get(&key) else { return Ok(Zval::Array(Rc::new(out))) };
         // Statics along the parent chain (child-most first, like the function
         // table walks elsewhere).
+        // The DECLARED default, not the current value (ReflectionClass::
+        // getDefaultProperties; a worker resetting statics relies on it).
         let mut cur = Some(cid);
+        let mut statics: Vec<(ClassId, usize, Vec<u8>)> = Vec::new();
         while let Some(c) = cur {
             for (i, sp) in self.classes[c].static_props.iter().enumerate() {
-                let name = sp.name.to_vec();
-                if out.get(&Key::from_bytes(&name)).is_some() {
-                    continue;
-                }
-                let cell_key = (c, name.clone());
-                let v = if let Some(cell) = self.static_props.get(&cell_key) {
-                    cell.borrow().deref_clone()
-                } else {
-                    match &self.classes[c].static_props[i].init {
-                        StaticInit::Const(k) => k.to_zval(),
-                        StaticInit::Thunk(_) => Zval::Null,
-                    }
-                };
-                out.insert(Key::from_bytes(&name), v);
+                statics.push((c, i, sp.name.to_vec()));
             }
             cur = self.classes[c].parent;
+        }
+        for (c, i, name) in statics {
+            if out.get(&Key::from_bytes(&name)).is_some() {
+                continue;
+            }
+            let v = self.static_prop_default(c, i)?;
+            out.insert(Key::from_bytes(&name), v);
         }
         let cc = self.classes[cid];
         for (n, d) in &cc.prop_defaults {
@@ -999,14 +996,27 @@ impl<'m> super::Vm<'m> {
         if let Some(cell) = self.static_props.get(&key) {
             return Ok(cell.borrow().deref_clone());
         }
-        match &self.classes[decl].static_props[idx].init {
-            StaticInit::Const(c) => {
-                let v = c.to_zval();
-                self.static_props.insert(key, php_types::zcell(v.clone()));
-                Ok(v)
-            }
-            StaticInit::Thunk(_) => Ok(Zval::Null),
-        }
+        // First touch: initialise like an access would (a non-constant
+        // default runs its initialiser).
+        let v = self.static_prop_default(decl, idx)?;
+        self.static_props.insert(key, php_types::zcell(v.clone()));
+        Ok(v)
+    }
+
+    /// The declared default of static property `idx` of class `decl`: the
+    /// folded constant, or the value its initialiser thunk computes (run
+    /// synchronously on a fresh frame; nothing is stored).
+    pub(super) fn static_prop_default(&mut self, decl: ClassId, idx: usize) -> Result<Zval, PhpError> {
+        let func = match &self.classes[decl].static_props[idx].init {
+            StaticInit::Const(c) => return Ok(c.to_zval()),
+            StaticInit::Thunk(func) => func,
+        };
+        let baseline = self.frames.len();
+        let mut frame = Frame::new(func, self.class_mod(decl));
+        frame.class = Some(decl);
+        frame.static_class = Some(decl);
+        self.frames.push(frame);
+        self.drive_to_return(baseline)
     }
     /// `__reflect_static_prop_set($class, $prop, $value)`: write a static
     /// property ignoring visibility — backs `ReflectionProperty::setValue` with

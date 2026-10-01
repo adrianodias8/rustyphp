@@ -1384,9 +1384,14 @@ impl<'m> Vm<'m> {
                             })
                         })
                         .unwrap_or_default();
-                    let mut val =
-                        self.call_method_sync(obj, b"offsetGet", vec![key])?.deref_clone();
-                    if !matches!(val, Zval::Object(_)) {
+                    // A by-reference `&offsetGet()` (WeakMap, Twig's
+                    // `$weakMap[$e][] = $ep`) hands back the element's cell:
+                    // the rest of the path writes through it.
+                    let mut val = match self.call_method_sync_raw(obj, b"offsetGet", vec![key])? {
+                        Zval::Ref(cell) => Zval::Ref(cell),
+                        other => other.deref_clone(),
+                    };
+                    if !matches!(val, Zval::Object(_) | Zval::Ref(_)) {
                         // Writing through a by-value offsetGet result mutates a
                         // temporary — PHP's notice, and no write happens.
                         self.diags.push(Diag::Notice(format!(
@@ -2127,8 +2132,13 @@ impl<'m> Vm<'m> {
                             })
                         })
                         .unwrap_or_default();
-                    let mut val = self.call_method_sync(obj, b"offsetGet", vec![key])?.deref_clone();
-                    if !matches!(val, Zval::Object(_)) {
+                    // `$this->map[$k][] = $v` with a by-reference
+                    // `&offsetGet()` (WeakMap): write through the element.
+                    let mut val = match self.call_method_sync_raw(obj, b"offsetGet", vec![key])? {
+                        Zval::Ref(cell) => Zval::Ref(cell),
+                        other => other.deref_clone(),
+                    };
+                    if !matches!(val, Zval::Object(_) | Zval::Ref(_)) {
                         // Writing through a by-value offsetGet result mutates a
                         // temporary — PHP's notice, and no write happens.
                         self.diags.push(Diag::Notice(format!(
@@ -2184,9 +2194,14 @@ impl<'m> Vm<'m> {
                             })
                         })
                         .unwrap_or_default();
-                    let mut val =
-                        self.call_method_sync(obj, b"offsetGet", vec![key])?.deref_clone();
-                    if !matches!(val, Zval::Object(_)) {
+                    // A by-reference `&offsetGet()` (WeakMap, Twig's
+                    // `$weakMap[$e][] = $ep`) hands back the element's cell:
+                    // the rest of the path writes through it.
+                    let mut val = match self.call_method_sync_raw(obj, b"offsetGet", vec![key])? {
+                        Zval::Ref(cell) => Zval::Ref(cell),
+                        other => other.deref_clone(),
+                    };
+                    if !matches!(val, Zval::Object(_) | Zval::Ref(_)) {
                         // Unsetting through a by-value offsetGet result would
                         // mutate a temporary — Zend's notice, nothing removed.
                         self.diags.push(Diag::Notice(format!(

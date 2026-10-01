@@ -155,6 +155,9 @@ class PDO {
     protected function __sqliteUdf(string $function_name, $callback, int $num_args, int $flags): bool {
         return __pdo_create_function($this->__h, $function_name, $callback, $num_args, $flags) === true;
     }
+    protected function __sqliteCollation(string $name, $callback): bool {
+        return __pdo_create_collation($this->__h, $name, $callback) === true;
+    }
     // pdo_sqlite's BC method: deprecated in 8.5 in favour of the driver
     // subclass method Pdo\Sqlite::createFunction().
     public function sqliteCreateFunction(string $function_name, $callback, int $num_args = -1, int $flags = 0): bool {

@@ -406,6 +406,23 @@ fn translate_walk(docroot: &Path, path: &[u8]) -> Resolved {
     Resolved::NotFound
 }
 
+/// Whether the script sent header `name` (lowercase): PHP's cli-server then
+/// sends the script's `Date` instead of its own (Symfony's Response sets one).
+fn script_sets_header(headers: &[Vec<u8>], name: &[u8]) -> bool {
+    headers.iter().any(|l| {
+        l.iter().position(|&b| b == b':').is_some_and(|p| l[..p].trim_ascii().eq_ignore_ascii_case(name))
+    })
+}
+
+/// Remove the head line starting with `prefix` (e.g. the server's `Date: `).
+fn drop_head_line(out: &mut Vec<u8>, prefix: &[u8]) {
+    if let Some(start) = out.windows(prefix.len()).position(|w| w == prefix) {
+        if let Some(len) = out[start..].windows(2).position(|w| w == b"\r\n") {
+            out.drain(start..start + len + 2);
+        }
+    }
+}
+
 /// The response head shared by every kind of response.
 fn response_head(
     protocol: (u8, u8),
@@ -728,6 +745,9 @@ fn write_php_response(
         None => status_reason(code),
     };
     let mut out = response_head(req.protocol, code, reason, host);
+    if script_sets_header(&outcome.headers, b"date") {
+        drop_head_line(&mut out, b"Date: ");
+    }
     let mut have_ctype = false;
     for line in &outcome.headers {
         if let Some(p) = line.iter().position(|&b| b == b':') {
@@ -1020,7 +1040,9 @@ fn worker_response_bytes(p: &PendingRequest, resp: &php_types::sapi::WorkerRespo
         out.extend_from_slice(h);
         out.extend_from_slice(b"\r\n");
     }
-    out.extend_from_slice(format!("Date: {}\r\n", php_types::sapi::http_date(now)).as_bytes());
+    if !script_sets_header(&resp.headers, b"date") {
+        out.extend_from_slice(format!("Date: {}\r\n", php_types::sapi::http_date(now)).as_bytes());
+    }
     out.extend_from_slice(if p.keep_alive {
         b"Connection: keep-alive\r\n"
     } else {
@@ -1039,7 +1061,12 @@ fn worker_response_bytes(p: &PendingRequest, resp: &php_types::sapi::WorkerRespo
     if !have_ctype {
         out.extend_from_slice(b"Content-type: text/html; charset=UTF-8\r\n");
     }
-    out.extend_from_slice(format!("Content-Length: {}\r\n\r\n", resp.body.len()).as_bytes());
+    // An application-sent Content-Length (Symfony's Response::prepare)
+    // stands, like on the one-shot path; ours only fills its absence.
+    if !script_sets_header(&resp.headers, b"content-length") {
+        out.extend_from_slice(format!("Content-Length: {}\r\n", resp.body.len()).as_bytes());
+    }
+    out.extend_from_slice(b"\r\n");
     if !p.head {
         out.extend_from_slice(&resp.body);
     }

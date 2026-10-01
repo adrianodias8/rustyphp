@@ -255,7 +255,7 @@ impl<'f> Lowerer<'f> {
                 // to the place (D-13.2/D-13.3). A non-lvalue (or bare `return;`)
                 // stays a value return; the runtime emits the by-ref Notice.
                 Some(e) if self.fn_by_ref && is_returnable_lvalue(e) => {
-                    StmtKind::ReturnRef(self.lower_place(e, line)?)
+                    StmtKind::ReturnRef(self.lower_ref_place(e, line)?)
                 }
                 Some(e) => StmtKind::Return(Some(self.lower_expr(e)?)),
                 None => StmtKind::Return(None),
@@ -378,7 +378,7 @@ impl<'f> Lowerer<'f> {
             // registered at run time via `DeclareTrait`, so later units can
             // `use` whichever variant the executed branch declared.
             Statement::Trait(t) => {
-                // S-72.6: chiave FQN come in lower_traits.
+                // S-72.6: FQN key, as in lower_traits.
                 let key = join_ns(&self.cur_namespace, t.name.value).to_ascii_lowercase();
                 if self.traits.contains_key(&key) {
                     return Ok(None); // top-level, already hoisted

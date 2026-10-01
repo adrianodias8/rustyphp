@@ -1318,7 +1318,20 @@ impl<'a> super::FnCompiler<'a> {
                         // temporary sits at the first element) — evaluate into
                         // a temp slot and call. The pointer-WRITING family
                         // (reset/end/next/prev) keeps the honest error.
-                        if canon.as_ref() == b"current" || canon.as_ref() == b"key" {
+                        let by_value = canon.as_ref() == b"current" || canon.as_ref() == b"key";
+                        // reset/end/next/prev on a call result: the temporary is
+                        // sent with PHP's notice (oracle-pinned), its pointer
+                        // moves and is discarded with it.
+                        let call_result = matches!(
+                            first.kind,
+                            ExprKind::Call { .. }
+                                | ExprKind::CallDynamic { .. }
+                                | ExprKind::MethodCall { .. }
+                                | ExprKind::MethodCallDyn { .. }
+                                | ExprKind::StaticCall { .. }
+                                | ExprKind::StaticCallDyn { .. }
+                        );
+                        if by_value || call_result {
                             let tmp = self.alloc_temp();
                             self.expr(first)?;
                             // BindRefTo REPLACES the temp's binding — a plain
@@ -1329,12 +1342,19 @@ impl<'a> super::FnCompiler<'a> {
                                 steps: [].into(),
                             });
                             self.emit(Op::Pop);
+                            if !by_value {
+                                let k = self.konst(Const::Str(php_types::PhpStr::new(
+                                    &b"Only variables should be passed by reference"[..],
+                                )));
+                                self.emit(Op::EmitNotice(k));
+                            }
                             self.push_value_args(rest)?;
                             self.emit(Op::CallHostBuiltinRef {
                                 name: canon.into(),
                                 slot: tmp,
                                 argc: rest.len() as u32,
                             });
+                            self.clear_temp_binding(tmp);
                             self.free_temp();
                             return Ok(());
                         }
@@ -1727,6 +1747,33 @@ impl<'a> super::FnCompiler<'a> {
                             self.emit(Op::MakeRef { base, steps: steps.into() });
                             continue;
                         }
+                        // `$GLOBALS[$name]` (Drupal's SettingsEditor::rewrite):
+                        // a reference to the global variable named at run time.
+                        if let ExprKind::Index { base, index } = &a.kind {
+                            if matches!(base.kind, ExprKind::GlobalsArray) {
+                                self.expr(index)?;
+                                self.emit(Op::GlobalRefDyn);
+                                continue;
+                            }
+                        }
+                        // A method call result (`NestedArray::setValue(
+                        // $this->getValues(), …)` with `&getValues()`, Drupal's
+                        // FormState): the callee's returned reference binds the
+                        // parameter; a plain value passes with PHP's notice.
+                        if let ExprKind::MethodCall { object, method, args: margs, named, nullsafe: false } = &a.kind {
+                            self.expr(object)?;
+                            let recv_class = match object.kind {
+                                ExprKind::This => self.cur_class,
+                                _ => None,
+                            };
+                            // `deref: false` keeps a `&m()`'s raw reference.
+                            self.emit_method_call(method, margs, named, recv_class, false)?;
+                            let k = self.konst(Const::Str(php_types::PhpStr::new(
+                                &b"Only variables should be passed by reference"[..],
+                            )));
+                            self.emit(Op::RefArgOrNotice(k));
+                            continue;
+                        }
                         let msg = if in_pack {
                             format!(
                                 "{}(): Argument #{} could not be passed by reference",
@@ -2111,6 +2158,38 @@ impl<'a> super::FnCompiler<'a> {
                         argc: rest.len() as u32,
                     });
                     self.clear_temp_binding(root_tmp);
+                    self.free_temp();
+                    return Ok(());
+                }
+                // A call result (`array_shift($input->getArgument('x'))`, drush):
+                // PHP sends the temporary, raises the notice, and the builtin's
+                // mutation is lost with the temporary.
+                if matches!(
+                    first.kind,
+                    ExprKind::Call { .. }
+                        | ExprKind::CallDynamic { .. }
+                        | ExprKind::MethodCall { .. }
+                        | ExprKind::MethodCallDyn { .. }
+                        | ExprKind::StaticCall { .. }
+                        | ExprKind::StaticCallDyn { .. }
+                ) {
+                    let t = self.alloc_temp();
+                    self.expr(first)?;
+                    // BindRefTo, not StoreSlot: a reused temp may still hold a
+                    // stale ref from an earlier call.
+                    self.emit(Op::BindRefTo { base: FieldBase::Local(t), steps: [].into() });
+                    self.emit(Op::Pop);
+                    let k = self.konst(Const::Str(php_types::PhpStr::new(
+                        &b"Only variables should be passed by reference"[..],
+                    )));
+                    self.emit(Op::EmitNotice(k));
+                    self.push_value_args(rest)?;
+                    self.emit(Op::CallBuiltinRef {
+                        name: name.into(),
+                        slot: t,
+                        argc: rest.len() as u32,
+                    });
+                    self.clear_temp_binding(t);
                     self.free_temp();
                     return Ok(());
                 }

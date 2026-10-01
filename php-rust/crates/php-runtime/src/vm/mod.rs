@@ -174,11 +174,6 @@ enum RunExit {
     /// the resumer to record — auto-key resolution lives in
     /// [`Vm::resume_generator`], mirroring the tree-walker.
     Yielded { key: GenKey, value: Zval },
-    /// A `Fiber::suspend($value)` ran inside the fiber whose frames begin at this
-    /// `baseline` (GEN-4). The whole frame segment `frames[baseline..]` has
-    /// already been parked in [`Vm::fibers`]; `value` is what `start()`/`resume()`
-    /// returns to its caller.
-    Suspended { value: Zval },
 }
 
 /// Run status of a fiber (GEN-4). `NotStarted` is the absence of a
@@ -191,13 +186,19 @@ enum FiberStatus {
 }
 
 /// A fiber's runtime state (GEN-4), keyed by its object handle id in
-/// [`Vm::fibers`]. `parked` holds the suspended frame *segment* (everything the
-/// fiber pushed, innermost last) while it is `Suspended` — unlike a generator
-/// (one frame), a fiber suspends its whole call stack, since `Fiber::suspend`
-/// can be called from any depth.
+/// [`Vm::fibers`]. A fiber runs on its own native stack (`co`), so a suspend
+/// keeps every Rust frame between its start and the `Fiber::suspend` call;
+/// `parked` holds its VM frames while it is not running.
 struct FiberState<'m> {
     status: FiberStatus,
+    /// The fiber's own frame stack while it is not running (its bottom frame
+    /// first); `fiber_enter` puts the script frame in front of it.
     parked: Vec<Frame<'m>>,
+    /// The fiber's native stack (a coroutine), from `start()` until it ends.
+    co: Option<coroutines::FiberCo>,
+    /// The coroutine's `Yielder`, type-erased; set when the body starts and
+    /// read by `Fiber::suspend` (see `coroutines::fiber_suspend`).
+    yielder: *const (),
     ret: Zval,
     /// The fiber's own `@` suppression state (depth, diag marks, saved
     /// error_reporting levels), parked at suspend: error suppression is
@@ -207,12 +208,22 @@ struct FiberState<'m> {
 }
 
 /// The currently-running fiber context (GEN-4), pushed while a fiber executes.
-/// `baseline` is the frame depth its segment starts at (so `Fiber::suspend`
-/// knows how much of the stack to park); `obj` backs `Fiber::getCurrent()`.
+/// `obj` backs `Fiber::getCurrent()`.
 struct FiberContext {
     id: u32,
-    baseline: usize,
     obj: Zval,
+    /// The `Fiber` method that entered it (`start`/`resume`/`throw`) and its
+    /// arguments: traces render it as the frame between the fiber's bottom
+    /// frame and the resumer's (`#n file(line): Fiber->resume()`).
+    method: &'static [u8],
+    args: Vec<Zval>,
+}
+
+/// One entry of the stack a trace walks (see `Vm::trace_stack`): a real frame,
+/// or the `Fiber->start()/resume()/throw()` call that entered fiber level `j`.
+enum TraceEnt<'a, 'm> {
+    Real(&'a Frame<'m>),
+    FiberCall(usize),
 }
 
 /// Why [`run_source_with`] could not produce a [`VmOutcome`] (E2). `Lower` is a
@@ -796,6 +807,7 @@ pub fn vm_new<'m>(
         shutdown_fns: Vec::new(),
         generators: HashMap::default(),
         fibers: HashMap::default(),
+        fiber_outer: Vec::new(),
         fiber_stack: Vec::new(),
         fiber_class_id: module.class_index.get(&b"fiber"[..]).copied(),
         throwable_id: module.class_index.get(&b"throwable"[..]).copied(),
@@ -819,6 +831,7 @@ pub fn vm_new<'m>(
         error_log: Vec::new(),
         user_abort_ignored: false,
         stream_wrappers: std::collections::HashMap::new(),
+        stream_wrapper_order: Vec::new(),
         filtered_streams: Vec::new(),
         json_active: Vec::new(),
         enum_cache: HashMap::default(),
@@ -3045,6 +3058,11 @@ thread_local! {
 /// PHP function calls grow `frames` rather than the Rust stack, so deep PHP
 /// recursion cannot overflow the host stack, and a frame is suspendable.
 pub struct Vm<'m> {
+    /// Fiber state (GEN-4), keyed by the fiber's object handle id; an entry
+    /// exists once the fiber has been started. FIRST field on purpose: fields
+    /// drop in declaration order, so a still-suspended fiber's native stack is
+    /// unwound (its Rust frames dropped) while the rest of the Vm is intact.
+    fibers: HashMap<u32, FiberState<'m>>,
     /// WP-67 P-2: the per-request module arena (owned by the harness,
     /// created BEFORE the Vm). [`Vm::park_module`] is THE unique
     /// constructor of `&'m Module` for unit modules (M-67.1) — every path
@@ -3465,12 +3483,12 @@ pub struct Vm<'m> {
     /// `yield`. This side-table is what lets a generator be a frame *outside* the
     /// call stack without the tree-walker's `corosensei`/`unsafe`.
     generators: HashMap<u32, Frame<'m>>,
-    /// Suspended fiber state (GEN-4), keyed by the fiber's object handle id. An
-    /// entry exists once the fiber has been started; its `parked` segment holds
-    /// the whole suspended call stack while the fiber is `Suspended`.
-    fibers: HashMap<u32, FiberState<'m>>,
+    /// Frames of the resumers of the running fibers, innermost last: entering a
+    /// fiber moves the resumer's frames here (all but the script frame, which
+    /// travels into the fiber's stack as its index 0) — see `fiber_enter`.
+    fiber_outer: Vec<Vec<Frame<'m>>>,
     /// The stack of currently-running fibers (GEN-4), innermost last. Backs
-    /// `Fiber::suspend` (which parks `frames[ctx.baseline..]`) and
+    /// `Fiber::suspend` (which switches back to the resumer) and
     /// `Fiber::getCurrent`.
     fiber_stack: Vec<FiberContext>,
     /// The prelude `Fiber` class id, resolved once at startup (GEN-4), for
@@ -3547,6 +3565,8 @@ pub struct Vm<'m> {
     /// late-defined class still works). `fopen("scheme://…")` instantiates it and
     /// drives its `stream_*` methods.
     stream_wrappers: std::collections::HashMap<Vec<u8>, Vec<u8>>,
+    /// User wrapper protocols in registration order (`stream_get_wrappers`).
+    stream_wrapper_order: Vec<Vec<u8>>,
     /// Streams that had a filter attached (`stream_filter_append`), so shutdown
     /// can finish their write chains (PHP flushes filters when the stream is
     /// destroyed at request end — a script need not fclose).
@@ -3901,6 +3921,7 @@ impl<'m> Vm<'m> {
         self.generators.clear();
         self.fibers.clear();
         self.fiber_stack.clear();
+        self.fiber_outer.clear();
         self.shutdown_fns.clear();
 
         // Exception/error handling
@@ -6074,9 +6095,6 @@ impl<'m> Vm<'m> {
                 Ok(RunExit::Yielded { .. }) => {
                     unreachable!("a `yield` can only run inside a resumed generator frame")
                 }
-                Ok(RunExit::Suspended { .. }) => {
-                    unreachable!("`Fiber::suspend` outside a fiber is rejected at the call site")
-                }
                 Err(e) => {
                     // Capture the faulting line before `unwind` pops frames, for an
                     // uncaught engine error's `render_fatal` (E1).
@@ -7742,6 +7760,30 @@ impl<'m> Vm<'m> {
                 .pop()
                 .expect("sync method result on caller stack"));
         }
+        self.drive_to_return(baseline)
+    }
+
+    /// [`Self::call_method_sync`] keeping a by-reference method's returned
+    /// reference (no RET_DEREF): `&offsetGet()` for a nested write.
+    pub(super) fn call_method_sync_raw(
+        &mut self,
+        recv: Zval,
+        method: &[u8],
+        args: Vec<Zval>,
+    ) -> Result<Zval, PhpError> {
+        let baseline = self.frames.len();
+        self.enter_object_method(recv, method, args, RetMode::Stack)?;
+        if self.frames.len() == baseline {
+            return Ok(self.frames[baseline - 1]
+                .stack
+                .pop()
+                .expect("sync method result on caller stack"));
+        }
+        self.frames
+            .last_mut()
+            .expect("method frame just pushed")
+            .flags
+            .set(FrameFlags::RET_DEREF, false);
         self.drive_to_return(baseline)
     }
 
@@ -10332,6 +10374,10 @@ impl<'m> Vm<'m> {
                     }
                     if opaque_keys {
                         sb.info = Rc::new(php_types::ObjectInfo::opaque());
+                        // No class layout either: a payload key that happens to
+                        // name a declared slot must not jump ahead of the
+                        // others — the array's own order is the wire order.
+                        sb.props = php_types::Props::new();
                     }
                 }
                 let out = Zval::Object(synth.clone());
@@ -10591,6 +10637,21 @@ impl<'m> Vm<'m> {
                 Some(rest) => rest.to_vec(),
                 None => k,
             };
+            // An UNMANGLED name of a declared private property (a
+            // `__serialize()` without `__unserialize()` writes plain names —
+            // Symfony's Definition) lands in that property, re-mangled with
+            // its declaring class, inherited privates included
+            // (php_var_unserialize's properties_info lookup).
+            let k = if k.first() != Some(&0) {
+                match prop_vis_decl(&self.classes, cid, &k) {
+                    Some((Visibility::Private, decl)) => {
+                        php_types::mangle_prop_key(&self.classes[decl].name, &k)
+                    }
+                    _ => k,
+                }
+            } else {
+                k
+            };
             if prop_readonly_decl(&self.classes, cid, &k).is_some() {
                 rc.borrow_mut().rare_mut().readonly_init.push(k.as_slice().into());
             }
@@ -10629,13 +10690,32 @@ impl<'m> Vm<'m> {
     /// per-arg clone of) the arguments — the caller omits the `args` key
     /// entirely (8.5.7 semantics).
     fn collect_backtrace_opt(&self, limit: usize, ignore_args: bool) -> Vec<BtFrame> {
-        let top = self.frames.len() - 1;
+        let v = self.trace_stack();
         let mut out = Vec::new();
-        for i in (1..=top).rev() {
+        for i in (1..v.len()).rev() {
             if limit != 0 && out.len() == limit {
                 break;
             }
-            let f = &self.frames[i];
+            let f = match v[i] {
+                TraceEnt::Real(f) => f,
+                TraceEnt::FiberCall(j) => {
+                    let TraceEnt::Real(caller) = v[i - 1] else {
+                        unreachable!("a fiber entry sits on a real frame")
+                    };
+                    let ctx = &self.fiber_stack[j];
+                    out.push(BtFrame {
+                        function: PhpStr::new(ctx.method),
+                        file: PhpStr::new(&caller.module.file[..]),
+                        line: self.frame_line(caller),
+                        class: Some(PhpStr::new(&b"Fiber"[..])),
+                        is_static: false,
+                        object: Some(ctx.obj.clone()),
+                        args: if ignore_args { Vec::new() } else { ctx.args.clone() },
+                        is_eval: false,
+                    });
+                    continue;
+                }
+            };
             // An `eval()` unit's frame renders as `eval`; an anonymous frame as
             // `{closure}`; otherwise its own name.
             let function = if f.eval_origin().is_some() {
@@ -10648,14 +10728,20 @@ impl<'m> Vm<'m> {
             // The call was made from the *caller* frame (i-1): its file, unless that
             // caller is itself an eval unit, in which case PHP names it
             // `<file>(<line>) : eval()'d code`.
-            let caller = &self.frames[i - 1];
-            let file = match caller.eval_origin() {
-                Some((ofile, oline)) => {
+            // A fiber's bottom frame was called by the Fiber machinery
+            // (internal code): no file/line (empty file, see BtFrame users).
+            let caller = match v[i - 1] {
+                TraceEnt::Real(c) => Some(c),
+                TraceEnt::FiberCall(_) => None,
+            };
+            let file = match caller.map(|c| (c, c.eval_origin())) {
+                Some((_, Some((ofile, oline)))) => {
                     let mut s = ofile.to_vec();
                     s.extend_from_slice(format!("({oline}) : eval()'d code").as_bytes());
                     PhpStr::new(s)
                 }
-                None => PhpStr::new(&caller.module.file[..]),
+                Some((c, None)) => PhpStr::new(&c.module.file[..]),
+                None => PhpStr::new(&b""[..]),
             };
             let (class, object) = match f.class {
                 // Resolve the class id in the frame's own module (an eval'd /
@@ -10666,12 +10752,12 @@ impl<'m> Vm<'m> {
             out.push(BtFrame {
                 function,
                 file,
-                line: self.cur_line(i - 1),
+                line: caller.map_or(0, |c| self.frame_line(c)),
                 class,
                 // A method with no bound `$this` is a static call ("::"); otherwise "->".
                 is_static: f.class.is_some() && f.this.is_none(),
                 object,
-                args: if ignore_args { Vec::new() } else { self.current_frame_args(i) },
+                args: if ignore_args { Vec::new() } else { self.frame_args(f) },
                 is_eval: f.eval_origin().is_some(),
             });
         }
@@ -10867,7 +10953,11 @@ impl<'m> Vm<'m> {
     /// PHP), while surplus arguments come from the variadic array (variadic callee)
     /// or the `extra_args` snapshot taken at bind time (non-variadic callee).
     fn current_frame_args(&self, top: usize) -> Vec<Zval> {
-        let frame = &self.frames[top];
+        self.frame_args(&self.frames[top])
+    }
+
+    /// The arguments frame `frame` was called with (declared + extra).
+    fn frame_args(&self, frame: &Frame<'m>) -> Vec<Zval> {
         let a = frame.argc as usize;
         let p = frame.func.n_params as usize;
         let mut out = Vec::with_capacity(a);
@@ -11798,10 +11888,18 @@ impl<'m> Vm<'m> {
         cid: ClassId,
         this: Zval,
         method: &[u8],
-        args: Vec<Zval>,
+        mut args: Vec<Zval>,
         ic: Option<&crate::bytecode::MethodIc>,
         deref: bool,
     ) -> Result<(), PhpError> {
+        // Deferred place arguments (`$hook($x, $this->p)` with `$hook` an
+        // `[$obj, 'm']` callable, Drupal's HelpBlock): resolve them in the
+        // CALLER's frame now that the callee is known, like `method_call`;
+        // bound as-is they decayed to NULL in the callee.
+        if args.iter().any(|a| matches!(a, Zval::ArgPlace(_))) {
+            let callee = self.instance_arg_ref_target(top, &this, method);
+            self.materialize_arg_places(top, &mut args, callee)?;
+        }
         // INLINE CACHE (WP-30): this site's last scope-independent resolution
         // for exactly this receiver class. Sound to skip resolve + private-
         // rebind + visibility: the fill predicate below guarantees the
@@ -13719,8 +13817,27 @@ impl<'m> Vm<'m> {
     /// `top`: `lines[ip-1]`, since the dispatch loop has already advanced `ip`
     /// past it. Defensive: returns 0 if the table is short or `ip` is 0 (EXC-3b).
     fn cur_line(&self, top: usize) -> Line {
-        let f = &self.frames[top];
+        self.frame_line(&self.frames[top])
+    }
+
+    /// The source line `f` is executing (its last dispatched op).
+    fn frame_line(&self, f: &Frame<'m>) -> Line {
         f.ip.checked_sub(1).and_then(|i| f.func.lines.get(i).copied()).unwrap_or(0)
+    }
+
+    /// The call stack a trace walks, outermost first: the script frame, then
+    /// for each running fiber level `j` the frames of its resumer (stashed in
+    /// `fiber_outer[j]`) and the `Fiber->start()/resume()` that entered it,
+    /// then the running frames. Outside a fiber, just `self.frames`.
+    fn trace_stack(&self) -> Vec<TraceEnt<'_, 'm>> {
+        let mut v = Vec::with_capacity(self.frames.len());
+        v.push(TraceEnt::Real(&self.frames[0]));
+        for (j, outer) in self.fiber_outer.iter().enumerate() {
+            v.extend(outer.iter().map(TraceEnt::Real));
+            v.push(TraceEnt::FiberCall(j));
+        }
+        v.extend(self.frames[1..].iter().map(TraceEnt::Real));
+        v
     }
 
     /// PHP fixes a Throwable's `line`/`file` at `new` time (not in the user
@@ -13770,17 +13887,58 @@ impl<'m> Vm<'m> {
     fn capture_trace(&self) -> (Zval, Vec<u8>) {
         let mut arr = PhpArray::new();
         let mut s: Vec<u8> = Vec::new();
-        let n = self.frames.len();
+        let v = self.trace_stack();
         let mut i = 0usize;
-        for k in (1..n).rev() {
-            let frame = &self.frames[k];
-            let line = self.cur_line(k - 1) as i64;
+        for k in (1..v.len()).rev() {
+            let frame = match v[k] {
+                TraceEnt::Real(f) => f,
+                TraceEnt::FiberCall(j) => {
+                    // The Fiber->start()/resume()/throw() that entered fiber
+                    // level j, called from the resumer's top frame.
+                    let TraceEnt::Real(caller) = v[k - 1] else {
+                        unreachable!("a fiber entry sits on a real frame")
+                    };
+                    let ctx = &self.fiber_stack[j];
+                    let line = self.frame_line(caller) as i64;
+                    let file: &[u8] =
+                        if caller.func.file.is_empty() { &self.module.file } else { &caller.func.file };
+                    let joined = ctx.args.iter().map(format_bt_arg).collect::<Vec<_>>().join(", ");
+                    s.extend_from_slice(format!("#{i} ").as_bytes());
+                    s.extend_from_slice(file);
+                    s.extend_from_slice(format!("({line}): Fiber->").as_bytes());
+                    s.extend_from_slice(ctx.method);
+                    s.push(b'(');
+                    s.extend_from_slice(joined.as_bytes());
+                    s.extend_from_slice(b")\n");
+                    let mut fr = PhpArray::new();
+                    fr.insert(Key::from_bytes(b"file"), Zval::Str(PhpStr::new(file.to_vec())));
+                    fr.insert(Key::from_bytes(b"line"), Zval::Long(line));
+                    fr.insert(Key::from_bytes(b"function"), Zval::Str(PhpStr::new(ctx.method)));
+                    fr.insert(Key::from_bytes(b"class"), Zval::Str(PhpStr::new(&b"Fiber"[..])));
+                    fr.insert(Key::from_bytes(b"type"), Zval::Str(PhpStr::new(&b"->"[..])));
+                    let mut argsarr = PhpArray::new();
+                    for a in &ctx.args {
+                        let _ = argsarr.append(a.clone());
+                    }
+                    fr.insert(Key::from_bytes(b"args"), Zval::Array(Rc::new(argsarr)));
+                    let _ = arr.append(Zval::Array(Rc::new(fr)));
+                    i += 1;
+                    continue;
+                }
+            };
+            let caller = match v[k - 1] {
+                TraceEnt::Real(c) => Some(c),
+                TraceEnt::FiberCall(_) => None,
+            };
+            let line = caller.map_or(0, |c| self.frame_line(c)) as i64;
             // The file/line are the *call site* in the caller (frame `k-1`): the
             // file is the caller function's defining file, so a callee invoked
             // across an include/autoload boundary still attributes to the right
             // file (the frame's module is the caller's, not the callee's). An empty
             // file (synthetic stub) falls back to the entry module.
-            let caller_file = &self.frames[k - 1].func.file;
+            // A fiber's bottom frame: called by internal code, rendered as
+            // "[internal function]" through the prelude call-site path.
+            let caller_file: &[u8] = caller.map_or(&b"prelude"[..], |c| &c.func.file[..]);
             let file: &[u8] = if caller_file.is_empty() {
                 &self.module.file
             } else {
@@ -13820,7 +13978,7 @@ impl<'m> Vm<'m> {
             }
             // PHP renders each frame's call arguments inline (`f(42, 'x')`),
             // scalars literal and strings quoted/truncated (`format_bt_arg`).
-            let frame_args = self.current_frame_args(k);
+            let frame_args = self.frame_args(frame);
             // An include/require unit frame renders as its construct keyword
             // (`require()`), exactly like Zend (batteria ordering-s68 a-func).
             let fname: &[u8] = match frame.unit_call() {
@@ -15225,6 +15383,7 @@ host_builtins! {
     b"__pdo_sqlite_version" => vm.ho_pdo_sqlite_version(),
     b"__pdo_exec" => vm.ho_pdo_exec(args),
     b"__pdo_create_function" => vm.ho_pdo_create_function(args),
+    b"__pdo_create_collation" => vm.ho_pdo_create_collation(args),
     b"__pdo_run" => vm.ho_pdo_run(args),
     b"__pdo_prepare" => vm.ho_pdo_prepare(args),
     b"__pdo_last_id" => vm.ho_pdo_last_id(args),
@@ -15514,6 +15673,7 @@ host_builtins! {
     b"stream_is_local" => vm.ho_stream_is_local(args),
     b"stream_wrapper_register" | b"stream_register_wrapper" => vm.ho_stream_wrapper_register(args),
     b"stream_wrapper_unregister" => vm.ho_stream_wrapper_unregister(args),
+    b"stream_get_wrappers" => vm.ho_stream_get_wrappers(args),
     b"stream_resolve_include_path" => vm.ho_stream_resolve_include_path(args),
     b"stream_get_line" => vm.ho_stream_get_line(args),
     b"stream_filter_append" => vm.ho_stream_filter_append(args, false),

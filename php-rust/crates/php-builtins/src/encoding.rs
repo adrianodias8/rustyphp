@@ -547,18 +547,6 @@ pub fn hash_hmac_algos(_args: &[Zval], _ctx: &mut Ctx) -> Result<Zval, PhpError>
     Ok(Zval::Array(Rc::new(out)))
 }
 
-/// `stream_get_wrappers(): array` — the stream wrappers this runtime actually
-/// opens (`open_file_stream` / `open_php_stream` / the ureq-backed http(s)
-/// layer). Userland feature-detects with `in_array($scheme, ...)`; notably
-/// `phar` is absent, matching phpr's unsupported-phar reality.
-pub fn stream_get_wrappers(_args: &[Zval], _ctx: &mut Ctx) -> Result<Zval, PhpError> {
-    let mut out = PhpArray::new();
-    for w in ["php", "file", "data", "http", "https"] {
-        let _ = out.append(Zval::Str(PhpStr::from_str(w)));
-    }
-    Ok(Zval::Array(Rc::new(out)))
-}
-
 /// Raw HMAC of `data` under `algo` keyed by `key`, or `None` for an algorithm
 /// that has no HMAC construction (a non-cryptographic hash like crc32, or an
 /// unknown name). `SimpleHmac` works for any block hash and hashes over-long

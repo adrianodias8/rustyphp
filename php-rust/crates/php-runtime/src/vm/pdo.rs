@@ -55,6 +55,22 @@ impl UdfCallable {
     }
 }
 
+/// The Vm a sqlite callback (UDF, collation) runs PHP code on: the one that
+/// installed `ACTIVE_VM` for the statement now stepping.
+fn active_vm() -> Option<&'static mut Vm<'static>> {
+    let p = ACTIVE_VM.get();
+    if p.is_null() {
+        return None;
+    }
+    // SAFETY: single-threaded VM; the outer &mut self that installed the
+    // pointer (VmReentry) is suspended inside sqlite's step loop while the
+    // callback runs, and the connection was moved out of Vm.pdo_conns for the
+    // duration (no aliasing through the VM). The 'static is a lifetime
+    // erasure for the callback's 'static bound; the reference does not
+    // outlive the callback.
+    Some(unsafe { &mut *(p as *mut Vm<'static>) })
+}
+
 /// Install the VM re-entry pointer for the duration of a statement run;
 /// restores the previous value on drop (UDF-triggered nested statements).
 struct VmReentry(*mut ());
@@ -469,17 +485,11 @@ impl<'m> Vm<'m> {
             flags |= FunctionFlags::SQLITE_DETERMINISTIC;
         }
         let r = conn.create_scalar_function(name.as_str(), argc as i32, flags, move |fctx| {
-            let p = ACTIVE_VM.get();
-            if p.is_null() {
+            let Some(vm) = active_vm() else {
                 return Err(rusqlite::Error::UserFunctionError(
-                    "phpr: no active VM for a SQLite UDF".into(),
+                    "ferro: no active VM for a SQLite UDF".into(),
                 ));
-            }
-            // SAFETY: single-threaded VM; the outer &mut self that installed
-            // the pointer is suspended inside sqlite's step loop while this
-            // callback runs, and the connection was moved out of Vm.pdo_conns
-            // for the duration (no aliasing through the VM).
-            let vm: &mut Vm<'static> = unsafe { &mut *(p as *mut Vm<'static>) };
+            };
             let mut argv = Vec::with_capacity(fctx.len());
             for i in 0..fctx.len() {
                 argv.push(sql_to_zval(fctx.get_raw(i)));
@@ -490,6 +500,35 @@ impl<'m> Vm<'m> {
                     let msg = e.message().to_owned();
                     UDF_ERROR.with(|u| *u.borrow_mut() = Some(e));
                     Err(rusqlite::Error::UserFunctionError(msg.into()))
+                }
+            }
+        });
+        match r {
+            Ok(()) => Ok(Zval::Bool(true)),
+            Err(e) => Ok(stmt_err_of(&e)),
+        }
+    }
+
+    /// `__pdo_create_collation($id, $name, $callback)` — `Pdo\Sqlite::
+    /// createCollation`: a PHP comparison callable (`strcmp`-like: <0, 0, >0)
+    /// as a sqlite collation (Drupal's NOCASE_UTF8). A throwing callable
+    /// compares equal and its error surfaces after the statement, like a UDF's.
+    pub(super) fn ho_pdo_create_collation(&mut self, args: Vec<Zval>) -> Result<Zval, PhpError> {
+        let id = convert::to_long_cast(args.first().unwrap_or(&Zval::Null), &mut self.diags) as u32;
+        let name = convert::to_zstr_cast(args.get(1).unwrap_or(&Zval::Null), &mut self.diags);
+        let name = String::from_utf8_lossy(name.as_bytes()).into_owned();
+        let cb = UdfCallable(args.get(2).cloned().unwrap_or(Zval::Null).deref_clone());
+        let Some(conn) = self.pdo_conns.get(&id) else {
+            return Ok(stmt_err(21, "library routine called out of sequence"));
+        };
+        let r = conn.create_collation(name.as_str(), move |a: &str, b: &str| {
+            let Some(vm) = active_vm() else { return std::cmp::Ordering::Equal };
+            let argv = vec![Zval::Str(PhpStr::from_str(a)), Zval::Str(PhpStr::from_str(b))];
+            match vm.call_callable(cb.get(), argv) {
+                Ok(v) => convert::to_long_cast(&v, &mut vm.diags).cmp(&0),
+                Err(e) => {
+                    UDF_ERROR.with(|u| *u.borrow_mut() = Some(e));
+                    std::cmp::Ordering::Equal
                 }
             }
         });

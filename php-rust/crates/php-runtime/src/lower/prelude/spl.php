@@ -118,6 +118,20 @@ class SplFileInfo {
         $p = strrpos($f, '.');
         return $p === false || $p === 0 ? '' : substr($f, $p + 1);
     }
+    public function getATime() { return fileatime($this->__path); }
+    public function getCTime() { return filectime($this->__path); }
+    public function getInode() { return fileinode($this->__path); }
+    public function getOwner() { return fileowner($this->__path); }
+    public function getGroup() { return filegroup($this->__path); }
+    public function getType() { return filetype($this->__path); }
+    public function isExecutable() { return is_executable($this->__path); }
+    public function getLinkTarget() { return readlink($this->__path); }
+    public function getFileInfo(?string $class = null) { $c = $class ?? SplFileInfo::class; return new $c($this->__path); }
+    public function getPathInfo(?string $class = null) { $c = $class ?? SplFileInfo::class; return new $c($this->getPath()); }
+    // Drupal's ExtensionDiscovery reads each .info.yml through it.
+    public function openFile(string $mode = 'r', bool $useIncludePath = false, $context = null) {
+        return new SplFileObject($this->__path, $mode);
+    }
     public function __toString() { return $this->__path; }
 }
 // SplFileObject / SplTempFileObject: the SPL file-handle layer over the fopen
@@ -296,9 +310,15 @@ class RecursiveDirectoryIterator extends FilesystemIterator implements Recursive
     public function rewind(): void { $this->__pos = 0; $this->__sync(); }
     public function valid(): bool { return $this->__pos < count($this->__names); }
     public function next(): void { $this->__pos++; $this->__sync(); }
-    public function key(): mixed { return $this->__cur(); }
+    public function key(): mixed {
+        if (($this->__flags & self::KEY_AS_FILENAME) === self::KEY_AS_FILENAME) { return $this->__names[$this->__pos]; }
+        return $this->__cur();
+    }
     public function current(): mixed {
         if (($this->__flags & self::CURRENT_AS_PATHNAME) === self::CURRENT_AS_PATHNAME) { return $this->__cur(); }
+        // CURRENT_AS_SELF: the iterator itself, positioned on the entry
+        // (Drupal's ExtensionDiscovery reads getSubPath() off it).
+        if (($this->__flags & self::CURRENT_AS_SELF) === self::CURRENT_AS_SELF) { return $this; }
         return new SplFileInfo($this->__cur());
     }
     public function hasChildren($allowLinks = false) {
@@ -324,48 +344,134 @@ class RecursiveDirectoryIterator extends FilesystemIterator implements Recursive
         return $this->__sub === '' ? $name : $this->__sub . '/' . $name;
     }
 }
+// `RecursiveIteratorIterator`: LAZY, a port of php-src's
+// spl_recursive_it_move_forward_ex state machine (RS_NEXT/START/TEST/SELF/
+// CHILD per level). It never walks ahead of the element it yields — with
+// FilesystemIterator::CURRENT_AS_SELF the yielded value IS the moving inner
+// iterator (Drupal's ExtensionDiscovery), and the subclass hooks
+// (beginChildren, endChildren, callHasChildren, callGetChildren, nextElement,
+// beginIteration, endIteration) run at the points Zend runs them.
 class RecursiveIteratorIterator implements OuterIterator {
     const LEAVES_ONLY = 0; const SELF_FIRST = 1; const CHILD_FIRST = 2; const CATCH_GET_CHILD = 16;
-    private $__it;
+    private const RS_NEXT = 0, RS_TEST = 1, RS_SELF = 2, RS_CHILD = 3, RS_START = 4;
+    private $__its = [];     // the iterator of each level
+    private $__st = [];      // the state of each level
+    private $__level = 0;
     private $__mode;
-    private $__list = [];  // [[key, subpathname, current, depth], ...] in emit order
-    private $__pos = 0;
-    private $__maxDepth = -1; // -1 = unlimited (setMaxDepth(-1), the default)
-    public function __construct($iterator, $mode = 0, $flags = 0) {
-        $this->__it = $iterator;
+    private $__flags;
+    private $__maxDepth = -1; // -1 = unlimited
+    private $__inIteration = false;
+    public function __construct(Traversable $iterator, int $mode = self::LEAVES_ONLY, int $flags = 0) {
+        if ($iterator instanceof IteratorAggregate) {
+            $iterator = $iterator->getIterator();
+        }
+        if (!$iterator instanceof RecursiveIterator) {
+            throw new InvalidArgumentException('An instance of RecursiveIterator or IteratorAggregate creating it is required');
+        }
+        $this->__its = [$iterator];
+        $this->__st = [self::RS_START];
         $this->__mode = $mode;
+        $this->__flags = $flags;
     }
-    public function setMaxDepth($maxDepth = -1) {
-        if ($maxDepth < -1) { throw new InvalidArgumentException('Parameter maxDepth must be >= -1'); }
+    public function setMaxDepth(int $maxDepth = -1): void {
+        if ($maxDepth < -1) { throw new ValueError('RecursiveIteratorIterator::setMaxDepth(): Argument #1 ($maxDepth) must be greater than or equal to -1'); }
         $this->__maxDepth = $maxDepth;
     }
-    public function getMaxDepth() { return $this->__maxDepth === -1 ? false : $this->__maxDepth; }
-    private function __collect($it, $depth) {
-        for ($it->rewind(); $it->valid(); $it->next()) {
-            $descend = method_exists($it, 'hasChildren') && $it->hasChildren()
-                && ($this->__maxDepth === -1 || $depth < $this->__maxDepth);
-            $entry = [$it->key(), method_exists($it, 'getSubPathname') ? $it->getSubPathname() : $it->key(), $it->current(), $depth];
-            if ($descend) {
-                if ($this->__mode === self::SELF_FIRST) { $this->__list[] = $entry; }
-                $this->__collect($it->getChildren(), $depth + 1);
-                if ($this->__mode === self::CHILD_FIRST) { $this->__list[] = $entry; }
-            } else {
-                $this->__list[] = $entry;
+    public function getMaxDepth(): int|false { return $this->__maxDepth === -1 ? false : $this->__maxDepth; }
+    public function rewind(): void {
+        while ($this->__level > 0) {
+            array_pop($this->__its); array_pop($this->__st);
+            $this->__level--;
+            $this->endChildren();
+        }
+        $this->__st[0] = self::RS_START;
+        $this->__its[0]->rewind();
+        if (!$this->__inIteration) { $this->beginIteration(); }
+        $this->__inIteration = true;
+        $this->__forward();
+    }
+    public function valid(): bool {
+        for ($l = $this->__level; $l >= 0; $l--) {
+            if ($this->__its[$l]->valid()) { return true; }
+        }
+        if ($this->__inIteration) { $this->endIteration(); }
+        $this->__inIteration = false;
+        return false;
+    }
+    public function key(): mixed { return $this->__its[$this->__level]->key(); }
+    public function current(): mixed { return $this->__its[$this->__level]->current(); }
+    public function next(): void { $this->__forward(); }
+    private function __forward(): void {
+        while (true) {
+            $l = $this->__level;
+            $it = $this->__its[$l];
+            $st = $this->__st[$l];
+            if ($st === self::RS_NEXT) { $it->next(); $st = self::RS_START; }
+            if ($st === self::RS_START) {
+                if (!$it->valid()) { $st = -1; } else { $st = self::RS_TEST; }
             }
+            if ($st === self::RS_TEST) {
+                if ($this->callHasChildren() && ($this->__maxDepth === -1 || $this->__maxDepth > $l)) {
+                    $this->__st[$l] = $this->__mode === self::SELF_FIRST ? self::RS_SELF : self::RS_CHILD;
+                    continue;
+                }
+                $this->nextElement();
+                $this->__st[$l] = self::RS_NEXT;
+                return;
+            }
+            if ($st === self::RS_SELF) {
+                $this->nextElement();
+                $this->__st[$l] = $this->__mode === self::SELF_FIRST ? self::RS_CHILD : self::RS_NEXT;
+                return;
+            }
+            if ($st === self::RS_CHILD) {
+                try {
+                    $child = $this->callGetChildren();
+                } catch (Throwable $e) {
+                    if (!($this->__flags & self::CATCH_GET_CHILD)) { $this->__st[$l] = self::RS_NEXT; throw $e; }
+                    $this->__st[$l] = self::RS_NEXT;
+                    continue;
+                }
+                if (!$child instanceof RecursiveIterator) {
+                    throw new UnexpectedValueException('Objects returned by RecursiveIterator::getChildren() must implement RecursiveIterator');
+                }
+                $this->__st[$l] = $this->__mode === self::CHILD_FIRST ? self::RS_SELF : self::RS_NEXT;
+                $this->__its[] = $child;
+                $this->__st[] = self::RS_START;
+                $this->__level++;
+                $child->rewind();
+                $this->beginChildren();
+                continue;
+            }
+            // This level is exhausted.
+            if ($l > 0) {
+                $this->endChildren();
+                array_pop($this->__its); array_pop($this->__st);
+                $this->__level--;
+                continue;
+            }
+            $this->__st[0] = self::RS_START;
+            return;
         }
     }
-    public function rewind(): void {
-        $this->__list = [];
-        $this->__pos = 0;
-        $this->__collect($this->__it, 0);
+    public function getDepth(): int { return $this->__level; }
+    public function getSubIterator(?int $level = null): ?RecursiveIterator {
+        $level ??= $this->__level;
+        return ($level >= 0 && $level <= $this->__level) ? $this->__its[$level] : null;
     }
-    public function valid(): bool { return $this->__pos < count($this->__list); }
-    public function next(): void { $this->__pos++; }
-    public function key(): mixed { return $this->__list[$this->__pos][0]; }
-    public function current(): mixed { return $this->__list[$this->__pos][2]; }
-    public function getSubPathname() { return $this->__list[$this->__pos][1]; }
-    public function getDepth() { return $this->__list[$this->__pos][3]; }
-    public function getInnerIterator() { return $this->__it; }
+    public function getInnerIterator(): RecursiveIterator { return $this->__its[$this->__level]; }
+    public function beginIteration() {}
+    public function endIteration() {}
+    public function callHasChildren() { return $this->__its[$this->__level]->hasChildren(); }
+    public function callGetChildren() { return $this->__its[$this->__level]->getChildren(); }
+    public function beginChildren() {}
+    public function endChildren() {}
+    public function nextElement() {}
+    // Unknown methods go to the current sub-iterator (Zend's get_method
+    // fallback): `$rii->getSubPathname()` over a RecursiveDirectoryIterator.
+    public function __call($name, $args) {
+        return $this->__its[$this->__level]->$name(...$args);
+    }
 }
 // SplDoublyLinkedList family (Composer's dependency solver: SplQueue work
 // queues, RuleWatchChain extends the list and removes mid-iteration). Backed by
@@ -730,6 +836,22 @@ abstract class RecursiveFilterIterator extends FilterIterator implements Recursi
     }
     public function getChildren() {
         return new static($this->getInnerIterator()->getChildren());
+    }
+}
+// `RecursiveCallbackFilterIterator`: the callback applies at every depth;
+// children are wrapped in the same class with the same callback (Drupal's
+// ExtensionDiscovery filters its directory scan with it).
+class RecursiveCallbackFilterIterator extends CallbackFilterIterator implements RecursiveIterator {
+    private $__rcb;
+    public function __construct(RecursiveIterator $iterator, callable $callback) {
+        parent::__construct($iterator, $callback);
+        $this->__rcb = $callback;
+    }
+    public function hasChildren(): bool {
+        return $this->getInnerIterator()->hasChildren();
+    }
+    public function getChildren(): RecursiveCallbackFilterIterator {
+        return new static($this->getInnerIterator()->getChildren(), $this->__rcb);
     }
 }
 // `AppendIterator`: iterate several iterators in sequence. Each appended

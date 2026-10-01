@@ -13,7 +13,7 @@ use crate::bytecode::Op;
 use crate::hir::BinOp;
 use php_types::Zval;
 
-pub const N_OPS: usize = 203;
+pub const N_OPS: usize = 206;
 
 pub const OP_NAMES: [&str; N_OPS] = [
     "PushConst", "Pop", "Dup", "LoadSlot", "LoadVar", "PushUndef", "StoreSlot", "Swap",
@@ -49,6 +49,9 @@ pub const OP_NAMES: [&str; N_OPS] = [
     "PropConcatGate",
     "NsShadowGuard",
     "CoerceParams",
+    "RefArgOrNotice",
+    "GlobalRefDyn",
+    "StaticPropBindRef",
 ];
 
 pub fn op_index(op: &Op) -> usize {
@@ -281,6 +284,10 @@ pub fn op_index(op: &Op) -> usize {
         Op::NsShadowGuard { .. } => 201,
         // Fork slice 5: hint prologue of a simple-call body (N_OPS 202→203).
         Op::CoerceParams { .. } => 202,
+        // Fork session 7: call result to a by-ref parameter (N_OPS 203→204).
+        Op::RefArgOrNotice(..) => 203,
+        Op::GlobalRefDyn => 204,
+        Op::StaticPropBindRef { .. } => 205,
     }
 }
 
@@ -767,8 +774,9 @@ mod tests {
         // shifted the offsets (N_OPS 187→194, 194→198, 198→199).
         // PropDimGetConst now closes the table (appended at the tail, no
         // existing index renumbered) — every distance from the bottom grows
-        // by 1, amended HERE as a block.
-        assert_eq!(op_index(&Op::ConcatAssignSlot(0)), N_OPS - 26);
+        // by 1, amended HERE as a block. Session 7 appended RefArgOrNotice,
+        // GlobalRefDyn, StaticPropBindRef: every distance +3.
+        assert_eq!(op_index(&Op::ConcatAssignSlot(0)), N_OPS - 29);
         assert_eq!(
             op_index(&Op::CmpJmpSC {
                 op: crate::hir::BinOp::Lt,
@@ -777,47 +785,47 @@ mod tests {
                 addr: 0,
                 when: true
             }),
-            N_OPS - 19
+            N_OPS - 22
         );
-        assert_eq!(OP_NAMES[N_OPS - 19], "CmpJmpSC");
+        assert_eq!(OP_NAMES[N_OPS - 22], "CmpJmpSC");
         assert_eq!(
             op_index(&Op::BinarySTDst { op: crate::hir::BinOp::Add, l: 0, dst: 0 }),
-            N_OPS - 18
+            N_OPS - 21
         );
-        assert_eq!(OP_NAMES[N_OPS - 18], "BinarySTDst");
+        assert_eq!(OP_NAMES[N_OPS - 21], "BinarySTDst");
         assert_eq!(
             op_index(&Op::BinaryTC { op: crate::hir::BinOp::Add, cidx: 0 }),
-            N_OPS - 17
+            N_OPS - 20
         );
-        assert_eq!(OP_NAMES[N_OPS - 17], "BinaryTC");
+        assert_eq!(OP_NAMES[N_OPS - 20], "BinaryTC");
         assert_eq!(
             op_index(&Op::IncDecSlotJmp { slot: 0, inc: true, addr: 0 }),
-            N_OPS - 14
+            N_OPS - 17
         );
-        assert_eq!(OP_NAMES[N_OPS - 14], "IncDecSlotJmp");
-        assert_eq!(op_index(&Op::StringifySlot { slot: 0 }), N_OPS - 11);
-        assert_eq!(OP_NAMES[N_OPS - 11], "StringifySlot");
-        assert_eq!(op_index(&Op::LoadVarPushConst { slot: 0, cidx: 0 }), N_OPS - 7);
-        assert_eq!(OP_NAMES[N_OPS - 7], "LoadVarPushConst");
-        assert_eq!(op_index(&Op::ConcatNConst { n: 0, cidx: 0 }), N_OPS - 6);
-        assert_eq!(OP_NAMES[N_OPS - 6], "ConcatNConst");
-        assert_eq!(op_index(&Op::BinaryAdd), N_OPS - 5);
-        assert_eq!(OP_NAMES[N_OPS - 5], "BinaryAdd");
-        assert_eq!(OP_NAMES[N_OPS - 4], "PropDimGetConst");
+        assert_eq!(OP_NAMES[N_OPS - 17], "IncDecSlotJmp");
+        assert_eq!(op_index(&Op::StringifySlot { slot: 0 }), N_OPS - 14);
+        assert_eq!(OP_NAMES[N_OPS - 14], "StringifySlot");
+        assert_eq!(op_index(&Op::LoadVarPushConst { slot: 0, cidx: 0 }), N_OPS - 10);
+        assert_eq!(OP_NAMES[N_OPS - 10], "LoadVarPushConst");
+        assert_eq!(op_index(&Op::ConcatNConst { n: 0, cidx: 0 }), N_OPS - 9);
+        assert_eq!(OP_NAMES[N_OPS - 9], "ConcatNConst");
+        assert_eq!(op_index(&Op::BinaryAdd), N_OPS - 8);
+        assert_eq!(OP_NAMES[N_OPS - 8], "BinaryAdd");
+        assert_eq!(OP_NAMES[N_OPS - 7], "PropDimGetConst");
         // Fork: PropConcatGate appended (in-place `$o->p .= rhs` gate) —
         // every distance from the bottom grows by 1, amended here in block.
-        assert_eq!(op_index(&Op::PropConcatGate { name: [].into(), done: 0 }), N_OPS - 3);
-        assert_eq!(OP_NAMES[N_OPS - 3], "PropConcatGate");
+        assert_eq!(op_index(&Op::PropConcatGate { name: [].into(), done: 0 }), N_OPS - 6);
+        assert_eq!(OP_NAMES[N_OPS - 6], "PropConcatGate");
         // Fork: NsShadowGuard appended — every distance from the bottom
         // grows by 1 again, amended here in block.
         assert_eq!(
             op_index(&Op::NsShadowGuard { name: [].into(), ic: Default::default(), user: 0 }),
-            N_OPS - 2
+            N_OPS - 5
         );
-        assert_eq!(OP_NAMES[N_OPS - 2], "NsShadowGuard");
+        assert_eq!(OP_NAMES[N_OPS - 5], "NsShadowGuard");
         // Fork slice 5: CoerceParams appended.
-        assert_eq!(op_index(&Op::CoerceParams { n: 0 }), N_OPS - 1);
-        assert_eq!(OP_NAMES[N_OPS - 1], "CoerceParams");
+        assert_eq!(op_index(&Op::CoerceParams { n: 0 }), N_OPS - 4);
+        assert_eq!(OP_NAMES[N_OPS - 4], "CoerceParams");
     }
 
     #[test]

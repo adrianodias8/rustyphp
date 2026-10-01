@@ -576,6 +576,38 @@ fn const_eval_in_class(e: &Expr, cur: ClassId, ctx: &ProgramCtx, depth: u32) -> 
         let (decl_cid, value) = find_const_decl(target, name, ctx)?;
         return const_eval_in_class(value, decl_cid, ctx, depth + 1);
     }
+    // Integer/string arithmetic in a case value (`case Info = -1;` in Drupal's
+    // RequirementSeverity, `case X = 1 << 3;`, `case P = self::A . 'x';`).
+    // Only exact, overflow-free integer results and string concatenation
+    // fold; anything else stays unfolded (the case falls back to run time).
+    if let ExprKind::Unary(op, inner) = &e.kind {
+        let v = const_eval_in_class(inner, cur, ctx, depth + 1)?;
+        return match (op, v) {
+            (crate::hir::UnOp::Neg, Const::Int(i)) => i.checked_neg().map(Const::Int),
+            (crate::hir::UnOp::Plus, Const::Int(i)) => Some(Const::Int(i)),
+            (crate::hir::UnOp::BitNot, Const::Int(i)) => Some(Const::Int(!i)),
+            _ => None,
+        };
+    }
+    if let ExprKind::Binary(op, l, r) = &e.kind {
+        let l = const_eval_in_class(l, cur, ctx, depth + 1)?;
+        let r = const_eval_in_class(r, cur, ctx, depth + 1)?;
+        use crate::hir::BinOp as B;
+        return match (op, l, r) {
+            (B::Add, Const::Int(a), Const::Int(b)) => a.checked_add(b).map(Const::Int),
+            (B::Sub, Const::Int(a), Const::Int(b)) => a.checked_sub(b).map(Const::Int),
+            (B::Mul, Const::Int(a), Const::Int(b)) => a.checked_mul(b).map(Const::Int),
+            (B::BitAnd, Const::Int(a), Const::Int(b)) => Some(Const::Int(a & b)),
+            (B::BitOr, Const::Int(a), Const::Int(b)) => Some(Const::Int(a | b)),
+            (B::BitXor, Const::Int(a), Const::Int(b)) => Some(Const::Int(a ^ b)),
+            (B::Shl, Const::Int(a), Const::Int(b)) if (0..64).contains(&b) => Some(Const::Int(a.wrapping_shl(b as u32))),
+            (B::Shr, Const::Int(a), Const::Int(b)) if (0..64).contains(&b) => Some(Const::Int(a >> b)),
+            (B::Concat, Const::Str(a), Const::Str(b)) => {
+                Some(Const::Str(php_types::PhpStr::concat2(a.as_bytes(), b.as_bytes())))
+            }
+            _ => None,
+        };
+    }
     const_eval(e)
 }
 
@@ -1309,15 +1341,42 @@ impl<'a> FnCompiler<'a> {
                 // A plain `return <expr>;` (or bare `return;`) inside a `function
                 // &f()` means the operand is a non-lvalue: PHP raises a notice and
                 // returns by value (D-13.4). The condition is known at compile time.
-                if self.returns_ref {
-                    let k = self.konst(Const::Str(php_types::PhpStr::new(
+                let notice = if self.returns_ref {
+                    Some(self.konst(Const::Str(php_types::PhpStr::new(
                         &b"Only variable references should be returned by reference"[..],
-                    )));
-                    self.emit(Op::EmitNotice(k));
-                }
-                match opt {
-                    Some(e) => self.expr(e)?,
-                    None => {
+                    ))))
+                } else {
+                    None
+                };
+                match (opt, notice) {
+                    // `return $o->m();` / `return C::m();` in a `function &f()`:
+                    // whether the call returned a reference is only known at run
+                    // time (`&havingConditions() { return $this->having->
+                    // conditions(); }` with `&conditions()`, Drupal's Select) —
+                    // keep the raw result and notice only for a plain value.
+                    (Some(e), Some(k)) if matches!(e.kind, ExprKind::MethodCall { nullsafe: false, .. } | ExprKind::StaticCall { .. }) => {
+                        if let ExprKind::MethodCall { object, method, args, named, .. } = &e.kind {
+                            self.expr(object)?;
+                            let recv_class = match object.kind {
+                                ExprKind::This => self.cur_class,
+                                _ => None,
+                            };
+                            self.emit_method_call(method, args, named, recv_class, false)?;
+                        } else {
+                            self.expr(e)?;
+                        }
+                        self.emit(Op::RefArgOrNotice(k));
+                    }
+                    (Some(e), notice) => {
+                        self.expr(e)?;
+                        if let Some(k) = notice {
+                            self.emit(Op::EmitNotice(k));
+                        }
+                    }
+                    (None, notice) => {
+                        if let Some(k) = notice {
+                            self.emit(Op::EmitNotice(k));
+                        }
                         let null = self.konst(Const::Null);
                         self.emit(Op::PushConst(null));
                     }

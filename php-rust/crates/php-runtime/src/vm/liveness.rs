@@ -411,6 +411,9 @@ fn effect(op: &Op, park_targets: &[usize]) -> Effect {
         | Op::Dup { .. }
         | Op::Echo { .. }
         | Op::EmitNotice { .. }
+        | Op::RefArgOrNotice { .. }
+        | Op::GlobalRefDyn { .. }
+        | Op::StaticPropBindRef { .. }
         | Op::EnumCase { .. }
         | Op::Eval { .. }
         | Op::FetchDim { .. }
@@ -678,6 +681,9 @@ fn renounce(func: &Func) -> (bool, Bits) {
             | Op::Dup { .. }
             | Op::Echo { .. }
             | Op::EmitNotice { .. }
+            | Op::RefArgOrNotice { .. }
+            | Op::GlobalRefDyn { .. }
+            | Op::StaticPropBindRef { .. }
             | Op::EmptyPath { .. }
             | Op::EndFinally { .. }
             | Op::EnumCase { .. }

@@ -68,6 +68,8 @@ fn unsafe_only_where_declared() {
         ("php-runtime/src/vm/mod.rs", 1, "Vm pointer recovered in a C callback"),
         ("php-runtime/src/vm/pdo.rs", 2, "SQLite UDF callback: Vm pointer, Send for the callable"),
         ("php-runtime/src/vm/xslt.rs", 1, "XSLT callback: Vm pointer"),
+        // Native fiber stacks (owner decision 2026-10-01, DECISION_KERNEL.md §8).
+        ("php-runtime/src/vm/coroutines.rs", 2, "fiber body: Vm pointer across the stack switch; the Yielder pointer in Fiber::suspend"),
         // Instrumentation builds only (feature-gated), never the shipped binary's default.
         ("php-types/src/memcensus.rs", 35, "byte census (mem-census)"),
         ("php-runtime/src/vm/zvalcensus.rs", 4, "zval census atexit hooks"),

@@ -1475,6 +1475,22 @@ pub enum Op {
     /// raises but does not abort on.
     EmitNotice(ConstIdx),
 
+    /// `[v] -> [v]` — a call result sent to a by-reference parameter: a
+    /// reference (the callee returns by reference) passes as is; any other
+    /// value raises the E_NOTICE `consts[idx]` ("Only variables should be
+    /// passed by reference") and passes by value (ZEND_SEND_VAR_NO_REF_EX).
+    RefArgOrNotice(ConstIdx),
+
+    /// `[name] -> [ref]` — `$GLOBALS[$expr]` sent to a by-reference parameter:
+    /// a reference to the global variable named at run time (resolved or
+    /// created as NULL, like Zend's FETCH_W on the global table).
+    GlobalRefDyn,
+
+    /// `[ref] -> [value]` — `Class::$p = &$x`: the static property's cell
+    /// becomes the reference's cell (a true two-way alias, like Zend's
+    /// ASSIGN_STATIC_PROP_REF). A non-reference is wrapped in a fresh cell.
+    StaticPropBindRef { target: ClassTarget, name: Rc<[u8]> },
+
     /// `[] -> []` — enter an `@` error-suppression region (step 48): mark the
     /// current diagnostics length and raise the suppress depth so `flush_diags`
     /// renders nothing until the matching [`Op::SuppressEnd`].

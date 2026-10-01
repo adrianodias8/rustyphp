@@ -332,7 +332,16 @@ class ReflectionClass implements Reflector {
     }
     public function isIterable() { return $this->isIterateable(); }
     // Static properties as a `name => value` map (own + inherited), values current.
-    public function getStaticProperties() { return __reflect_static_props($this->name); }
+    // Values through the per-property getter, which runs a not-yet-run
+    // initialiser (a non-constant default reads NULL from the bulk list).
+    public function getStaticProperties() {
+        $out = [];
+        foreach (array_keys(__reflect_static_props($this->name)) as $n) {
+            $decl = __reflect_prop_declaring_class($this->name, $n);
+            $out[$n] = __reflect_static_prop_get($decl === false ? $this->name : $decl, $n);
+        }
+        return $out;
+    }
     public function getStaticPropertyValue($name, $default = null) {
         $props = $this->getStaticProperties();
         if (array_key_exists($name, $props)) { return $props[$name]; }
@@ -364,7 +373,13 @@ class ReflectionClass implements Reflector {
     public function getProperty($name) { return new ReflectionProperty($this->name, $name); }
     public function getProperties($filter = null) {
         $out = [];
-        foreach (__reflect_prop_names($this->name) as $n) {
+        // Instance properties, then static ones (declaration order within
+        // each); `$filter` is a ReflectionProperty::IS_* mask.
+        $names = __reflect_prop_names($this->name);
+        foreach (array_keys(__reflect_static_props($this->name)) as $sn) {
+            if (!in_array($sn, $names, true)) { $names[] = $sn; }
+        }
+        foreach ($names as $n) {
             // Construct each with the DECLARING class as scope so the ancestor-
             // private guard in the ctor does not fire (it would otherwise abort
             // enumeration). Zend then OMITS an ancestor's private property from a
@@ -373,6 +388,9 @@ class ReflectionClass implements Reflector {
             $decl = __reflect_prop_declaring_class($this->name, $n);
             $rp = new ReflectionProperty($decl === false ? $this->name : $decl, $n);
             if ($decl !== false && strcasecmp($decl, $this->name) !== 0 && $rp->isPrivate()) {
+                continue;
+            }
+            if ($filter !== null && ($rp->getModifiers() & $filter) === 0) {
                 continue;
             }
             $out[] = $rp;

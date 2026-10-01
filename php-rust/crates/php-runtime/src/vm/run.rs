@@ -1536,6 +1536,31 @@ impl<'m> super::Vm<'m> {
                 return Ok(result);
             }
         }
+        // Filesystem mutators on a registered wrapper URL.
+        if !args.is_empty()
+            && matches!(
+                &name[..],
+                b"chmod" | b"touch" | b"chown" | b"chgrp" | b"unlink" | b"rename" | b"mkdir" | b"rmdir"
+            )
+        {
+            if let Some(path) = user_wrapper_url(&args[0], &self.stream_wrappers) {
+                let line = self.cur_line(top);
+                self.flush_diags(line)?;
+                let result = self.user_wrapper_fs_op(&name, &path, args)?;
+                self.flush_diags(line)?;
+                return Ok(result);
+            }
+        }
+        // `file_put_contents("scheme://…", …)` on a registered wrapper.
+        if !args.is_empty() && name[..] == *b"file_put_contents" {
+            if let Some(path) = user_wrapper_url(&args[0], &self.stream_wrappers) {
+                let line = self.cur_line(top);
+                self.flush_diags(line)?;
+                let result = self.user_wrapper_put_contents(&path, args)?;
+                self.flush_diags(line)?;
+                return Ok(result);
+            }
+        }
         // Stat-family / image / exif builtins on a wrapper URL:
         // url_stat or read-to-EOF through the wrapper object.
         if !args.is_empty() && is_user_wrapper_path_op(&name) {
@@ -1553,10 +1578,12 @@ impl<'m> super::Vm<'m> {
         // `stringify_args`, taken in `run_value_builtin`). The `deep`
         // family (`implode`/`str_replace`) also coerces array
         // *elements*, so its precompute recurses into array arguments.
-        if value_builtin_string_coerces(&name) {
-            self.stringify_args = self.compute_stringify(args, false)?;
-        } else if value_builtin_string_coerces_deep(&name, args) {
+        // Deep first: a builtin in both lists (`strtr` with a map) needs the
+        // array elements converted too, and deep is a superset of shallow.
+        if value_builtin_string_coerces_deep(&name, args) {
             self.stringify_args = self.compute_stringify(args, true)?;
+        } else if value_builtin_string_coerces(&name) {
+            self.stringify_args = self.compute_stringify(args, false)?;
         }
         let line = self.cur_line(top);
         self.run_value_builtin(f, args, line)
@@ -2601,9 +2628,22 @@ impl<'m> super::Vm<'m> {
                     // merge. A generator is driven to completion (its keys are
                     // re-yielded verbatim, so honour them like an array's).
                     let pairs: Vec<(Key, Zval)> = match src.deref_clone() {
-                        Zval::Array(s) => {
-                            s.iter().map(|(k, v)| (k.clone(), v.deref_clone())).collect()
-                        }
+                        // A reference element stays a reference (PHP: `[...$a]`
+                        // where `$a = [&$x]` aliases `$x`); a call's argument
+                        // array relies on it for by-ref parameters. A reference
+                        // nobody else holds (refcount 1) is unwrapped, as
+                        // ZEND_ADD_ARRAY_UNPACK does.
+                        Zval::Array(s) => s
+                            .iter()
+                            .map(|(k, v)| {
+                                let v = match v {
+                                    Zval::Ref(rc) if Rc::strong_count(rc) > 1 => Zval::Ref(Rc::clone(rc)),
+                                    Zval::Ref(rc) => rc.borrow().clone(),
+                                    other => other.clone(),
+                                };
+                                (k.clone(), v)
+                            })
+                            .collect(),
                         Zval::Generator(rc) => {
                             let mut out = Vec::new();
                             self.ensure_started(&rc)?;
@@ -2851,6 +2891,20 @@ impl<'m> super::Vm<'m> {
                         rhs
                     };
                     let (keys, key) = self.pop_prefix_and_key(top, *nkeys, "AssignOpPath key");
+                    // `$a[k] .= x` where the element is a Stringable object
+                    // (Drupal's `$batch_set['init_message'] .= …` on a
+                    // TranslatableMarkup): the leaf has no VM, so the element
+                    // is converted through `__toString()` first and written
+                    // back as its string, then the concat runs on it.
+                    if matches!(*op, BinOp::Concat) {
+                        let mut path = keys.clone();
+                        path.push(key.clone());
+                        let cur = super::arrays::silent_get_path(self.base_cell(*base, top), &path);
+                        if let Some(obj) = cur.as_ref().and_then(deref_object) {
+                            let s = Zval::Str(self.vm_stringify(&Zval::Object(obj))?);
+                            self.path_op(*base, top, keys.clone(), Last::Set { key: key.clone(), value: s })?;
+                        }
+                    }
                     let result = self.path_op(*base, top, keys, Last::OpSet { key, op: *op, rhs })?;
                     self.frames[top].stack.push(result);
                 }
@@ -3099,7 +3153,7 @@ impl<'m> super::Vm<'m> {
                     // Spread `$f(...$a)`: the arguments are the values of a runtime
                     // array (the callee sits beneath it), expanded in order.
                     let argsval = self.frames[top].stack.pop().expect("CallValueArgs array");
-                    let args = args_from_array_value(argsval);
+                    let args = args_from_array_value_refs(argsval);
                     let callee = self.frames[top].stack.pop().expect("CallValueArgs callee");
                     self.invoke_value(callee, args)?;
                 }
@@ -6069,24 +6123,23 @@ impl<'m> super::Vm<'m> {
                     // dispatch (GEN-4), handled before normal method resolution.
                     if self.fiber_class_id == Some(start) {
                         if method.eq_ignore_ascii_case(b"suspend") {
-                            let (id, baseline) = match self.fiber_stack.last() {
-                                Some(c) => (c.id, c.baseline),
-                                None => {
-                                    return Err(PhpError::Error(
-                                        "Cannot suspend outside of a fiber".to_string(),
-                                    ))
-                                }
-                            };
+                            if self.fiber_stack.is_empty() {
+                                return Err(PhpError::Error(
+                                    "Cannot suspend outside of a fiber".to_string(),
+                                ));
+                            }
                             // Decay a reference pushed by a dynamic call (SEND_VAR_EX);
                             // a deferred place argument reads by value (native callee).
                             if args.iter().any(|a| matches!(a, Zval::ArgPlace(_))) {
                                 self.materialize_arg_places(top, &mut args, None)?;
                             }
                             let value = args.into_iter().next().map(decay_arg).unwrap_or(Zval::Null);
-                            // Park the whole fiber segment; it is restored by resume.
-                            let parked = self.frames.split_off(baseline);
-                            self.fibers.get_mut(&id).expect("running fiber state").parked = parked;
-                            return Ok(RunExit::Suspended { value });
+                            // Switch to the resumer on the fiber's native stack;
+                            // the call evaluates to what resume() sends (or
+                            // raises what throw() sends) when we are back.
+                            let back = self.fiber_suspend(value)?;
+                            self.frames[top].stack.push(back);
+                            continue;
                         }
                         if method.eq_ignore_ascii_case(b"getcurrent") {
                             let cur = self
@@ -7125,6 +7178,46 @@ impl<'m> super::Vm<'m> {
                         _ => "VM: unsupported construct".to_string(),
                     };
                     return Err(PhpError::Error(msg));
+                }
+                Op::StaticPropBindRef { target, name } => {
+                    // Visibility + first-access initialisation first (a thunk
+                    // initialiser rewinds to re-run this op: keep the operand).
+                    if self.ensure_static(*target, &name, top, ip)?.is_none() {
+                        continue;
+                    }
+                    let v = self.frames[top].stack.pop().expect("StaticPropBindRef ref");
+                    let cell = match v {
+                        Zval::Ref(c) => c,
+                        other => php_types::zcell(other),
+                    };
+                    let start = self.target_class_id(*target, top)?;
+                    if let Some((decl, _)) = find_static_prop(&self.classes, start, &name) {
+                        self.static_props.insert((decl, name.to_vec()), Rc::clone(&cell));
+                    }
+                    let value = cell.borrow().clone();
+                    self.frames[top].stack.push(value);
+                }
+                Op::GlobalRefDyn => {
+                    let nv = self.frames[top].stack.pop().expect("GlobalRefDyn name").deref_clone();
+                    let name = convert::to_zstr_cast(&nv, &mut self.diags).as_bytes().to_vec();
+                    let cell = if let Some(idx) = crate::bytecode::superglobal_index(&name) {
+                        make_cell(&mut self.superglobals[idx as usize])
+                    } else {
+                        let slot = self.global_slot_by_name(&name);
+                        make_cell(&mut self.frames[0].slots[slot])
+                    };
+                    self.frames[top].stack.push(Zval::Ref(cell));
+                }
+                Op::RefArgOrNotice(i) => {
+                    let is_ref = matches!(self.frames[top].stack.last(), Some(Zval::Ref(_)));
+                    if !is_ref {
+                        if let crate::bytecode::Const::Str(b) = &self.frames[top].func.consts[*i as usize] {
+                            let msg = String::from_utf8_lossy(b.as_bytes()).into_owned();
+                            self.diags.push(Diag::Notice(msg));
+                            let line = self.cur_line(top);
+                            self.flush_diags(line)?;
+                        }
+                    }
                 }
                 Op::EmitNotice(i) => {
                     if let crate::bytecode::Const::Str(b) = &self.frames[top].func.consts[*i as usize] {

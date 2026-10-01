@@ -87,6 +87,12 @@ pub fn latin1_decode(b: &[u8]) -> String {
     b.iter().map(|&c| c as char).collect()
 }
 
+/// The position in the latin1 view ([`latin1_decode`]) of byte offset `off`
+/// of `subject`: each byte >= 0x80 before it is two bytes in the view.
+pub fn latin1_view_offset(subject: &[u8], off: usize) -> usize {
+    off + subject[..off.min(subject.len())].iter().filter(|&&b| b >= 0x80).count()
+}
+
 /// Encode the latin1 round-trip back: chars ≤ U+00FF become their single
 /// byte; anything above (text injected from a genuine-UTF-8 replacement)
 /// keeps its UTF-8 bytes.

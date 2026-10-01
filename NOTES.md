@@ -23,6 +23,41 @@ this session unless it is explicitly labelled "upstream's claim".
 
 ---
 
+# Session 7 — 2026-10-01 — Drupal 11: install, front page, worker mode (steps 1–2)
+
+Plan: the owner's four steps at the top of this file. Steps 1 and 2 done; step 3 next.
+
+1. **Install** (`bench/drupal/install.sh`): `drush site:install standard` on SQLite completes under
+   ferro, 14.5 s vs 2.1 s for the oracle. Same diagnostics in the log; the two databases are
+   equivalent (same 39 tables and row counts; `config` identical once UUIDs are normalised; the
+   rest differs only in timestamps, the cron key, the CSS/JS query string and the password salt).
+   28 fixes on the way — `MISSING_FOR_DRUPAL.md` rows 1–28, each with its `.phpt`. The largest:
+   **native fiber stacks** (corosensei, owner decision; `Fiber::suspend` from inside a generator
+   or callback panicked), `__serialize()`-without-`__unserialize()` round trips (Symfony DI lost
+   every `ChildDefinition`'s class), lazy `RecursiveIteratorIterator`, user stream wrappers
+   (`file_put_contents`, chmod/touch/unlink/rename/mkdir/rmdir), static-property reference
+   binding and return.
+2. **Front page** (`bench/drupal/frontpage.sh`, base `/scratch/drupal-base`, see
+   `bench/drupal/README.md`): `/`, `/node`, `/user/login` byte-identical to the oracle's `php -S`,
+   headers included, after token stripping (4/4). Rows 29–36 (first-class callable autoload,
+   preg byte offsets on multibyte subjects — Twig lexer, `strtr` with Stringable values, `$this->p`
+   arguments to array callables, references through argument unpacking — Olivero preprocess,
+   `LIBXML_NOEMPTYTAG` — the active menu link, duplicate `Date`).
+3. **Worker mode** (`bench/drupal/drupal-worker.php`, `bench/drupal/worker-leaks.sh`): the naive
+   loop fails the same way under FrankenPHP and ferro (Drupal state, not the engine). A worker
+   needs `$kernel->resetContainer()` + a reset of `Renderer::$contextCollection`,
+   `Html::$seenIds`, `Html::$seenIdsInit` after `terminate()` — then 10/10 responses are
+   byte-identical to one-shot PHP. Table and the full leak map in `MISSING_FOR_DRUPAL.md`
+   § Worker mode. Rows 37–43 found on the way (reflection of static properties, nested writes
+   through `WeakMap`/`&offsetGet`, `touch()` on a directory, xmlns-first serialisation, …).
+4. Corpus 3,051 → **3,100** (48 + 1 new passes, baseline advanced, 0 pass→fail). DBAL: the 10
+   errors are gone (4,146 tests, 1 failure — the oracle's same 1). New divergences D-17…D-23.
+
+Measured, not yet tuned: one-shot ferro serves the warm front page in 0.28 s vs 0.008 s for
+`php -S` (every request recompiles Drupal); worker mode is what step 3 measures.
+
+---
+
 # Session 6 — 2026-10-01 — Ferrophant rebrand; worker recycling and the soak test
 
 1. **Rebrand** (`4583e8f1`): binary `ferro`, builtin `ferro_handle_request`, comments in English,

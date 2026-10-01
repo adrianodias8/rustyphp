@@ -1614,7 +1614,10 @@ impl<'m> super::Vm<'m> {
         }
         let pat = convert::to_zstr_cast(&args[0].deref_clone(), &mut self.diags).as_bytes().to_vec();
         let subject =
-            convert::to_zstr_cast(&args[1].deref_clone(), &mut self.diags).as_bytes().to_vec();
+            match args[1].deref_clone() {
+                v @ Zval::Object(_) => self.vm_stringify(&v)?.as_bytes().to_vec(),
+                v => convert::to_zstr_cast(&v, &mut self.diags).as_bytes().to_vec(),
+            };
         let limit = match args.get(2) {
             Some(v) => convert::to_long_cast(&v.deref_clone(), &mut self.diags),
             None => -1,
@@ -1676,7 +1679,10 @@ impl<'m> super::Vm<'m> {
         }
         let pat = convert::to_zstr_cast(&args[0].deref_clone(), &mut self.diags).as_bytes().to_vec();
         let subject =
-            convert::to_zstr_cast(&args[1].deref_clone(), &mut self.diags).as_bytes().to_vec();
+            match args[1].deref_clone() {
+                v @ Zval::Object(_) => self.vm_stringify(&v)?.as_bytes().to_vec(),
+                v => convert::to_zstr_cast(&v, &mut self.diags).as_bytes().to_vec(),
+            };
         let opts = self.mb_regex.options.clone();
         let Some(re) = self.mb_compile(&pat, &opts, func, ic) else {
             // Bad pattern: false, and no out-param write (empty array is harmless).
@@ -1700,7 +1706,10 @@ impl<'m> super::Vm<'m> {
         }
         let pat = convert::to_zstr_cast(&args[0].deref_clone(), &mut self.diags).as_bytes().to_vec();
         let repl =
-            convert::to_zstr_cast(&args[1].deref_clone(), &mut self.diags).as_bytes().to_vec();
+            match args[1].deref_clone() {
+                v @ Zval::Object(_) => self.vm_stringify(&v)?.as_bytes().to_vec(),
+                v => convert::to_zstr_cast(&v, &mut self.diags).as_bytes().to_vec(),
+            };
         let subject =
             convert::to_zstr_cast(&args[2].deref_clone(), &mut self.diags).as_bytes().to_vec();
         let opts = self.mb_opts_val(&args, 3);
@@ -1751,7 +1760,10 @@ impl<'m> super::Vm<'m> {
         }
         let pat = convert::to_zstr_cast(&args[0].deref_clone(), &mut self.diags).as_bytes().to_vec();
         let subject =
-            convert::to_zstr_cast(&args[1].deref_clone(), &mut self.diags).as_bytes().to_vec();
+            match args[1].deref_clone() {
+                v @ Zval::Object(_) => self.vm_stringify(&v)?.as_bytes().to_vec(),
+                v => convert::to_zstr_cast(&v, &mut self.diags).as_bytes().to_vec(),
+            };
         let opts = self.mb_opts_val(&args, 2);
         let Some(re) = self.mb_compile(&pat, &opts, "mb_ereg_match", false) else {
             return Ok(Zval::Bool(false));
@@ -3771,7 +3783,10 @@ impl<'m> super::Vm<'m> {
         }
         let pat = convert::to_zstr_cast(&args[0].deref_clone(), &mut self.diags).as_bytes().to_vec();
         let subject =
-            convert::to_zstr_cast(&args[1].deref_clone(), &mut self.diags).as_bytes().to_vec();
+            match args[1].deref_clone() {
+                v @ Zval::Object(_) => self.vm_stringify(&v)?.as_bytes().to_vec(),
+                v => convert::to_zstr_cast(&v, &mut self.diags).as_bytes().to_vec(),
+            };
         let limit = match args.get(2) {
             Some(a) => convert::to_long_cast(&a.deref_clone(), &mut self.diags),
             None => -1,
@@ -4076,7 +4091,12 @@ impl<'m> super::Vm<'m> {
         // (compile-cache, pattern_is_unicode, subject_text) reads &[u8].
         let pat_z = convert::to_zstr_cast(&args[0].deref_clone(), &mut self.diags);
         let pat = pat_z.as_bytes();
-        let subject_z = convert::to_zstr_cast(&args[1].deref_clone(), &mut self.diags);
+        // A Stringable subject goes through `__toString()` (Drupal's
+        // Unicode::validateUtf8 on a ViewsRenderPipelineMarkup).
+        let subject_z = match args[1].deref_clone() {
+            v @ Zval::Object(_) => self.vm_stringify(&v)?,
+            v => convert::to_zstr_cast(&v, &mut self.diags),
+        };
         let subject = subject_z.as_bytes();
         let Some(re) = self.preg_compile(pat) else {
             return Ok((Zval::Bool(false), Zval::Null));
@@ -4109,6 +4129,11 @@ impl<'m> super::Vm<'m> {
         };
         let latin1 = txt.is_latin1();
         let subj = txt.as_str();
+        // `$offset` is a BYTE offset; the latin1 view spells every byte >= 0x80
+        // as two UTF-8 bytes, so the search position moves by one per such
+        // byte before it (an anchored `/A` match at the offset — Twig's lexer
+        // after a `’` — otherwise never lines up).
+        let start = if latin1 { crate::preg::latin1_view_offset(subject, start) } else { start };
         let (ret, matches) = match re.captures_at(subj, start) {
             Some(mut caps) => {
                 if latin1 {
@@ -4133,7 +4158,10 @@ impl<'m> super::Vm<'m> {
         }
         let pat = convert::to_zstr_cast(&args[0].deref_clone(), &mut self.diags).as_bytes().to_vec();
         let subject =
-            convert::to_zstr_cast(&args[1].deref_clone(), &mut self.diags).as_bytes().to_vec();
+            match args[1].deref_clone() {
+                v @ Zval::Object(_) => self.vm_stringify(&v)?.as_bytes().to_vec(),
+                v => convert::to_zstr_cast(&v, &mut self.diags).as_bytes().to_vec(),
+            };
         let Some(re) = self.preg_compile(&pat) else {
             return Ok((Zval::Bool(false), Zval::Null));
         };
@@ -4451,8 +4479,12 @@ impl<'m> super::Vm<'m> {
             let mut outer = PhpArray::new();
             for bt in frames {
                 let mut e = PhpArray::new();
-                e.insert(k.k_file.clone(), Zval::Str(bt.file));
-                e.insert(k.k_line.clone(), Zval::Long(bt.line as i64));
+                // An empty file marks a call made from internal code (a
+                // fiber's bottom frame): PHP omits file and line.
+                if !bt.file.is_empty() {
+                    e.insert(k.k_file.clone(), Zval::Str(bt.file));
+                    e.insert(k.k_line.clone(), Zval::Long(bt.line as i64));
+                }
                 e.insert(k.k_function.clone(), Zval::Str(bt.function));
                 if let Some(cls) = bt.class {
                     e.insert(k.k_class.clone(), Zval::Str(cls));
@@ -4498,7 +4530,11 @@ impl<'m> super::Vm<'m> {
                 .map(format_bt_arg)
                 .collect::<Vec<_>>()
                 .join(", ");
-            s.push_str(&format!("#{n} {file}({}): {callee}({argstr})\n", bt.line));
+            if bt.file.is_empty() {
+                s.push_str(&format!("#{n} [internal function]: {callee}({argstr})\n"));
+            } else {
+                s.push_str(&format!("#{n} {file}({}): {callee}({argstr})\n", bt.line));
+            }
         }
         // Flush pending diagnostics first so the trace lands in output order, then
         // append to both streams (this is ordinary output, like an echo).
@@ -6184,11 +6220,29 @@ impl<'m> super::Vm<'m> {
             )));
             return Ok(Zval::Bool(false));
         }
+        self.stream_wrapper_order.retain(|p| p != &proto);
+        self.stream_wrapper_order.push(proto.clone());
         self.stream_wrappers.insert(proto, class);
         Ok(Zval::Bool(true))
     }
 
     /// `stream_wrapper_unregister($protocol): bool` — remove a userland wrapper.
+    /// `stream_get_wrappers(): array` — the wrappers this runtime opens
+    /// natively (`phar` absent: unsupported), then the user-registered ones,
+    /// which Drupal checks before re-registering (`in_array($scheme, …)`).
+    pub(super) fn ho_stream_get_wrappers(&mut self, _args: Vec<Zval>) -> Result<Zval, PhpError> {
+        let mut out = PhpArray::new();
+        for w in ["php", "file", "data", "http", "https"] {
+            let _ = out.append(Zval::Str(PhpStr::from_str(w)));
+        }
+        for proto in &self.stream_wrapper_order {
+            if self.stream_wrappers.contains_key(proto) {
+                let _ = out.append(Zval::Str(PhpStr::new(proto.clone())));
+            }
+        }
+        Ok(Zval::Array(Rc::new(out)))
+    }
+
     pub(super) fn ho_stream_wrapper_unregister(&mut self, args: Vec<Zval>) -> Result<Zval, PhpError> {
         let proto = convert::to_zstr_cast(args.first().unwrap_or(&Zval::Null), &mut self.diags)
             .as_bytes()
@@ -6641,6 +6695,124 @@ impl<'m> super::Vm<'m> {
             }
         }
         Ok(Zval::Str(PhpStr::new(data)))
+    }
+
+    /// `file_put_contents("scheme://…", $data, $flags)` on a registered
+    /// wrapper (Drupal writes `public://.htaccess` this way): open with `wb`
+    /// (`ab` under FILE_APPEND), one `stream_write`, `stream_close`. LOCK_EX is
+    /// refused like PHP does for a non-plain-file stream.
+    pub(super) fn user_wrapper_put_contents(&mut self, path: &[u8], args: &[Zval]) -> Result<Zval, PhpError> {
+        let flags = args
+            .get(2)
+            .map(|v| convert::to_long_cast(&v.deref_clone(), &mut self.diags))
+            .unwrap_or(0);
+        if flags & 2 != 0 {
+            self.diags.push(Diag::Warning(
+                "file_put_contents(): Exclusive locks may only be set for regular files".to_string(),
+            ));
+            return Ok(Zval::Bool(false));
+        }
+        let data: Vec<u8> = match args.get(1).map(|v| v.deref_clone()) {
+            Some(Zval::Array(a)) => {
+                let mut out = Vec::new();
+                for (_, v) in a.iter() {
+                    out.extend_from_slice(convert::to_zstr_cast(&v.deref_clone(), &mut self.diags).as_bytes());
+                }
+                out
+            }
+            Some(v) => convert::to_zstr_cast(&v, &mut self.diags).as_bytes().to_vec(),
+            None => Vec::new(),
+        };
+        let mode: &[u8] = if flags & 8 != 0 { b"ab" } else { b"wb" };
+        let Zval::Resource(rc) = self.fopen_user_wrapper(path, mode)? else {
+            return Ok(Zval::Bool(false));
+        };
+        let Some(obj) = rc.borrow().as_user_stream().map(|u| u.obj.clone()) else {
+            return Ok(Zval::Bool(false));
+        };
+        let len = data.len();
+        let written = if len == 0 {
+            0
+        } else {
+            let r = self.call_method_sync(obj.clone(), b"stream_write", vec![Zval::Str(PhpStr::new(data))])?;
+            convert::to_long_cast(&r.deref_clone(), &mut self.diags)
+        };
+        let cid = object_class_id(&obj).unwrap_or(0);
+        if resolve_method_runtime(&self.classes, cid, b"stream_close").is_some() {
+            self.call_method_sync(obj, b"stream_close", Vec::new())?;
+        }
+        Ok(Zval::Long(written))
+    }
+
+    /// chmod/touch/chown/chgrp/unlink/rename/mkdir/rmdir on a registered
+    /// wrapper URL: the wrapper method PHP's userspace streams call
+    /// (`stream_metadata` with STREAM_META_* for the first four), with the
+    /// same arguments; a missing method warns "C::m is not implemented!" and
+    /// fails. Drupal's file system (public://, temporary://) goes through it.
+    pub(super) fn user_wrapper_fs_op(&mut self, name: &[u8], path: &[u8], args: &[Zval]) -> Result<Zval, PhpError> {
+        let scheme = url_scheme(path);
+        let Some(class) = self.stream_wrappers.get(scheme.as_bytes()).cloned() else {
+            return Ok(Zval::Bool(false));
+        };
+        let key = class.strip_prefix(b"\\").unwrap_or(&class).to_ascii_lowercase();
+        let Some(&cid) = self.class_index.get(key.as_slice()) else {
+            return Ok(Zval::Bool(false));
+        };
+        let arg = |i: usize| args.get(i).map(|v| v.deref_clone());
+        let p = Zval::Str(PhpStr::new(path.to_vec()));
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+        let (method, call_args): (&[u8], Vec<Zval>) = match name {
+            b"chmod" => (b"stream_metadata", vec![p, Zval::Long(6), arg(1).unwrap_or(Zval::Long(0))]),
+            b"touch" => {
+                let mtime = match arg(1) {
+                    Some(Zval::Null) | None => now,
+                    Some(v) => convert::to_long_cast(&v, &mut self.diags),
+                };
+                let atime = match arg(2) {
+                    Some(Zval::Null) | None => mtime,
+                    Some(v) => convert::to_long_cast(&v, &mut self.diags),
+                };
+                let mut t = PhpArray::new();
+                let _ = t.append(Zval::Long(mtime));
+                let _ = t.append(Zval::Long(atime));
+                (b"stream_metadata", vec![p, Zval::Long(1), Zval::Array(Rc::new(t))])
+            }
+            b"chown" | b"chgrp" => {
+                let v = arg(1).unwrap_or(Zval::Null);
+                let by_name = matches!(v, Zval::Str(_));
+                let option = match (name, by_name) {
+                    (b"chown", true) => 2,
+                    (b"chown", false) => 3,
+                    (_, true) => 4,
+                    (_, false) => 5,
+                };
+                (b"stream_metadata", vec![p, Zval::Long(option), v])
+            }
+            b"unlink" => (b"unlink", vec![p]),
+            b"rename" => (b"rename", vec![p, arg(1).unwrap_or(Zval::Null)]),
+            b"mkdir" => {
+                let mode = arg(1).map(|v| convert::to_long_cast(&v, &mut self.diags)).unwrap_or(0o777);
+                let recursive = arg(2).map(|v| convert::to_bool(&v, &mut self.diags)).unwrap_or(false);
+                (b"mkdir", vec![p, Zval::Long(mode), Zval::Long(8 | i64::from(recursive))])
+            }
+            b"rmdir" => (b"rmdir", vec![p, Zval::Long(8)]),
+            _ => return Ok(Zval::Bool(false)),
+        };
+        if resolve_method_runtime(&self.classes, cid, method).is_none() {
+            self.diags.push(Diag::Warning(format!(
+                "{}(): {}::{} is not implemented!",
+                String::from_utf8_lossy(name),
+                String::from_utf8_lossy(&self.classes[cid].name),
+                String::from_utf8_lossy(method)
+            )));
+            return Ok(Zval::Bool(false));
+        }
+        let obj = self.instantiate_wrapper(cid)?;
+        let r = self.call_method_sync(obj, method, call_args)?;
+        Ok(Zval::Bool(convert::to_bool(&r.deref_clone(), &mut self.diags)))
     }
 
     /// Call the wrapper's `url_stat($path, $flags)`. `None` when the scheme has

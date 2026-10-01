@@ -1,5 +1,36 @@
-//! VM coroutines logic, extracted from vm/mod.rs (no semantic change).
+//! VM coroutines logic, extracted from vm/mod.rs: generators (frames parked
+//! in `generators`) and fibers (a native stack each, through corosensei).
 use super::*;
+
+/// Native stack size of a fiber. The main thread's default is 8 MiB; a fiber
+/// runs the same interpreter, so it gets the same (virtual: pages are only
+/// touched as the stack grows).
+const FIBER_STACK_BYTES: usize = 8 * 1024 * 1024;
+
+/// What the resumer sends into a fiber at each switch.
+pub(super) enum FiberMsg {
+    Start(Zval, Vec<Zval>),
+    Resume(Zval),
+    Throw(Zval),
+}
+
+/// A switch into the fiber: the resumer's Vm pointer and the message.
+pub(super) struct FiberIn {
+    vm: *mut (),
+    msg: FiberMsg,
+}
+
+/// A switch out of the fiber (a `Fiber::suspend`): the fiber's Vm pointer
+/// (unused by the resumer, which holds its own `&mut`; passing it makes the
+/// pointer escape into the switch) and the suspend value.
+pub(super) struct FiberOut {
+    #[allow(dead_code)]
+    vm: *mut (),
+    value: Zval,
+}
+
+pub(super) type FiberCo = corosensei::Coroutine<FiberIn, FiberOut, Result<Zval, PhpError>>;
+type FiberYielder = corosensei::Yielder<FiberIn, FiberOut>;
 
 impl<'m> Vm<'m> {
     /// Build a `Generator` handle for a freshly-bound generator-body `frame`
@@ -105,17 +136,6 @@ impl<'m> Vm<'m> {
                 gs.cur_val = Zval::Null;
                 gs.status = GenStatus::Done;
                 Ok(())
-            }
-            Ok(RunExit::Suspended { .. }) => {
-                // `Fiber::suspend` reached across a generator resume (a fiber
-                // suspended from within a generator that is itself inside the
-                // fiber). This pathological nesting is out of scope; fail cleanly.
-                let mut gs = gs_rc.borrow_mut();
-                gs.status = GenStatus::Done;
-                Err(PhpError::Error(
-                    "VM: cannot suspend a Fiber from within a Generator (unsupported nesting)"
-                        .to_string(),
-                ))
             }
             Err(e) => {
                 // Uncaught inside the generator: `unwind` left the dead frame at
@@ -231,12 +251,44 @@ impl<'m> Vm<'m> {
         self.fibers.get(&id).map(|s| s.status)
     }
 
-    /// Run a fiber's frame segment at `baseline` until it suspends, its callable
-    /// returns, or it throws (GEN-4). Shared by `start`/`resume`. Returns the
-    /// value to hand back to the caller (the `Fiber::suspend` value, or NULL on
-    /// termination); an exception that escapes the fiber propagates to the caller.
-    pub(super) fn drive_fiber(&mut self, id: u32, obj: &Zval, baseline: usize) -> Result<Zval, PhpError> {
-        self.fiber_stack.push(FiberContext { id, baseline, obj: obj.clone() });
+    /// Switch the frame stack into fiber `id`: the resumer's frames move to
+    /// `fiber_outer`, except the script frame (globals live in `frames[0]`),
+    /// which moves to the front of the fiber's own stack. Inside a fiber the
+    /// frame indices are therefore always the same — its bottom frame is 1 —
+    /// which the Rust frames suspended on its native stack rely on.
+    fn fiber_enter(&mut self, id: u32) {
+        let mut outer = std::mem::take(&mut self.frames);
+        let main = outer.remove(0);
+        let mut own = std::mem::take(&mut self.fibers.get_mut(&id).expect("fiber state").parked);
+        own.insert(0, main);
+        self.frames = own;
+        self.fiber_outer.push(outer);
+    }
+
+    /// The inverse of [`Self::fiber_enter`]: park the fiber's frames (all but
+    /// the script frame) and give the resumer its stack back.
+    fn fiber_exit(&mut self, id: u32) {
+        let mut own = std::mem::take(&mut self.frames);
+        let main = own.remove(0);
+        let mut outer = self.fiber_outer.pop().expect("resumer frames");
+        outer.insert(0, main);
+        self.frames = outer;
+        if let Some(st) = self.fibers.get_mut(&id) {
+            st.parked = own;
+        }
+    }
+
+    /// Run fiber `id` on its native stack until it suspends, returns or
+    /// throws (GEN-4). Shared by `start`/`resume`/`throw`. Returns the value
+    /// handed back to the caller (the `Fiber::suspend` argument, or NULL on
+    /// termination); an exception that escapes the fiber propagates.
+    pub(super) fn drive_fiber(&mut self, id: u32, obj: &Zval, msg: FiberMsg, args: Vec<Zval>) -> Result<Zval, PhpError> {
+        let method: &'static [u8] = match &msg {
+            FiberMsg::Start(..) => b"start",
+            FiberMsg::Resume(_) => b"resume",
+            FiberMsg::Throw(_) => b"throw",
+        };
+        self.fiber_stack.push(FiberContext { id, obj: obj.clone(), method, args });
         // `@` is per-execution-context: park the caller's suppression state and
         // run the fiber body under its OWN (restored from its last suspend), so
         // `@$fiber->start()` does not silence diagnostics inside the fiber.
@@ -258,15 +310,15 @@ impl<'m> Vm<'m> {
                 self.error_level &= 4437;
             }
         }
-        let outcome = loop {
-            match self.run_loop(baseline) {
-                Ok(exit) => break Ok(exit),
-                Err(e) => match self.unwind(e, baseline) {
-                    None => continue,
-                    Some(e) => break Err(e),
-                },
-            }
-        };
+        self.fiber_enter(id);
+        let mut co = self.fibers.get_mut(&id).and_then(|st| st.co.take()).expect("fiber coroutine");
+        // The Vm travels as a raw pointer in every switch message, so each
+        // side re-derives its access after the switch (fiber_body /
+        // fiber_suspend); this side keeps using `self` only after `resume`
+        // returns, when the fiber is parked again.
+        let vm = self as *mut Vm<'m> as *mut ();
+        let result = co.resume(FiberIn { vm, msg });
+        self.fiber_exit(id);
         self.fiber_stack.pop();
         // Park the fiber's suppression state (survives a suspend inside `@`)
         // and restore the caller's — including the caller's silence mask on
@@ -284,46 +336,67 @@ impl<'m> Vm<'m> {
         if !self.silence_saved.is_empty() && self.error_level & !4437 != 0 {
             self.error_level &= 4437;
         }
-        if let Some(st) = self.fibers.get_mut(&id) {
-            st.suppress = (fiber_depth, fiber_marks, fiber_silence);
-        }
-        match outcome {
-            Ok(RunExit::Suspended { value }) => {
-                // `Fiber::suspend` already parked frames[baseline..] into the entry.
-                if let Some(st) = self.fibers.get_mut(&id) {
-                    st.status = FiberStatus::Suspended;
-                }
-                Ok(value)
+        let st = self.fibers.get_mut(&id).expect("fiber state");
+        st.suppress = (fiber_depth, fiber_marks, fiber_silence);
+        match result {
+            corosensei::CoroutineResult::Yield(out) => {
+                st.co = Some(co);
+                st.status = FiberStatus::Suspended;
+                Ok(out.value)
             }
-            Ok(RunExit::Returned(v)) => {
-                if let Some(st) = self.fibers.get_mut(&id) {
-                    st.status = FiberStatus::Terminated;
-                    st.ret = v;
+            corosensei::CoroutineResult::Return(done) => {
+                st.status = FiberStatus::Terminated;
+                // The native stack is finished; free it now.
+                drop(co);
+                match done {
+                    Ok(v) => {
+                        st.ret = v;
+                        Ok(Zval::Null)
+                    }
+                    Err(e) => Err(e),
                 }
-                Ok(Zval::Null)
-            }
-            Ok(RunExit::Yielded { .. }) => {
-                unreachable!("a fiber callable does not `yield` at its own baseline")
-            }
-            Err(e) => {
-                // The exception escaped the fiber: it terminates and the error
-                // propagates out of start()/resume(). `unwind` left the dead
-                // baseline frame; drop the whole segment, noting what it held.
-                while self.frames.len() > baseline {
-                    let dead = self.frames.pop().expect("fiber frames above baseline");
-                    self.gc_note_frame(&dead);
-                    self.recycle_frame(dead);
-                }
-                if let Some(st) = self.fibers.get_mut(&id) {
-                    st.status = FiberStatus::Terminated;
-                }
-                Err(e)
             }
         }
     }
 
-    /// `$fiber->start(...$args)` (GEN-4): invoke the fiber's callable as a fresh
-    /// frame and run it to the first suspend or to completion.
+    /// The fiber body, on the fiber's native stack: call the callable to
+    /// completion. `Fiber::suspend` inside it (at any Rust-level nesting —
+    /// generators, callbacks, magic methods) switches back to the resumer.
+    fn fiber_body(&mut self, callable: Zval, args: Vec<Zval>) -> Result<Zval, PhpError> {
+        let r = self.call_callable(callable, args);
+        // An escaping exception left no frames above the script frame
+        // (call_callable drops them); a return left none either.
+        debug_assert_eq!(self.frames.len(), 1);
+        r
+    }
+
+    /// `Fiber::suspend($value)` (GEN-4), called from the `StaticCall` site
+    /// inside the running fiber: switch to the resumer and wait. Returns the
+    /// value `resume()` delivers, or the throwable `throw()` delivers as an
+    /// error raised at this call.
+    pub(super) fn fiber_suspend(&mut self, value: Zval) -> Result<Zval, PhpError> {
+        let Some(ctx) = self.fiber_stack.last() else {
+            return Err(PhpError::Error("Cannot suspend outside of a fiber".to_string()));
+        };
+        let yielder = self.fibers.get(&ctx.id).expect("running fiber state").yielder;
+        // SAFETY: `yielder` was stored by this fiber's coroutine body from the
+        // `&Yielder` corosensei passed it; that `Yielder` lives on the fiber's
+        // native stack for the whole body, and this code runs on that same
+        // stack (the fiber is the running one: `fiber_stack.last()`), so the
+        // body — and the `Yielder` — is still alive.
+        let yielder = unsafe { &*(yielder as *const FiberYielder) };
+        // `self` escapes into the switch: after it returns, every Vm field is
+        // re-read, never assumed unchanged across the resumer's run.
+        let back = yielder.suspend(FiberOut { vm: self as *mut Vm<'m> as *mut (), value });
+        match back.msg {
+            FiberMsg::Resume(v) => Ok(v),
+            FiberMsg::Throw(e) => Err(PhpError::Thrown(e)),
+            FiberMsg::Start(..) => unreachable!("a fiber is started once"),
+        }
+    }
+
+    /// `$fiber->start(...$args)` (GEN-4): create the fiber's native stack and
+    /// run its callable to the first suspend or to completion.
     pub(super) fn fiber_start(&mut self, obj: &Zval, args: Vec<Zval>) -> Result<Zval, PhpError> {
         let id = match obj {
             Zval::Object(o) => o.borrow().id,
@@ -341,36 +414,46 @@ impl<'m> Vm<'m> {
             }
             _ => Zval::Null,
         };
+        let stack = corosensei::stack::DefaultStack::new(FIBER_STACK_BYTES).map_err(|e| {
+            PhpError::Error(format!("Fiber stack allocation failed: {e}"))
+        })?;
+        let co: FiberCo = corosensei::Coroutine::with_stack(stack, |yielder: &FiberYielder, first: FiberIn| {
+            // SAFETY: `first.vm` is the `&mut Vm` of the `drive_fiber` that is
+            // resuming this coroutine, cast to a raw pointer for the switch;
+            // that frame is blocked inside `resume` until this body suspends or
+            // returns, so this is the only live access to the Vm. The lifetime
+            // is erased to `'static` only because a coroutine body must be
+            // `'static`; the coroutine is owned by the Vm (`fibers`, its first
+            // field) and never outlives it.
+            let vm = unsafe { &mut *(first.vm as *mut Vm<'static>) };
+            let FiberMsg::Start(callable, args) = first.msg else {
+                unreachable!("a fiber's first message is Start");
+            };
+            if let Some(ctx) = vm.fiber_stack.last() {
+                let id = ctx.id;
+                if let Some(st) = vm.fibers.get_mut(&id) {
+                    st.yielder = yielder as *const FiberYielder as *const ();
+                }
+            }
+            vm.fiber_body(callable, args)
+        });
         self.fibers.insert(
             id,
             FiberState {
                 status: FiberStatus::Running,
                 parked: Vec::new(),
+                co: Some(co),
+                yielder: std::ptr::null(),
                 ret: Zval::Null,
                 suppress: (0, Vec::new(), Vec::new()),
             },
         );
-        let baseline = self.frames.len();
-        self.invoke_value(callable, args)?;
-        if self.frames.len() != baseline + 1 {
-            // A non-closure callable (builtin / generator function) did not push a
-            // plain fiber frame; out of scope.
-            while self.frames.len() > baseline {
-                let dead = self.frames.pop().expect("frames above baseline");
-                self.gc_note_frame(&dead);
-                self.recycle_frame(dead);
-            }
-            self.fibers.remove(&id);
-            return Err(PhpError::Error(
-                "VM: fiber callable must be a closure or function (other callables unsupported)"
-                    .to_string(),
-            ));
-        }
-        self.drive_fiber(id, obj, baseline)
+        let shown = args.clone();
+        self.drive_fiber(id, obj, FiberMsg::Start(callable, args), shown)
     }
 
-    /// `$fiber->resume($value)` (GEN-4): restore the parked segment, deliver
-    /// `$value` as the suspended `Fiber::suspend`'s result, and run on.
+    /// `$fiber->resume($value)` (GEN-4): the suspended `Fiber::suspend(...)`
+    /// call returns `$value` and the fiber runs on.
     pub(super) fn fiber_resume(&mut self, obj: &Zval, args: Vec<Zval>) -> Result<Zval, PhpError> {
         let id = match obj {
             Zval::Object(o) => o.borrow().id,
@@ -381,14 +464,28 @@ impl<'m> Vm<'m> {
                 "Cannot resume a fiber that is not suspended".to_string(),
             ));
         }
+        let shown = args.clone();
         let value = args.into_iter().next().unwrap_or(Zval::Null);
-        let parked = std::mem::take(&mut self.fibers.get_mut(&id).expect("fiber state").parked);
-        let baseline = self.frames.len();
-        self.frames.extend(parked);
-        // The suspended `Fiber::suspend(...)` call evaluates to the resume value.
-        self.frames.last_mut().expect("restored fiber frame").stack.push(value);
         self.fibers.get_mut(&id).expect("fiber state").status = FiberStatus::Running;
-        self.drive_fiber(id, obj, baseline)
+        self.drive_fiber(id, obj, FiberMsg::Resume(value), shown)
+    }
+
+    /// `$fiber->throw($e)` (GEN-4): the suspended `Fiber::suspend(...)` call
+    /// throws `$e` inside the fiber.
+    pub(super) fn fiber_throw(&mut self, obj: &Zval, args: Vec<Zval>) -> Result<Zval, PhpError> {
+        let id = match obj {
+            Zval::Object(o) => o.borrow().id,
+            _ => unreachable!("fiber_throw on a non-object"),
+        };
+        if self.fiber_status(id) != Some(FiberStatus::Suspended) {
+            return Err(PhpError::Error(
+                "Cannot resume a fiber that is not suspended".to_string(),
+            ));
+        }
+        let shown = args.clone();
+        let exc = args.into_iter().next().unwrap_or(Zval::Null);
+        self.fibers.get_mut(&id).expect("fiber state").status = FiberStatus::Running;
+        self.drive_fiber(id, obj, FiberMsg::Throw(exc), shown)
     }
 
     /// Dispatch a `Fiber` instance method (GEN-4), returning the value to leave on
@@ -421,9 +518,14 @@ impl<'m> Vm<'m> {
             b"isterminated" => {
                 Ok(Zval::Bool(self.fiber_status(id) == Some(FiberStatus::Terminated)))
             }
-            b"throw" => Err(PhpError::Error(
-                "VM: Fiber::throw() is not yet supported".to_string(),
-            )),
+            b"throw" => self.fiber_throw(obj, args),
+            // Static methods called through an instance (`$fiber->suspend()`,
+            // Drupal's EntityStorageBase): they act on the running fiber.
+            b"suspend" => {
+                let v = args.into_iter().next().map(|v| v.deref_clone()).unwrap_or(Zval::Null);
+                self.fiber_suspend(v)
+            }
+            b"getcurrent" => Ok(self.fiber_stack.last().map(|c| c.obj.clone()).unwrap_or(Zval::Null)),
             other => Err(PhpError::Error(format!(
                 "Call to undefined method Fiber::{}()",
                 String::from_utf8_lossy(other)

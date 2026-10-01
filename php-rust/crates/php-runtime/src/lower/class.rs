@@ -156,7 +156,20 @@ impl<'f> Lowerer<'f> {
         // Resolve any nested traits before flattening their members in.
         for u in &uses {
             for tn in u.trait_names.iter() {
-                let nk = self.resolve_class(tn).to_ascii_lowercase();
+                let fqn = self.resolve_class(tn);
+                let nk = fqn.to_ascii_lowercase();
+                if !self.traits.contains_key(&nk) && !asts.contains_key(&nk) {
+                    // Not loaded and not in this unit: hand the autoload retry
+                    // the name as written. PHP passes it to the autoloader with
+                    // its case, and PSR-4 maps that case onto the file path.
+                    in_progress.remove(key);
+                    self.defer = saved_defer;
+                    return Err(LowerError::UndefinedClass {
+                        name: fqn,
+                        kind: MissingSym::Trait,
+                        line,
+                    });
+                }
                 self.resolve_trait(&nk, asts, in_progress)?;
             }
         }
@@ -280,7 +293,12 @@ impl<'f> Lowerer<'f> {
         }
 
         // --- flatten members, applying exclusions + collision detection ---
-        let mut from_trait: HashMap<Vec<u8>, (Box<[u8]>, Box<[u8]>)> = HashMap::default();
+        // method (lowercase) → (trait as written, method name, its declaration
+        // site): the same declaration reached twice (a trait used directly and
+        // through another trait) is one method, not a collision — PHP compares
+        // the op_arrays (zend_add_trait_method).
+        type DeclSite = (Box<[u8]>, Line, Line);
+        let mut from_trait: HashMap<Vec<u8>, (Box<[u8]>, Box<[u8]>, DeclSite)> = HashMap::default();
         let mut seen_p = own_p.clone();
         let mut seen_s = own_s.clone();
         let mut seen_c = own_c.clone();
@@ -319,7 +337,11 @@ impl<'f> Lowerer<'f> {
                     if excluded.contains(&(tkey.clone(), m_lc.clone())) || own_m.contains(&m_lc) {
                         continue;
                     }
-                    if let Some((a_trait, a_method)) = from_trait.get(&m_lc) {
+                    let site: DeclSite = (m.decl.file.clone(), m.decl.line, m.decl.end_line);
+                    if let Some((a_trait, a_method, a_site)) = from_trait.get(&m_lc) {
+                        if *a_site == site {
+                            continue;
+                        }
                         return Err(LowerError::Fatal {
                             message: format!(
                                 "Trait method {}::{} has not been applied as {}::{}, \
@@ -334,7 +356,7 @@ impl<'f> Lowerer<'f> {
                             line,
                         });
                     }
-                    from_trait.insert(m_lc, (torig.clone(), m.decl.name.clone()));
+                    from_trait.insert(m_lc, (torig.clone(), m.decl.name.clone(), site));
                     let mut m = m.clone();
                     m.decl.closure_shift = mshift;
                     methods.push(m);

@@ -17,6 +17,12 @@
 
 use std::rc::Rc;
 
+thread_local! {
+    /// LIBXML_NOEMPTYTAG for the `saveXML` call in progress (see
+    /// `ho_dom_save_xml`); the recursive serializer reads it.
+    static NO_EMPTY_TAG: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 use php_types::{Key, PhpArray, PhpStr, Zval};
 
 /// One parsed document (or an empty one from `new DOMDocument`).
@@ -533,14 +539,21 @@ impl DomDoc {
             DomKind::Element { name, attrs } => {
                 out.push(b'<');
                 out.extend_from_slice(name);
-                for (k, v) in attrs {
-                    out.push(b' ');
-                    out.extend_from_slice(k);
-                    out.extend_from_slice(b"=\"");
-                    escape_into(v, true, out);
-                    out.push(b'"');
+                // libxml2 keeps namespace declarations (nsDef) apart from the
+                // attributes and writes them first (xmlNodeDumpOutput):
+                // `<rss version=".." xmlns:dc="..">` saves as
+                // `<rss xmlns:dc=".." version="..">` (Drupal's RSS filter).
+                let is_ns = |k: &[u8]| k == b"xmlns" || k.starts_with(b"xmlns:");
+                for pass in [true, false] {
+                    for (k, v) in attrs.iter().filter(|(k, _)| is_ns(k) == pass) {
+                        out.push(b' ');
+                        out.extend_from_slice(k);
+                        out.extend_from_slice(b"=\"");
+                        escape_into(v, true, out);
+                        out.push(b'"');
+                    }
                 }
-                if self.nodes[n].children.is_empty() {
+                if self.nodes[n].children.is_empty() && !NO_EMPTY_TAG.with(|f| f.get()) {
                     out.extend_from_slice(b"/>");
                 } else {
                     out.push(b'>');
@@ -2078,6 +2091,11 @@ enum Axis {
     Attribute,
     SelfAxis,
     Parent,
+    /// `namespace::` — parsed, evaluates to an empty node-set: the engine has
+    /// no namespace nodes (KNOWN_DIVERGENCES D-17). masterminds/html5's
+    /// serializer queries it; on HTML documents libxml's answer holds only
+    /// namespaces it treats as implicit and prints nothing either way.
+    Namespace,
 }
 
 #[derive(Clone)]
@@ -2347,6 +2365,7 @@ impl<'a> Parser<'a> {
                         b"attribute" => Axis::Attribute,
                         b"self" => Axis::SelfAxis,
                         b"parent" => Axis::Parent,
+                        b"namespace" => Axis::Namespace,
                         other => {
                             return Err(format!(
                                 "unsupported axis {}",
@@ -3148,9 +3167,15 @@ impl<'m> Vm<'m> {
     /// `__dom_save_xml(docId, nodeId|-1) -> string`.
     pub(super) fn ho_dom_save_xml(&mut self, args: Vec<Zval>) -> Result<Zval, PhpError> {
         let n = self.dom_arg(&args, 1);
+        // LIBXML_NOEMPTYTAG (4): `<e></e>` instead of `<e/>` (Drupal's
+        // ActiveLinkResponseFilter strips the closing tag it expects).
+        let no_empty_tag = self.dom_arg(&args, 2) & 4 != 0;
         let (doc, _) = self.dom_doc(&args)?;
         let node = if n < 0 { None } else { Some(n as usize) };
-        Ok(Zval::Str(PhpStr::new(doc.save_xml(node))))
+        NO_EMPTY_TAG.with(|f| f.set(no_empty_tag));
+        let out = doc.save_xml(node);
+        NO_EMPTY_TAG.with(|f| f.set(false));
+        Ok(Zval::Str(PhpStr::new(out)))
     }
 
     /// `__dom_normalize(docId, nodeId) -> true`.
@@ -3400,6 +3425,15 @@ impl<'m> Vm<'m> {
             4 => DomKind::Cdata(a),
             7 => DomKind::Pi { target: a, data: b },
             8 => DomKind::Comment(a),
+            // DOMImplementation::createDocumentType(name, publicId, systemId).
+            10 => {
+                let c = self.dom_str(&args, 4);
+                DomKind::DocType {
+                    name: a,
+                    public_id: (!b.is_empty()).then_some(b),
+                    system_id: (!c.is_empty()).then_some(c),
+                }
+            }
             _ => DomKind::Fragment,
         };
         let doc = self.dom_docs.get_mut(&id).unwrap();

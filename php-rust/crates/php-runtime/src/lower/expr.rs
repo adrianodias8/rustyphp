@@ -114,7 +114,10 @@ impl<'f> Lowerer<'f> {
                 if let AssignmentOperator::Assign(_) = a.operator {
                     if let Expression::UnaryPrefix(u) = a.rhs {
                         if let UnaryPrefixOperator::Reference(_) = u.operator {
-                            let target = self.lower_place(a.lhs, line)?;
+                            // `Class::$p = &$x` (Views' `static::$pageRenderArray
+                            // = &$element`): a bare static property is a target
+                            // place here too, like on the source side below.
+                            let target = self.lower_ref_place(a.lhs, line)?;
                             // `$y = &f(...)`: alias the cell a by-reference
                             // function returns (step 13, D-13.5).
                             if let Expression::Call(_) = u.operand {
@@ -1524,6 +1527,34 @@ impl<'f> Lowerer<'f> {
         }
     }
 
+    /// `$this[k]` (an `ArrayAccess` object indexing itself): the array paths
+    /// have no `$this` base, so `$this` is evaluated into a temp like any
+    /// object-valued root. The temp holds the same handle, so `offsetSet` /
+    /// `offsetExists` / `offsetUnset` reach the real object.
+    fn this_dim_as_value(&mut self, place: &mut Place, base: &Expression) -> Result<(), LowerError> {
+        if matches!(place.base, PlaceBase::This) && place.steps.is_empty() {
+            place.base = PlaceBase::Value(Box::new(self.lower_expr(base)?));
+        }
+        Ok(())
+    }
+
+    /// A reference-binding side (`$t = &$s`'s target, `return` in a
+    /// `function &f()`): like [`Self::lower_place`], plus a bare
+    /// `Class::$p`, which is a place only in these positions (it binds the
+    /// live static cell); elsewhere static properties keep their dedicated
+    /// lowerings.
+    pub(super) fn lower_ref_place(&mut self, e: &Expression, line: Line) -> Result<Place, LowerError> {
+        match e {
+            Expression::Parenthesized(p) => self.lower_ref_place(p.expression, line),
+            Expression::Access(Access::StaticProperty(sp)) if matches!(&sp.property, Variable::Direct(_)) => {
+                let class = self.class_ref_of(sp.class, line)?;
+                let name = static_prop_name(&sp.property, line)?.into();
+                Ok(Place { base: PlaceBase::StaticProp { class, name }, steps: Vec::new() })
+            }
+            e => self.lower_place(e, line),
+        }
+    }
+
     pub(super) fn lower_place(&mut self, lhs: &Expression, line: Line) -> Result<Place, LowerError> {
         match lhs {
             Expression::Parenthesized(p) => self.lower_place(p.expression, line),
@@ -1572,6 +1603,7 @@ impl<'f> Lowerer<'f> {
                     return Ok(Place { base, steps: vec![index] });
                 }
                 let mut place = self.lower_place(aa.array, line)?;
+                self.this_dim_as_value(&mut place, aa.array)?;
                 place.steps.push(PlaceStep::Index(self.lower_expr(aa.index)?));
                 Ok(place)
             }
@@ -1592,6 +1624,7 @@ impl<'f> Lowerer<'f> {
                     return Ok(Place { base, steps: vec![PlaceStep::Append] });
                 }
                 let mut place = self.lower_place(ap.array, line)?;
+                self.this_dim_as_value(&mut place, ap.array)?;
                 place.steps.push(PlaceStep::Append);
                 Ok(place)
             }

@@ -326,7 +326,6 @@ pub fn registry() -> Registry {
     add(b"array_merge_recursive", array::array_merge_recursive);
     add(b"hash_algos", encoding::hash_algos);
     add(b"hash_hmac_algos", encoding::hash_hmac_algos);
-    add(b"stream_get_wrappers", encoding::stream_get_wrappers);
     // ext/zlib string (de)compression (system zlib via php_types::zlibio,
     // byte-identical).
     add(b"gzdeflate", zlib::gzdeflate);
@@ -718,6 +717,9 @@ const LOADED_EXTENSIONS: &[&[u8]] = &[
     b"core", b"session", b"standard", b"spl", b"pcre", b"json", b"mbstring", b"hash", b"date", b"openssl",
     b"zip", b"dom", b"libxml", b"reflection", b"ctype", b"curl", b"pcntl", b"posix",
     b"pdo", b"pdo_sqlite", b"sqlite3", b"simplexml", b"bcmath", b"gmp",
+    // ext/zlib on the system zlib (zlib.rs: gz*/zlib_* and the gz stream
+    // functions); Drupal's install requirements check extension_loaded('zlib').
+    b"zlib",
     // ext/gd on the system libgd (vm/gd.rs + prelude_gd.php); ext/exif's
     // reader lives in exif.rs. WP's site-health keys off both names.
     b"gd", b"exif",
@@ -762,6 +764,7 @@ const LOADED_EXTENSIONS_CASED: &[&[u8]] = &[
     // get_loaded_extensions() did not list it, and Composer's
     // PlatformRepository did not materialise ext-simplexml.
     b"PDO", b"pdo_sqlite", b"sqlite3", b"SimpleXML", b"bcmath", b"gmp",
+    b"zlib",
     b"gd", b"exif",
     b"fileinfo",
     b"intl",

@@ -27,6 +27,10 @@ class Sqlite extends \PDO {
     public function createFunction(string $function_name, callable $callback, int $num_args = -1, int $flags = 0): bool {
         return $this->__sqliteUdf($function_name, $callback, $num_args, $flags);
     }
+    // A PHP comparison callable as a sqlite collation (Drupal's NOCASE_UTF8).
+    public function createCollation(string $name, callable $callback): bool {
+        return $this->__sqliteCollation($name, $callback);
+    }
 }
 
 namespace Dom;

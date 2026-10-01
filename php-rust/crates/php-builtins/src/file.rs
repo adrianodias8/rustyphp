@@ -2201,12 +2201,15 @@ fn set_times(p: &std::ffi::OsStr, atime: i64, mtime: i64) -> std::io::Result<()>
 /// uses now; a null `$atime` mirrors `$mtime` (PHP semantics).
 pub fn touch(argv: &[Zval], ctx: &mut Ctx) -> Result<Zval, PhpError> {
     let p = arg_os_path(argv, ctx);
-    if let Err(e) = std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(&p)
-    {
+    // Only a missing path is created (php_plain_files_metadata: `access(F_OK)`
+    // first); an existing file OR directory just gets its times set — Drupal's
+    // Twig cache touches template directories.
+    let exists = std::fs::symlink_metadata(&p).is_ok();
+    if let Err(e) = if exists {
+        Ok(())
+    } else {
+        std::fs::OpenOptions::new().write(true).create(true).truncate(false).open(&p).map(|_| ())
+    } {
         ctx.diags.push(Diag::Warning(format!(
             "touch(): Unable to create file {} because {}",
             show_path(&p),

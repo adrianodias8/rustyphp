@@ -41,3 +41,12 @@ WORKDIR /work/php-rust/php-rust
 # Session 5: wrk for the worker-mode benchmarks (bench/worker/bench-wrk.sh).
 RUN apt-get update && apt-get install -y --no-install-recommends wrk \
     && rm -rf /var/lib/apt/lists/*
+
+# Session 7: ext/gd in the oracle — Drupal requires it, and ferro implements
+# gd, so the oracle must have it for parity checks. Bundled libgd, with the
+# formats Drupal's image toolkit uses.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libpng-dev libjpeg-dev libfreetype-dev libwebp-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
+    && docker-php-ext-install -j"$(nproc)" gd \
+    && rm -rf /var/lib/apt/lists/*

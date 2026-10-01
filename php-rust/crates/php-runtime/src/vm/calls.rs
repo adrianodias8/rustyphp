@@ -161,6 +161,9 @@ pub(super) fn value_builtin_string_coerces(name: &[u8]) -> bool {
 pub(super) fn value_builtin_string_coerces_deep(name: &[u8], args: &[Zval]) -> bool {
     match name {
         b"str_replace" | b"str_ireplace" => true,
+        // `strtr($s, $map)`: the map's values are converted (Drupal's logger
+        // replaces placeholders with Markup objects).
+        b"strtr" => args.len() == 2,
         // `array_unique` compares element string representations under its
         // default SORT_STRING flag (PHPUnit dedupes ExecutionOrderDependency
         // objects this way), so Stringable elements need the precompute. The
@@ -254,6 +257,23 @@ pub(super) fn const_literal_to_zval(kind: crate::hir::ExprKind) -> Option<Zval> 
 pub(super) fn args_from_array_value(v: Zval) -> Vec<Zval> {
     match v.deref_clone() {
         Zval::Array(a) => a.iter().map(|(_, v)| v.deref_clone()).collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// [`args_from_array_value`] keeping reference elements live, for a dynamic
+/// spread call (`$f(...$args)`) whose callee binds through `bind_params`,
+/// which decays them at by-value positions and keeps them at `&$p`: Drupal's
+/// ModuleHandler::invoke spreads the preprocess `[&$variables, …]` this way.
+pub(super) fn args_from_array_value_refs(v: Zval) -> Vec<Zval> {
+    match v.deref_clone() {
+        Zval::Array(a) => a
+            .iter()
+            .map(|(_, v)| match v {
+                Zval::Ref(rc) => Zval::Ref(Rc::clone(rc)),
+                other => other.clone(),
+            })
+            .collect(),
         _ => Vec::new(),
     }
 }
@@ -459,12 +479,16 @@ pub(super) fn build_named_frame<'m>(
     let passed = positional.len() + named.len();
     let mut frame = Frame::new(callee, module);
     let mut variadic = PhpArray::new();
+    // A spread can carry references (`f(...[&$x])`): a by-ref parameter keeps
+    // one, any other position takes a copy of its value (like `bind_params`).
+    let by_ref = |i: usize| callee.param_by_ref.get(i).copied().unwrap_or(false);
+    let variadic_by_ref = callee.variadic_slot.is_some_and(|v| by_ref(v as usize));
     // Positional args fill the leading fixed slots; surplus goes to the variadic.
     for (i, a) in positional.into_iter().enumerate() {
         if i < fixed {
-            frame.slots[i] = a;
+            frame.slots[i] = if by_ref(i) { a } else { decay_arg(a) };
         } else if has_variadic {
-            let _ = variadic.append(a);
+            let _ = variadic.append(if variadic_by_ref { a } else { decay_arg(a) });
         }
     }
     // Named args target a fixed parameter by name, or collect into the variadic.
@@ -476,8 +500,9 @@ pub(super) fn build_named_frame<'m>(
                     String::from_utf8_lossy(&name)
                 )))
             }
-            Some(j) => frame.slots[j] = val,
+            Some(j) => frame.slots[j] = if by_ref(j) { val } else { decay_arg(val) },
             None if has_variadic => {
+                let val = if variadic_by_ref { val } else { decay_arg(val) };
                 variadic.insert(Key::Str(PhpStr::new(name.to_vec())), val);
             }
             None => {
@@ -897,6 +922,29 @@ impl<'m> Vm<'m> {
                     "Closure::fromCallable(): Argument #1 ($callback) is not callable".to_string(),
                 )
             };
+            // A class named by the callable (`"C::m"`, `['C', 'm']`) that is
+            // not loaded yet goes through the autoloader first, as
+            // zend_is_callable does (Drupal's `Unicode::strcasecmp(...)` in
+            // the SQLite driver, the first use of the class on a web request).
+            let named_class: Option<Vec<u8>> = match args.first().map(|v| v.deref_clone()) {
+                Some(Zval::Str(s)) => {
+                    let b = s.as_bytes();
+                    b.windows(2).position(|w| w == b"::").map(|p| b[..p].to_vec())
+                }
+                Some(Zval::Array(a)) if a.len() == 2 => match a.iter().next().map(|(_, v)| v.deref_clone()) {
+                    Some(Zval::Str(c)) => Some(c.as_bytes().to_vec()),
+                    _ => None,
+                },
+                _ => None,
+            };
+            if let Some(c) = named_class {
+                let c = c.strip_prefix(b"\\").map(|r| r.to_vec()).unwrap_or(c);
+                let lower = c.to_ascii_lowercase();
+                let special = matches!(lower.as_slice(), b"self" | b"parent" | b"static");
+                if !special && !self.class_index.contains_key(lower.as_slice()) {
+                    self.try_autoload(&c, &lower, None)?;
+                }
+            }
             match args.into_iter().next().map(|v| v.deref_clone()) {
                 // An existing closure passes through unchanged.
                 Some(Zval::Closure(cl)) => Ok(Zval::Closure(cl)),

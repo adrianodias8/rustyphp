@@ -266,7 +266,7 @@ class DOMDocument extends DOMNode {
         return file_put_contents($filename, __dom_save_html($this->__d, -1));
     }
     public function saveXML($node = null, $options = 0) {
-        return __dom_save_xml($this->__d, $node === null ? -1 : $node->__n);
+        return __dom_save_xml($this->__d, $node === null ? -1 : $node->__n, (int) $options);
     }
     public function normalizeDocument() {
         __dom_normalize($this->__d, $this->__n < 0 ? 0 : $this->__n);
@@ -601,20 +601,37 @@ class DOMDocumentFragment extends DOMNode {
 }
 
 class DOMDocumentType extends DOMNode {
+    public $__pub = '';
+    public $__sys = '';
     public function __get($name) {
         if ($name === 'name') {
             $i = __dom_info($this->__d, $this->__n);
             return $i[1];
         }
-        if ($name === 'publicId' || $name === 'systemId') { return ''; }
+        if ($name === 'publicId') { return $this->__pub; }
+        if ($name === 'systemId') { return $this->__sys; }
         return parent::__get($name);
     }
 }
 
 class DOMImplementation {
     public function hasFeature($feature, $version) { return true; }
+    // A doctype not yet owned by a document lives in a scratch document of its
+    // own; createDocument() copies it into the new document (masterminds/html5,
+    // Drupal's HTML parsing).
+    public function createDocumentType($qualifiedName, $publicId = '', $systemId = '') {
+        $d = __dom_new_doc('1.0', '');
+        $t = DOMNode::__wrap($d, __dom_create($d, 10, (string)$qualifiedName, (string)$publicId, (string)$systemId));
+        $t->__pub = (string)$publicId;
+        $t->__sys = (string)$systemId;
+        return $t;
+    }
     public function createDocument($namespace = null, $qualifiedName = '', $doctype = null) {
         $doc = new DOMDocument();
+        if ($doctype !== null) {
+            $n = __dom_create($doc->__d, 10, $doctype->name, $doctype->publicId, $doctype->systemId);
+            __dom_mutate($doc->__d, 0, 0, $n, -1);
+        }
         if ($qualifiedName !== '') {
             $doc->appendChild($doc->createElement($qualifiedName));
         }

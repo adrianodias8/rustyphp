@@ -328,6 +328,16 @@ impl<'a> super::FnCompiler<'a> {
         // bound variable and the stored static property
         // (`$exists = &self::$existsCache[$k]`, ClassExistenceResource).
         if let PlaceBase::StaticProp { class, name } = &target.base {
+            // Bare `Class::$p = &$src` with a compile-time class: rebind the
+            // property's cell to the source's (StaticPropBindRef).
+            let source_is_static = matches!(source.base, PlaceBase::StaticProp { .. } | PlaceBase::StaticPropDyn { .. });
+            if target.steps.is_empty() && !self.is_runtime_class(class) && !source_is_static {
+                let cls_target = self.resolve_target(class)?.0;
+                let (sbase, ssteps) = self.field_path(source)?;
+                self.emit(Op::MakeRef { base: sbase, steps: ssteps.into() });
+                self.emit(Op::StaticPropBindRef { target: cls_target, name: name.clone().into() });
+                return Ok(());
+            }
             let (class, name) = (class.clone(), SpName::Lit(name.clone()));
             let src = source.clone();
             return self.static_prop_rmw(&class, &name, &target.steps, false, move |s, local| {
@@ -406,13 +416,37 @@ impl<'a> super::FnCompiler<'a> {
             self.emit(Op::BindRefToChecked { base, steps: steps.into() });
             return Ok(());
         }
-        let ExprKind::Call { name, args, named, .. } = &call.kind else {
+        // `$v = &C::m()` (`$value = &NestedArray::getValue(...)`, Drupal's
+        // FormState): static dispatch leaves a `&m()`'s raw reference on the
+        // stack (no RET_DEREF), so the bind checks it at run time like the
+        // dynamic forms above — a plain value binds with PHP's notice.
+        if matches!(call.kind, ExprKind::StaticCall { .. }) {
+            let (base, steps) = self.field_path(target)?;
+            self.expr(call)?;
+            self.emit(Op::BindRefToChecked { base, steps: steps.into() });
+            return Ok(());
+        }
+        let ExprKind::Call { name, args, named, fallback } = &call.kind else {
             return Err(CompileError::Unsupported("reference assignment from a non-call".into()));
         };
         if !named.is_empty() {
             return Err(CompileError::Unsupported("reference call with named arguments".into()));
         }
         let Some(idx) = self.ctx.funcs.iter().position(|f| ascii_eq_ignore_case(&f.name, name)) else {
+            // Not declared in this unit (`$batch =& batch_get();` in Drupal's
+            // install.core.inc; `&batch_get()` lives in form.inc, included
+            // later) or a builtin: resolve by name at run time and let
+            // BindRefToChecked bind a returned reference, or copy with PHP's
+            // notice. Only argument-less calls with no namespace fallback: a
+            // by-name call cannot honour by-reference parameters.
+            if args.is_empty() && named.is_empty() && fallback.is_none() {
+                let (base, steps) = self.field_path(target)?;
+                let k = self.konst(Const::Str(php_types::PhpStr::new(&name[..])));
+                self.emit(Op::PushConst(k));
+                self.emit(Op::CallValue { argc: 0 });
+                self.emit(Op::BindRefToChecked { base, steps: steps.into() });
+                return Ok(());
+            }
             return Err(CompileError::Unsupported(
                 "reference assignment from a builtin / undefined call".into(),
             ));

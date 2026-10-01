@@ -31,7 +31,6 @@ Zend/tests/asymmetric_visibility/override_private_public.phpt	compile-error	comp
 Zend/tests/asymmetric_visibility/override_protected_private.phpt	compile-error	compile-time diagnostic not modelled
 Zend/tests/asymmetric_visibility/override_public_private.phpt	compile-error	compile-time diagnostic not modelled
 Zend/tests/asymmetric_visibility/override_public_protected.phpt	compile-error	compile-time diagnostic not modelled
-Zend/tests/asymmetric_visibility/static_props.phpt	unsupported	assignment target (line 68)
 Zend/tests/asymmetric_visibility/virtual_get_only.phpt	compile-error	compile-time diagnostic not modelled
 Zend/tests/asymmetric_visibility/virtual_set_only.phpt	compile-error	compile-time diagnostic not modelled
 Zend/tests/attributes/008_wrong_attribution.phpt	compile-error	compile-time diagnostic not modelled
@@ -106,12 +105,9 @@ Zend/tests/break_error_001.phpt	unsupported	break/continue level (line 3)
 Zend/tests/break_error_002.phpt	unsupported	non-constant break/continue level (line 3)
 Zend/tests/break_error_003.phpt	compile-error	compile-time diagnostic not modelled
 Zend/tests/break_error_004.phpt	compile-error	compile-time diagnostic not modelled
-Zend/tests/bug32322.phpt	vm-unsupported	reference assignment from a non-call
-Zend/tests/bug33257.phpt	vm-unsupported	by-reference builtin whose first argument is not a plain variable
 Zend/tests/bug34199.phpt	extension	requires unsupported extension 'simplexml'
 Zend/tests/bug34617.phpt	extension	requires unsupported extension 'xml'
 Zend/tests/bug35163_2.phpt	unsupported	assignment target (line 4)
-Zend/tests/bug35393.phpt	vm-unsupported	by-reference builtin whose first argument is not a plain variable
 Zend/tests/bug36513.phpt	builtin	Call to undefined function highlight_string()
 Zend/tests/bug38211.phpt	unsupported	assignment target (line 3)
 Zend/tests/bug38779.phpt	compile-error	compile-time diagnostic not modelled
@@ -286,11 +282,8 @@ Zend/tests/enum/__unserialize.phpt	compile-error	compile-time diagnostic not mod
 Zend/tests/enum/__unset.phpt	compile-error	compile-time diagnostic not modelled
 Zend/tests/enum/__wakeup.phpt	compile-error	compile-time diagnostic not modelled
 Zend/tests/enum/backed-int-case-without-value.phpt	compile-error	compile-time diagnostic not modelled
-Zend/tests/enum/backed-int-const-expr.phpt	vm-unsupported	class constant `Bar` (undefined here, or an enum case)
 Zend/tests/enum/backed-int-const-invalid-expr.phpt	vm-unsupported	class constant `Bar` (undefined here, or an enum case)
 Zend/tests/enum/backed-invalid.phpt	unsupported	enum backing type (only int/string) (line 3)
-Zend/tests/enum/backed-negative-int.phpt	vm-unsupported	class constant `Bar` (undefined here, or an enum case)
-Zend/tests/enum/backed-string-heredoc.phpt	vm-unsupported	class constant `Bar` (undefined here, or an enum case)
 Zend/tests/enum/backed-type-no-union.phpt	unsupported	enum backing type (only int/string) (line 3)
 Zend/tests/enum/case-in-class.phpt	unsupported	class member (line 3)
 Zend/tests/enum/cases-refcount.phpt	builtin	Call to undefined function debug_zval_dump()
@@ -425,19 +418,6 @@ Zend/tests/get_required_files.phpt	builtin	Call to undefined function get_requir
 Zend/tests/get_resource_id.phpt	builtin	Call to undefined function get_resource_id()
 Zend/tests/gh10072-2.phpt	extension	requires unsupported extension 'zend_test'
 Zend/tests/gh10072.phpt	extension	requires unsupported extension 'zend_test'
-Zend/tests/gh10168/assign_dim_ref_with_prop_ref.phpt	unsupported	assignment target (line 12)
-Zend/tests/gh10168/assign_dim_with_prop_ref.phpt	unsupported	assignment target (line 12)
-Zend/tests/gh10168/assign_prop_ref_with_prop_ref.phpt	unsupported	assignment target (line 23)
-Zend/tests/gh10168/assign_prop_with_prop_ref.phpt	unsupported	assignment target (line 22)
-Zend/tests/gh10168/assign_static_prop_ref.phpt	unsupported	assignment target (line 13)
-Zend/tests/gh10168/assign_static_prop_ref_with_prop_ref.phpt	unsupported	assignment target (line 13)
-Zend/tests/gh10168/assign_static_prop_with_prop_ref.phpt	unsupported	assignment target (line 13)
-Zend/tests/gh10168/assign_static_untyped_prop_ref.phpt	unsupported	assignment target (line 13)
-Zend/tests/gh10168/assign_static_untyped_prop_ref_with_prop_ref.phpt	unsupported	assignment target (line 13)
-Zend/tests/gh10168/assign_static_untyped_prop_with_prop_ref.phpt	unsupported	assignment target (line 13)
-Zend/tests/gh10168/assign_untyped_prop_ref_with_prop_ref.phpt	unsupported	assignment target (line 23)
-Zend/tests/gh10168/assign_untyped_prop_with_prop_ref.phpt	unsupported	assignment target (line 22)
-Zend/tests/gh10168/assign_with_prop_ref.phpt	unsupported	assignment target (line 12)
 Zend/tests/gh10168/wrong_assign_to_variable.phpt	section	--SKIPIF-- section not modelled
 Zend/tests/gh10469.phpt	extension	requires unsupported extension 'zend_test'
 Zend/tests/gh11138.phpt	section	--POST_RAW-- section not modelled
@@ -928,6 +908,7 @@ Zend/tests/traits/constant_013.phpt	compile-error	compile-time diagnostic not mo
 Zend/tests/traits/constant_014.phpt	compile-error	compile-time diagnostic not modelled
 Zend/tests/traits/constant_015.phpt	compile-error	compile-time diagnostic not modelled
 Zend/tests/traits/constant_016.phpt	section	--ENV-- section not modelled
+Zend/tests/traits/error_010.phpt	compile-error	compile-time diagnostic not modelled
 Zend/tests/traits/error_013.phpt	compile-error	compile-time diagnostic not modelled
 Zend/tests/traits/gh14009_002.phpt	compile-error	compile-time diagnostic not modelled
 Zend/tests/traits/interface_002.phpt	compile-error	compile-time diagnostic not modelled
@@ -1108,18 +1089,14 @@ Zend/tests/type_declarations/typed_properties_049.phpt	compile-error	compile-tim
 Zend/tests/type_declarations/typed_properties_053.phpt	compile-error	compile-time diagnostic not modelled
 Zend/tests/type_declarations/typed_properties_054.phpt	compile-error	compile-time diagnostic not modelled
 Zend/tests/type_declarations/typed_properties_061.phpt	section	--SKIPIF-- section not modelled
-Zend/tests/type_declarations/typed_properties_068.phpt	unsupported	assignment target (line 13)
-Zend/tests/type_declarations/typed_properties_069.phpt	unsupported	assignment target (line 13)
-Zend/tests/type_declarations/typed_properties_070.phpt	unsupported	assignment target (line 20)
+Zend/tests/type_declarations/typed_properties_068.phpt	vm-unsupported	static property field path
+Zend/tests/type_declarations/typed_properties_069.phpt	vm-unsupported	static property field path
+Zend/tests/type_declarations/typed_properties_070.phpt	vm-unsupported	static property field path
 Zend/tests/type_declarations/typed_properties_075.phpt	section	--SKIPIF-- section not modelled
-Zend/tests/type_declarations/typed_properties_079.phpt	unsupported	assignment target (line 8)
-Zend/tests/type_declarations/typed_properties_082.phpt	unsupported	assignment target (line 17)
 Zend/tests/type_declarations/typed_properties_085.phpt	compile-error	compile-time diagnostic not modelled
 Zend/tests/type_declarations/typed_properties_095.phpt	extension	requires unsupported extension 'zend_test'
 Zend/tests/type_declarations/typed_properties_097.phpt	section	--SKIPIF-- section not modelled
 Zend/tests/type_declarations/typed_properties_101.phpt	builtin	Call to undefined function debug_zval_dump()
-Zend/tests/type_declarations/typed_properties_102.phpt	unsupported	assignment target (line 8)
-Zend/tests/type_declarations/typed_properties_107.phpt	unsupported	assignment target (line 17)
 Zend/tests/type_declarations/typed_properties_109.phpt	compile-error	compile-time diagnostic not modelled
 Zend/tests/type_declarations/typed_properties_protected_inheritance_mismatch.phpt	compile-error	compile-time diagnostic not modelled
 Zend/tests/type_declarations/typed_return_null_false_without_value.phpt	compile-error	compile-time diagnostic not modelled
@@ -1363,8 +1340,6 @@ tests/classes/property_override_public_protectedStatic.phpt	compile-error	compil
 tests/classes/property_override_public_publicStatic.phpt	compile-error	compile-time diagnostic not modelled
 tests/classes/static_mix_1.phpt	compile-error	compile-time diagnostic not modelled
 tests/classes/static_mix_2.phpt	compile-error	compile-time diagnostic not modelled
-tests/classes/static_properties_004.phpt	unsupported	assignment target (line 15)
-tests/classes/static_properties_undeclared_assignRef.phpt	unsupported	assignment target (line 4)
 tests/classes/static_this.phpt	compile-error	compile-time diagnostic not modelled
 tests/classes/this.phpt	compile-error	compile-time diagnostic not modelled
 tests/classes/type_hinting_005a.phpt	compile-error	compile-time diagnostic not modelled
@@ -1433,9 +1408,6 @@ tests/lang/operators/postinc_basiclong_64bit.phpt	section	--SKIPIF-- section not
 tests/lang/operators/predec_basiclong_64bit.phpt	section	--SKIPIF-- section not modelled
 tests/lang/operators/preinc_basiclong_64bit.phpt	section	--SKIPIF-- section not modelled
 tests/lang/operators/subtract_basiclong_64bit.phpt	section	--SKIPIF-- section not modelled
-tests/lang/passByReference_012.phpt	vm-unsupported	by-reference builtin whose first argument is not a plain variable
-tests/lang/returnByReference.004.phpt	vm-unsupported	reference assignment from a non-call
-tests/lang/returnByReference.007.phpt	vm-unsupported	reference assignment from a non-call
 tests/lang/static_basic_002.phpt	compile-error	compile-time diagnostic not modelled
 tests/lang/string/unicode_escape_empty.phpt	compile-error	compile-time diagnostic not modelled
 tests/lang/string/unicode_escape_incomplete.phpt	compile-error	compile-time diagnostic not modelled

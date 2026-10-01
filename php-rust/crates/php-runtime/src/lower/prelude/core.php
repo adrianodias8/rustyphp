@@ -534,7 +534,9 @@ class WeakMap implements ArrayAccess, Countable, IteratorAggregate {
         $id = spl_object_id($object);
         return $this->__live($id) !== null && $this->__entries[$id][1] !== null;
     }
-    public function offsetGet($object) {
+    // By reference: `$map[$k][] = $v` writes into the element (zend_weakmap
+    // read_dimension hands out the slot for a write fetch).
+    public function &offsetGet($object) {
         if (!is_object($object)) {
             throw new TypeError("WeakMap key must be an object");
         }

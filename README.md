@@ -47,10 +47,12 @@ the previous build. Nothing is "believed to be faster".
 
 | what | number | where |
 |---|---:|---|
-| `Zend/tests` + `tests/` passing (of 6,172) | 3,051 | `baseline/zend-tests.md` |
+| `Zend/tests` + `tests/` passing (of 6,172) | 3,103 | `baseline/zend-tests.md` |
 | operator differential vs `php` | 37,835 cases, 0 mismatches | `cargo test -p php-types --test differential` |
 | Composer 2.10 `require monolog/monolog` | runs; `vendor/` byte-identical | `baseline/smoke-composer.sh` |
-| Doctrine DBAL 4.5 PHPUnit suite | 4,146 tests, 10 errors, 1 failure (oracle: 1 failure) | `baseline/smoke-dbal.sh` |
+| Doctrine DBAL 4.5 PHPUnit suite | 4,146 tests, 1 failure (the oracle's same 1) | `baseline/smoke-dbal.sh` |
+| Drupal 11 `drush site:install standard` (SQLite) | completes; database equivalent to the oracle's | `bench/drupal/install.sh`, `MISSING_FOR_DRUPAL.md` |
+| Drupal 11 front page, one-shot and worker mode | byte-identical to `php -S` (worker: 10/10 with the documented reset) | `bench/drupal/frontpage.sh`, `worker-leaks.sh` |
 | Symfony HttpKernel request, in-process | 7.9× the time of `php -n` | `bench/results/2026-09-30-slices-2-3.md` |
 | Symfony under `wrk`, worker mode, 4 workers | **1.08× nginx+php-fpm+opcache**, **0.63× FrankenPHP worker** | `bench/results/2026-09-30-wrk-w4.md` |
 | same, 8 workers | 1.27× php-fpm, 1.13× FrankenPHP | `bench/results/2026-09-30-wrk-w8.md` |
