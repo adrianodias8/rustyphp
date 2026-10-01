@@ -1,150 +1,63 @@
-# Build + unit-test gate. The full PHP oracle gates (byte-identical output vs
-# php-cli 8.5.7 and the Zend phpt corpus) run locally — they need the oracle
-# binary and the php-src test corpus — but build + 1500+ unit tests here catch
-# what those gates structurally cannot: cfg(test)-only breakage (a Ctx field
-# addition once left `cargo test` uncompilable for several sessions) and
-# platform drift.
+# CI: everything runs in the dev image (docker/Dockerfile: oracle PHP 8.5.7 +
+# the pinned Rust toolchain), exactly as it runs locally through docker/run.sh.
 #
-# This file was MOVED from php-rust/.github/workflows/ (where GitHub never ran
-# it: workflows only live at the repo ROOT — inert since it was written, zero
-# runs) with the ONLY adaptations being: working-directory php-rust, cache
-# scoping, defensively extended system deps, concurrency, paths-filter,
-# workflow_dispatch. The lanes (quintet matrix, census, grep-gate) are
-# UNCHANGED. This is an EARLY-WARNING net: pins and promotion stay on the
-# canonical local scripts; no timing figure comes out of here.
+#   1. build the workspace (release)
+#   2. cargo test --release — the differential tests have their oracle here
+#   3. baseline/gate.sh — zero pass→fail on php-src's tests/ + Zend/tests/
+#      (php-src checked out at the oracle's tag php-8.5.7)
+#
+# Hosted runners are linux/amd64; the baseline was captured on linux/arm64.
+# A pass→fail on an untouched tree is an architecture difference to triage,
+# not a regression.
+#
+# Replaces upstream's ci.yml (only ran on `main`, called upstream harness
+# scripts this fork deleted, and had no oracle) and the earlier
+# phpt-regression-gate.yml (git refused the php-src mount: safe.directory).
 name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [next]
     paths:
       - 'php-rust/crates/**'
       - 'php-rust/Cargo.toml'
       - 'php-rust/Cargo.lock'
       - 'php-rust/rust-toolchain.toml'
-      - 'php-rust/wp78-harness/**'
+      - 'baseline/**'
+      - 'docker/**'
       - '.github/workflows/ci.yml'
   pull_request:
+    branches: [next]
   workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  CARGO_TERM_COLOR: always
-  CARGO_INCREMENTAL: 0
-
-defaults:
-  run:
-    working-directory: php-rust
-
 jobs:
-  build-and-test:
+  test-and-gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 150
     steps:
-      - uses: actions/checkout@v5
-      - uses: Swatinem/rust-cache@v2
+      - name: Checkout fork
+        uses: actions/checkout@v5
         with:
-          workspaces: php-rust
-      # libz-sys links the SYSTEM zlib (deliberate: byte-identical deflate needs
-      # PHP's exact library); zlib1g-dev ships on the runner image, this is a
-      # guard for image changes. gd/tidy/xslt added defensively (on macOS the
-      # build links them via homebrew -L paths; the first green run is the
-      # judge of what Linux actually needs).
-      - name: System deps
-        run: sudo apt-get update && sudo apt-get install -y zlib1g-dev pkg-config libgd-dev libtidy-dev libxslt1-dev
-      - name: Build (release)
-        run: cargo build --release --workspace
-      # The differential test (php-builtins) requires the PHP 8.5.7 oracle,
-      # which the Linux runner does not have: EXPLICIT skip through the valve
-      # the test itself provides (the first run panicked "PHP oracle not
-      # found" with instructions). Installing a distro PHP other than the
-      # pinned 8.5.7 would give spurious reds: the differential stays a LOCAL
-      # gate (see header).
-      - name: Unit tests
-        run: cargo test --release --workspace
-        env:
-          PHPR_ALLOW_MISSING_ORACLE: 1
-      # A-AH2/A-AH3 (Council WP-78) + A-AH10 (Council WP-80) + A-AH16 (Council
-      # WP-81): the php-server feature matrix is a QUINTET (default /
-      # axum-only / census / census-axum-only / union) and the crate must be
-      # warning-free in every configuration (KS-AH-78-2). The census
-      # configuration was OUTSIDE the matrix and could bit-rot in silence
-      # until measurement day; the census-axum-only weak-dep configuration
-      # (S-80.0.5) was compiled by NOBODY — pinned here per KS-AH-81-4.
-      # `cargo rustc` scopes -D warnings to the php-server crate alone
-      # (dependency warnings stay warnings).
-      - name: php-server feature matrix (fatal warnings)
-        run: |
-          cargo rustc --release -p php-server -- -D warnings
-          cargo rustc --release -p php-server --no-default-features --features axum-server -- -D warnings
-          cargo rustc --release -p php-server --features census-instrumentation -- -D warnings
-          cargo rustc --release -p php-server --no-default-features --features census-instrumentation -- -D warnings
-          cargo rustc --release -p php-server --features axum-server -- -D warnings
-      # A-AH15 (Council WP-81): the census bracket/emitter code lives in
-      # php-runtime and php-cli since S-79.0.3/6 — the php-server-scoped
-      # passes above compile them as DEPENDENCIES, where warnings stay
-      # warnings, so that code never saw -D at all.
-      - name: cross-crate census lint (fatal warnings)
-        run: |
-          cargo rustc --release -p php-runtime --features census-instrumentation -- -D warnings
-          cargo rustc --release -p php-cli --lib --features census-instrumentation -- -D warnings
-      # A-SK4 (Council WP-78): worker_pool.rs and the axum handler only compile
-      # under the feature — the default workspace test run above covers 0% of
-      # that code. This step compiles AND runs the feature-gated gate tests.
-      - name: php-server axum tests
-        run: cargo test --release -p php-server --features axum-server
-      # A-AH11 (Council WP-80) + A-AH17 (Council WP-81): the census build must
-      # stay the FUNCTIONAL twin. This is a deliberate DOUBLE-RUN of the axum
-      # gate tests (plain above, under census here) — the twin-check on the
-      # test suite, not duplication. The census-only tests (split positive
-      # controls, tripwires, drain) run only here.
-      - name: php-server census tests (twin-check double-run)
-        run: cargo test --release -p php-server --features census-instrumentation
-      # A-AH15: the alloc_census integrity tests (LIFO trip, provider guard)
-      # live in php-runtime and compile only under the feature — without this
-      # step they would be a PASS on code cargo test never runs (the WP-78
-      # Klabnik lesson).
-      - name: php-runtime census tests
-        run: cargo test --release -p php-runtime --lib --features census-instrumentation
-      # A-AH17: the axum-only configuration's test targets otherwise never
-      # compile anywhere — build them (no run: the union run above covers the
-      # behavior; this pins compilability).
-      - name: axum-only test targets compile
-        run: cargo test --release -p php-server --no-default-features --features axum-server --no-run
-      # A-AH24 (Council WP-82): same class for the FIFTH configuration — the
-      # census-axum-only test targets compile nowhere else (symmetry with
-      # A-AH17; an asymmetric build-only pin was unjustified).
-      - name: census-axum-only test targets compile
-        run: cargo test --release -p php-server --no-default-features --features census-instrumentation --no-run
-      # S-81.0 (KS-AH-82-4, Council WP-82): SIXTH configuration — mem-census
-      # (retained-size instrument). Same -D discipline as the census lanes;
-      # a retained figure from a binary without matrix row + this lane is
-      # NULL by kill-switch.
-      - name: mem-census lint (fatal warnings, cross-crate)
-        run: |
-          cargo rustc --release -p php-server --features mem-census -- -D warnings
-          cargo rustc --release -p php-runtime --features mem-census -- -D warnings
-          cargo rustc --release -p php-cli --lib --features mem-census -- -D warnings
-      # A-AH29 (Council WP-83): the rustc lint above does NOT compile
-      # cfg(test) code — the mem-census TEST targets of the library crates
-      # get their compile pin here (the php-server one compiles via the
-      # retained-walk control below).
-      - name: mem-census test-target compile pins (A-AH29)
-        run: |
-          cargo test --release -p php-runtime --features mem-census --no-run
-          cargo test --release -p php-cli --lib --features mem-census --no-run
-      # KL-82-2: the retained-walk positive control (shared subgraph =
-      # S1+S2-Sshared exactly) — a retained figure without this green is
-      # NULL and the A/B is VOID.
-      - name: retained-walk positive control (mem-census)
-        run: cargo test --release -p php-server --features mem-census retained_walk_shared_subgraph_control
-      # S-78.1.3 (Council WP-79): the two shell grep-gates are pure-text and
-      # cheap — running them here enforces KS-MS-4 (forbidden doc patterns) and
-      # KS-PP-2/KS-PP-4 (capture order + allow-marker census) on every push.
-      - name: doc-purge grep-gate (KS-MS-4)
-        run: wp78-harness/gate-doc-purge.sh
-      - name: capture-order grep-gate (KS-PP-2/KS-PP-4)
-        run: wp78-harness/gate-capture-order.sh
+          path: php-rust
+      - name: Checkout php-src (corpus) at the oracle's tag
+        uses: actions/checkout@v5
+        with:
+          repository: php/php-src
+          ref: php-8.5.7
+          path: php-src
+      - name: Build dev image
+        run: docker build -t rustyphp-dev:8.5.7 php-rust/docker
+      - name: Build workspace (release)
+        run: php-rust/docker/run.sh cargo build --release --locked --workspace
+      # The container runs as root, where the unwritable-log-file test cannot
+      # fail to write: it is skipped here (and is the one known local failure).
+      - name: Unit, integration and differential tests
+        run: >
+          php-rust/docker/run.sh cargo test --release --locked --workspace --no-fail-fast --
+          --skip build_config_to_unwritable_file_errs
+      - name: Corpus regression gate
+        run: php-rust/docker/run.sh ../baseline/gate.sh

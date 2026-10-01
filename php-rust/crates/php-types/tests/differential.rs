@@ -265,7 +265,7 @@ fn differential_operators_vs_oracle() {
             eprintln!("SKIPPED-BY-ENV: differential senza oracle");
             return;
         }
-        panic!("PHP oracle non trovato: set PHP_ORACLE; PHPR_ALLOW_MISSING_ORACLE=1 per saltare ESPLICITAMENTE");
+        panic!("PHP oracle not found: set PHP_ORACLE, or PHPR_ALLOW_MISSING_ORACLE=1 to skip EXPLICITLY");
 };
     let corpus = corpus();
     let mut php_cases: Vec<(String, String)> = Vec::new();

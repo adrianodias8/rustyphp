@@ -13,7 +13,7 @@ export PHPT_TIMEOUT_SECS="${PHPT_TIMEOUT_SECS:-10}"
 
 stage_corpus() {
   local want have
-  want="$(git -C "$PHP_SRC" rev-parse HEAD)"
+  want="$(git -c safe.directory="*" -C "$PHP_SRC" rev-parse HEAD)"
   have="$(cat "$CORPUS/.staged-from" 2>/dev/null || true)"
   if [[ "$want" != "$have" ]]; then
     echo "staging corpus $PHP_SRC -> $CORPUS ($want)" >&2
