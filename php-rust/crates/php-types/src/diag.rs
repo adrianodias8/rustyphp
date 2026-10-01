@@ -71,12 +71,37 @@ pub enum PhpError {
     Exit(u8),
 }
 
+/// `name() expects exactly|at least|at most N argument(s), M given` — the
+/// message Zend raises only as ArgumentCountError (zend_wrong_parameters_count_error).
+fn is_arity_message(m: &str) -> bool {
+    let Some((head, rest)) = m.split_once("() expects ") else { return false };
+    if head.is_empty() || head.contains(' ') {
+        return false;
+    }
+    let Some(rest) = rest
+        .strip_prefix("exactly ")
+        .or_else(|| rest.strip_prefix("at least "))
+        .or_else(|| rest.strip_prefix("at most "))
+    else {
+        return false;
+    };
+    let Some((n, tail)) = rest.split_once(' ') else { return false };
+    let Some(tail) = tail.strip_prefix("argument, ").or_else(|| tail.strip_prefix("arguments, ")) else {
+        return false;
+    };
+    let Some(given) = tail.strip_suffix(" given") else { return false };
+    n.bytes().all(|b| b.is_ascii_digit()) && given.bytes().all(|b| b.is_ascii_digit())
+}
+
 impl PhpError {
     /// The throwable class name, for the engine-error variants. [`PhpError::Thrown`]
     /// returns a sentinel — the real class is read from the object at the render
     /// site (`Evaluator::render_fatal`), never through here.
     pub fn class_name(&self) -> &'static str {
         match self {
+            // Builtins raise their arity errors as plain `Error` from dozens of
+            // sites; PHP's wording is ArgumentCountError's alone (D-04).
+            PhpError::Error(m) if is_arity_message(m) => "ArgumentCountError",
             PhpError::Error(_) => "Error",
             PhpError::TypeError(_) | PhpError::TypeErrorAt { .. } => "TypeError",
             PhpError::ValueError(_) => "ValueError",

@@ -207,6 +207,10 @@ set_error_handler(function ($no, $msg) {
     echo "D:$sev:$msg\n";
     return true;
 });
+// Operands pass through a call so Zend cannot fold the expression at compile
+// time: a folded expression's diagnostics (PHP 8.5's NAN-to-string warning)
+// are emitted before the handler above exists and never reach a case.
+function __v($x) { return $x; }
 "#,
     );
     for (id, expr) in cases {
@@ -224,6 +228,8 @@ fn run_php(php: &str, script: &str) -> String {
     std::fs::write(&file, script).unwrap();
     let out = Command::new(php)
         .arg("-n") // no php.ini: defaults (precision=14, serialize_precision=-1)
+        // 37k unfolded cases compile past the default 128M.
+        .args(["-d", "memory_limit=-1"])
         .arg(&file)
         .output()
         .expect("oracle php run");
@@ -270,7 +276,7 @@ fn differential_operators_vs_oracle() {
         for (j, (lb, vb)) in corpus.iter().enumerate() {
             for op in BINOPS {
                 let id = format!("b{i}_{j}_{op}");
-                php_cases.push((id.clone(), format!("({la}) {op} ({lb})")));
+                php_cases.push((id.clone(), format!("__v({la}) {op} __v({lb})")));
                 rust_results.push((id, render_rust_case(op, va, vb)));
             }
         }
@@ -280,10 +286,10 @@ fn differential_operators_vs_oracle() {
         for (op, expr) in [
             ("++", format!("(function() {{ $v = {la}; $v++; return $v; }})()")),
             ("--", format!("(function() {{ $v = {la}; $v--; return $v; }})()")),
-            ("neg", format!("-({la})")),
-            ("~", format!("~({la})")),
-            ("!", format!("!({la})")),
-            ("(string)", format!("(string)({la})")),
+            ("neg", format!("-__v({la})")),
+            ("~", format!("~__v({la})")),
+            ("!", format!("!__v({la})")),
+            ("(string)", format!("(string)__v({la})")),
         ] {
             let id = format!("u{i}_{op}");
             php_cases.push((id.clone(), expr));

@@ -156,7 +156,6 @@ Zend/tests/bug39944.phpt
 Zend/tests/bug40621.phpt
 Zend/tests/bug41026.phpt
 Zend/tests/bug44660.phpt
-Zend/tests/bug46106.phpt
 Zend/tests/bug46381.phpt
 Zend/tests/bug46811.phpt
 Zend/tests/bug47572.phpt
@@ -650,7 +649,6 @@ Zend/tests/func_get_arg_basic.phpt
 Zend/tests/func_get_arg_invalid.phpt
 Zend/tests/func_get_args.phpt
 Zend/tests/func_get_args_basic.phpt
-Zend/tests/function_arguments/argument_count_incorrect_internal.phpt
 Zend/tests/function_arguments/argument_count_incorrect_internal_strict.phpt
 Zend/tests/function_arguments/gh20435.phpt
 Zend/tests/function_arguments/sensitive_parameter.phpt
@@ -1230,7 +1228,6 @@ Zend/tests/try/try_finally_027.phpt
 Zend/tests/type_coercion/float_to_int/non-rep-float-as-int-extra2.phpt
 Zend/tests/type_coercion/float_to_int/non-rep-float-as-int-extra3.phpt
 Zend/tests/type_coercion/float_to_int/non-rep-float-as-int-extra4.phpt
-Zend/tests/type_coercion/float_to_int/union_int_string_type_arg.phpt
 Zend/tests/type_coercion/float_to_int/union_int_string_type_arg_promote_exception.phpt
 Zend/tests/type_coercion/float_to_int/warning_float_does_not_fit_zend_long_arrays.phpt
 Zend/tests/type_coercion/float_to_int/warnings_float_literals.phpt

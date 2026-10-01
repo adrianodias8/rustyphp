@@ -1,17 +1,17 @@
 # Baseline — php-src `tests/` + `Zend/tests/`
 
-- phpr git SHA: `e38b1997526820ac2e56834b723c15be36fa9709`
-- phpt-runner binary sha256: `2fd2ac396925c4d8`
+- phpr git SHA: `81959d0b8c985f3541164fb998fbc601b0566a79`
+- phpt-runner binary sha256: `0205698af9856357`
 - corpus: php-src `php-8.5.7` (`35eab8c0`)
 - runner flags: `--isolate --list-fails --list-skips`, `PHPT_TIMEOUT_SECS=10`, default engine mode (no `PHPR_REG_LOWER` set)
 - platform: `Linux 6.17.8-orbstack-00308-g8f9c941121b1 aarch64`, Debian GNU/Linux 13 (trixie), in Docker
-- measured: 2026-09-30T17:51:44Z
-- wall time: 242s
+- measured: 2026-10-01T08:03:12Z
+- wall time: 229s
 
 | scope | total | pass | fail | skip | pass rate (of runnable) |
 |---|---:|---:|---:|---:|---:|
-| `tests/` + `Zend/tests/` | 6172 | 3048 | 1625 | 1499 | 65.2% |
-| `Zend/tests/` only | 5305 | 2661 | 1414 | 1230 | 65.3% |
+| `tests/` + `Zend/tests/` | 6172 | 3051 | 1622 | 1499 | 65.3% |
+| `Zend/tests/` only | 5305 | 2664 | 1411 | 1230 | 65.4% |
 | `tests/` only | 867 | 387 | 211 | 269 | 64.7% |
 
 Upstream's claim for `Zend/tests/` (README/COVERAGE, pin S-175, macOS, oracle 8.5.7):

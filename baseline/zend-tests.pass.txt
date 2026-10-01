@@ -277,6 +277,7 @@ Zend/tests/bug44913.phpt
 Zend/tests/bug45180.phpt
 Zend/tests/bug45744.phpt
 Zend/tests/bug45877.phpt
+Zend/tests/bug46106.phpt
 Zend/tests/bug46196.phpt
 Zend/tests/bug46241.phpt
 Zend/tests/bug46308.phpt
@@ -924,6 +925,7 @@ Zend/tests/func_num_args_basic.phpt
 Zend/tests/func_sig_trailing_comma.phpt
 Zend/tests/function_arguments/argument_count_correct.phpt
 Zend/tests/function_arguments/argument_count_correct_strict.phpt
+Zend/tests/function_arguments/argument_count_incorrect_internal.phpt
 Zend/tests/function_arguments/argument_count_incorrect_userland.phpt
 Zend/tests/function_arguments/argument_count_incorrect_userland_strict.phpt
 Zend/tests/function_arguments/call_with_trailing_comma_basic.phpt
@@ -2385,6 +2387,7 @@ Zend/tests/type_coercion/float_to_int/no_warnings_compatible_float_literals_assi
 Zend/tests/type_coercion/float_to_int/no_warnings_compatible_float_vars.phpt
 Zend/tests/type_coercion/float_to_int/no_warnings_compatible_string_float_vars.phpt
 Zend/tests/type_coercion/float_to_int/non-rep-float-as-int-extra1.phpt
+Zend/tests/type_coercion/float_to_int/union_int_string_type_arg.phpt
 Zend/tests/type_coercion/float_to_int/warnings_float_literals_assignment_ops.phpt
 Zend/tests/type_coercion/float_to_int/warnings_string_float_literals_assignment_ops.phpt
 Zend/tests/type_coercion/int_special_values.phpt

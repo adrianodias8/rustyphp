@@ -18,9 +18,7 @@ relocation (the scenario passes; `baseline/repro/static-prop-ref-across-include.
 | id | what phpr does | what PHP does | test | found |
 |---|---|---|---|---|
 | D-01 | `echo A::$t;` on an uninitialised typed static property prints nothing | throws `Error: Typed static property A::$t must not be accessed before initialization` | `typed-static-uninit-read.phpt` | session 2 |
-| D-02 | `"x" . NAN`, `$s .= NAN` are silent | `Warning: unexpected NAN value was coerced to string` (PHP 8.5) | `nan-to-string-warning.phpt` | session 2 |
 | D-03 | `function strlen() {}` compiles and shadows the builtin | `Fatal error: Cannot redeclare function strlen()` | `redeclare-builtin-fatal.phpt` (runner: "compile-time diagnostic not modelled") | session 2 |
-| D-04 | `strlen()` with the wrong argument count throws `Error` | throws `ArgumentCountError` | `builtin-arity-argumentcounterror.phpt` | session 4 |
 | D-05 | `function assert()` inside a namespace is accepted | `Fatal error: Defining a custom assert() function is not allowed` | `assert-declared-in-namespace.phpt` (runner: skip, as D-03) | session 4 |
 | D-06 | the `Deprecated: Implicit conversion from float 1.5 to int` of a typed argument reports the call line | reports the callee's line (Zend's `RECV` runs in the callee) | `coercion-deprecation-line.phpt` | session 4 |
 | D-07 | an argument TypeError for an object says `object given` | names the class: `C given` | `typeerror-class-name-given.phpt` | session 4 |
@@ -31,6 +29,8 @@ relocation (the scenario passes; `baseline/repro/static-prop-ref-across-include.
 | D-12 | `$t[null] = 4` is silent | `Deprecated: Using null as an array offset is deprecated, use an empty string instead` (PHP 8.5) | `null-array-offset-deprecation.phpt` | session 4 |
 | D-13 | `PHP_OS` is `Darwin` on every platform (compile-time constant) | the running platform (`Linux` in the container) | `php-os-constant.phpt` | session 1 |
 | D-14 | `ini_set('precision', '5')` returns `false` and has no effect (`ini_get` and float rendering keep 14; upstream's `ini.rs` marks engine-hardwired directives read-only) | takes effect: `14\|14\|5\|0.33333` | `ini-set-precision.phpt` | session 5 (worker isolation battery) |
+| D-15 | an uncaught `TypeError` raised by a builtin (`sort(NULL)`) has no frame for the builtin in its trace (`#0 {main}`) | `#0 file(2): sort(NULL)` then `#1 {main}` | `builtin-frame-in-trace.phpt` | session 6 |
+| D-16 | float-offset diagnostics on an array write (`$b[1.5] = 3`, `[NAN => 1]`) are reported with the line of the NEXT statement, after its output; `[$k => 1]` with `$k = 1e30` misses the not-representable warning; `isset($a[NAN])` is silent (upstream behaves the same) | reported on the write's own line; every out-of-range float offset warns | `nan-array-key-warning.phpt` | session 6 |
 
 Fixed by the fork (tests in `baseline/repro/`): `count()` on a `Countable` through any dynamic
 call; `isset(Class::$static)`; `.=` quadratic for every non-local target and non-string operand;

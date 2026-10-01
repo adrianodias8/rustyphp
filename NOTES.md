@@ -20,6 +20,22 @@ this session unless it is explicitly labelled "upstream's claim".
    (3,048, repro 14/14, divergences 12 failing + 2 skipped); isolation diffs = the three
    documented in session 5 §2.
 
+6. **D-04 fixed**: builtin arity errors (`… expects exactly N argument(s), M given`) are raised as
+   plain `Error` from dozens of sites; `PhpError::class_name()` now maps that wording to
+   `ArgumentCountError` (catch and render both go through it).
+7. **D-02 fixed**: `to_zstr` warns on NAN like Zend's `zval_get_string` (concat, interpolation,
+   string params, `print_r`, `implode`); the float-offset path renders its message without it and
+   gained PHP 8.5's "float … is not representable as an int" warning.
+   The operator differential missed every warning of a compile-time-folded expression (emitted
+   before its handler exists); operands now pass through `__v()`, oracle run with
+   `memory_limit=-1`. Still 37,835 cases, 0 mismatches.
+8. New divergences: D-15 (builtin frame missing from a trace), D-16 (float-offset diagnostics
+   reported on the next statement's line — upstream does the same). The `PHPR_REG_LOWER`
+   bad-value warning was still in Italian; translated. Other Italian string literals (mostly test
+   assertion messages) remain; a sweep is open.
+9. Corpus 3,048 → **3,051** (bug46106, argument_count_incorrect_internal,
+   float_to_int/union_int_string_type_arg), baseline advanced; 0 pass→fail.
+
 Not done: a memory ceiling. The soak shows no growth to bound; with all workers in one process an
 RSS ceiling could only recycle blindly. Revisit if a real application grows.
 

@@ -170,15 +170,15 @@ fn out_of_grammar_value_is_default_plus_loud_warning() {
         REG_FORMS.iter().any(|f| c.contains(f))
     };
     let (out, err, inc_name) = run_case(Some("junk"), "junk", "");
-    assert_eq!(out, base, "un valore fuori grammatica cambia l'output del programma");
+    assert_eq!(out, base, "an out-of-grammar value changes the program output");
     assert!(
-        err.contains("fuori grammatica"),
-        "nessun warning per PHPR_REG_LOWER=junk: fallback silenzioso\n{err}"
+        err.contains("is not a valid value"),
+        "no warning for PHPR_REG_LOWER=junk: silent fallback\n{err}"
     );
     let chunk = included_chunk(&err, &inc_name);
     assert_eq!(
         REG_FORMS.iter().any(|f| chunk.contains(f)),
         base_has,
-        "un valore fuori grammatica non cade sul default del contratto\n{chunk}"
+        "an out-of-grammar value does not fall back to the default\n{chunk}"
     );
 }

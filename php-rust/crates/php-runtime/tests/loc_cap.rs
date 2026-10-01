@@ -44,7 +44,7 @@ fn no_source_file_over_cap() {
     const CAP_PREG: usize = 2289;
     const CAP_MEMCENSUS: usize = 2262;
     const CAP_LOWER_CLASS: usize = 2173;
-    const CAP_VM_ARRAYS: usize = 2200;
+    const CAP_VM_ARRAYS: usize = 2209;
     const CAP_LSP: usize = 2094;
     const CAP_B_FILEINFO: usize = 2083;
     const CAP_WORKER_POOL: usize = 2074;

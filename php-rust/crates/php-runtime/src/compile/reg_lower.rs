@@ -77,8 +77,8 @@ pub fn mode_from_env(raw: Option<&std::ffi::OsStr>) -> bool {
         Some("0") => false,
         _ => {
             eprintln!(
-                "phpr: PHPR_REG_LOWER={v:?} fuori grammatica (accetta `1`=on, \
-                 `0`=off, assente=default): uso il default"
+                "ferro: PHPR_REG_LOWER={v:?} is not a valid value (accepted: `1`=on, \
+                 `0`=off, unset=default); using the default"
             );
             DEFAULT_ON
         }

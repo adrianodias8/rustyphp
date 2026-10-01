@@ -927,10 +927,19 @@ pub(super) fn coerce_key_diag(v: &Zval, diags: &mut Diags) -> Option<Key> {
     if let Zval::Double(d) = v {
         let l = convert::dval_to_lval(*d);
         if !convert::is_long_compatible(*d, l) {
-            let rendered = convert::to_zstr(&Zval::Double(*d), diags);
+            // Rendered directly: going through to_zstr would add PHP 8.5's
+            // NAN-to-string warning, which an offset does not raise.
+            let rendered = php_types::dtoa::double_to_precision(*d, 14);
+            let rendered = String::from_utf8_lossy(&rendered);
+            // PHP 8.5: a float outside the int range (NAN, ±INF, too big)
+            // warns before the precision deprecation (!ZEND_DOUBLE_FITS_LONG).
+            if !(d.is_finite() && *d >= -9.223_372_036_854_775_808e18 && *d < 9.223_372_036_854_775_808e18) {
+                diags.push(Diag::Warning(format!(
+                    "The float {rendered} is not representable as an int, cast occurred"
+                )));
+            }
             diags.push(Diag::Deprecated(format!(
-                "Implicit conversion from float {} to int loses precision",
-                String::from_utf8_lossy(rendered.as_bytes())
+                "Implicit conversion from float {rendered} to int loses precision"
             )));
         }
         return Some(Key::Int(l));

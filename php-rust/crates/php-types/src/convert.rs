@@ -199,9 +199,17 @@ pub fn to_zstr(v: &Zval, diags: &mut Diags) -> ZStr {
         Zval::Bool(false) => PhpStr::empty(),
         Zval::Bool(true) => PhpStr::from_str("1"),
         Zval::Long(l) => PhpStr::from_i64(*l),
-        // NAN converts silently here (oracle: null . NAN); the explicit
-        // (string) cast warns — see to_zstr_cast.
-        Zval::Double(d) => PhpStr::new(double_to_precision(*d, 14)),
+        // PHP 8.5 warns on every NAN-to-string conversion (zval_get_string:
+        // concat, interpolation, string parameters, print_r); comparisons,
+        // var_export and json_encode format floats without coming here.
+        Zval::Double(d) => {
+            if d.is_nan() {
+                diags.push(Diag::Warning(
+                    "unexpected NAN value was coerced to string".to_string(),
+                ));
+            }
+            PhpStr::new(double_to_precision(*d, 14))
+        }
         Zval::Str(s) => s.clone(),
         Zval::Array(_) => {
             diags.push(Diag::Warning("Array to string conversion".to_string()));
@@ -246,16 +254,8 @@ pub fn to_zstr(v: &Zval, diags: &mut Diags) -> ZStr {
     }
 }
 
-/// Explicit (string) cast: like to_zstr but NAN warns
-/// (oracle: "Warning: unexpected NAN value was coerced to string").
+/// Explicit (string) cast: the same conversion as to_zstr (NAN warns there).
 pub fn to_zstr_cast(v: &Zval, diags: &mut Diags) -> ZStr {
-    if let Zval::Double(d) = v {
-        if d.is_nan() {
-            diags.push(Diag::Warning(
-                "unexpected NAN value was coerced to string".to_string(),
-            ));
-        }
-    }
     to_zstr(v, diags)
 }
 
