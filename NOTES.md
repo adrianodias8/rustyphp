@@ -23,6 +23,43 @@ this session unless it is explicitly labelled "upstream's claim".
 
 ---
 
+# Session 8 — 2026-10-01 — Drupal under wrk (step 3), classic-mode speed
+
+**Step 3 numbers** (front page, anonymous, `page_cache` uninstalled; `bench/drupal/bench-wrk-drupal.sh`,
+12-CPU VM shared with wrk; every arm's body identical to php-fpm's, token-stripped):
+
+| workers | php-fpm + opcache | FrankenPHP worker | ferro worker |
+|---|---:|---:|---:|
+| 4 | 732.77 | 196.42 | 57.22 |
+| 8 | 1415.78 | 369.15 | 114.50 |
+| 12 | 1623.49 | 460.92 | 148.55 |
+
+FrankenPHP: `num_threads` 8/16 and `GOMAXPROCS` changed nothing (~240 req/s at 4 workers);
+`num_threads` = workers does not start. The ferro worker degrades within a run (105 → 55 req/s
+over four 15 s runs, GC share 4 % → 20 %) even with the `recipe` reset (which now also clears
+`ReverseContainer::$recordedServices`, +245 entries per request in both engines). Cause open.
+
+**Classic (one-shot, php-fpm-like) mode — the owner's priority.** A warm one-shot request took
+166 ms (oracle `php -S`, no opcache: 8–10 ms). Profile: 64 % in `Vm::run_deferred` — every class
+of a defer-always unit was re-parsed, re-lowered and re-compiled on every request although the
+unit cache hit. Fixes (`bench/drupal/oneshot-time.sh`, warm, same box):
+
+| change | ms / request |
+|---|---:|
+| before | 166 |
+| deferred declarations cached in `UNIT_CACHE` (`vm/defercache.rs`, keyed by file/line/snippet digest, valid per `unit_fp`) | 75 |
+| + negative cache: a (snippet, fp) whose lowering stopped on a missing supertype goes straight to autoload | 33 |
+| + per-thread regex cache (ext/pcre's is per process) and a precomputed snippet digest | 30 |
+| + realpath cache for include resolution (positives only, `realpath_cache_ttl` 120 s) | 29 |
+
+New `ferro -S … router.php --workers N` (no `--worker`): N threads, fresh `Vm` per request, caches
+per thread. wrk, 8 workers (`bench/results/2026-10-01-drupal-wrk-classic-w8.md`):
+php-fpm 1355 req/s, **ferro-classic 219** (was ~34 at 166 ms × 8 threads), ferro-worker 150.
+What is left is the interpreter itself (`run_loop`, calls, autoload, unserialize): ~3× Zend per
+request with compilation gone. The remaining gap to php-fpm is ~6×.
+
+---
+
 # Session 7 — 2026-10-01 — Drupal 11: install, front page, worker mode (steps 1–2)
 
 Plan: the owner's four steps at the top of this file. Steps 1 and 2 done; step 3 next.

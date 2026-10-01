@@ -47,6 +47,8 @@ use crate::hir::{
 
 mod arrays;
 mod calls;
+mod defercache;
+use defercache::{defer_neg_get, defer_neg_put, defer_unit_key};
 // Without `op-census` only the arm/dump stubs and the unit tests use the
 // module — the counters are compiled out of run_loop.
 #[cfg_attr(not(feature = "op-census"), allow(dead_code))]
@@ -771,7 +773,6 @@ pub fn vm_new<'m>(
         suppress_marks: Vec::new(),
         silence_saved: Vec::new(),
         superglobals: std::array::from_fn(|_| Zval::Undef),
-        preg_cache: HashMap::default(),
         frames: Vec::new(),
         frame_pool: FramePool::default(),
         census_on: {
@@ -3300,7 +3301,6 @@ pub struct Vm<'m> {
     /// `preg_match('/.{1,10000}/u', …)` in a loop; without this each call would
     /// rebuild the (large, Unicode) NFA from scratch. `None` caches a pattern that
     /// failed to compile so it isn't retried.
-    preg_cache: HashMap<Vec<u8>, Option<Rc<crate::preg::Engine>>>,
     frames: Vec<Frame<'m>>,
     /// WP-30: recycled frame backing buffers (see [`FramePool`]).
     frame_pool: FramePool,
@@ -3969,7 +3969,6 @@ impl<'m> Vm<'m> {
         self.next_tidy = 1;
         self.next_mysqli = 1;
         self.next_dom = 1;
-        self.preg_cache.clear();
         self.json_active.clear();
         self.enum_cache.clear();
         // AMEND-3: Clear iof_cache per-request (Hejlsberg E-B2: epoch reset)
@@ -5631,19 +5630,31 @@ impl<'m> Vm<'m> {
     /// Render every diagnostic raised since the last flush into `rendered`,
     /// stamped with `line` and the module file (E1; mirrors `eval::flush_diags`):
     /// `\n{Severity}: {message} in {file} on line {line}\n`.
-    /// Compile a PHP regex, memoising the result per raw pattern (PCRE keeps a
-    /// per-request pattern cache). Returns a shared handle; `None` (also cached)
-    /// means the pattern is invalid.
+    /// Compile a PHP regex, memoising the result per raw pattern. Like
+    /// ext/pcre's per-process cache (4096 entries, `PCRE_G(pcre_cache)`), it
+    /// lives across requests on this thread. Returns a shared handle; `None`
+    /// (also cached) means the pattern is invalid.
     fn preg_compile(&mut self, pat: &[u8]) -> Option<Rc<crate::preg::Engine>> {
+        thread_local! {
+            static PREG_CACHE: RefCell<HashMap<Vec<u8>, Option<Rc<crate::preg::Engine>>>> =
+                RefCell::new(HashMap::default());
+        }
         // preg_last_error: every preg operation that compiles resets to
         // NO_ERROR; an invalid pattern (even from the cache) records
         // PREG_INTERNAL_ERROR — BAD_UTF8 is recorded by subject_text.
-        let engine = if let Some(hit) = self.preg_cache.get(pat) {
-            hit.clone()
-        } else {
-            let engine = crate::preg::compile(pat).map(Rc::new);
-            self.preg_cache.insert(pat.to_vec(), engine.clone());
-            engine
+        let engine = match PREG_CACHE.with(|c| c.borrow().get(pat).cloned()) {
+            Some(hit) => hit,
+            None => {
+                let engine = crate::preg::compile(pat).map(Rc::new);
+                PREG_CACHE.with(|c| {
+                    let mut c = c.borrow_mut();
+                    if c.len() >= 4096 {
+                        c.clear();
+                    }
+                    c.insert(pat.to_vec(), engine.clone());
+                });
+                engine
+            }
         };
         crate::preg::set_last_error(if engine.is_some() { 0 } else { 1 });
         engine
@@ -6907,28 +6918,56 @@ impl<'m> Vm<'m> {
         let file = unit.file.clone();
         let snippet = dd.snippet.clone();
         let line = dd.line;
+        let digest = dd.digest;
         // S-70.2 guard (mirrors `lower_unit`): a name that surfaces AGAIN
         // after a "resolved" autoload is known to the VM but unresolvable by
         // the seeded lowerer — error out instead of retrying forever.
         let mut attempted: std::collections::HashSet<Vec<u8>> = std::collections::HashSet::new();
+        // Deferred-declaration cache: the snippet's relocated module, keyed
+        // like an include unit (file, line, snippet digest) and valid for
+        // the VM fingerprint it was lowered under. Without it every class of
+        // a defer-always unit is re-parsed and re-compiled on every request.
+        let dkey = (self.main_hir.is_some() && unit_cache_enabled())
+            .then(|| defer_unit_key(&file, line, &snippet, digest));
+        let mut fp = 0;
         let program = loop {
-            let seed_index = self.seed_class_index();
-            match crate::lower_source_seeded(
-                &file,
-                &snippet,
-                &self.seed_classes,
-                self.seed_static,
-                &self.seed_traits,
-                &self.seed_globals,
-                &self.seed_aliases,
-                // S-70.2: the deferred bind resolves ONLY against the runtime
-                // class table (+ spl_autoload below, in Zend's order) — never
-                // the conditional registry of the lowering (phantom family).
-                &|k| self.class_index.get(k).copied(),
-                &self.seed_conditional,
-                Some(seed_index),
-                crate::DeferPolicy::No,
-            ) {
+            if let Some(dk) = &dkey {
+                fp = self.unit_fp();
+                if let Some(ret) = self.defer_cache_hit(dk, fp, expr, caller) {
+                    return ret;
+                }
+            }
+            // A cached UndefinedClass for this fingerprint: the lowering is
+            // deterministic, so go straight to the supertype autoload.
+            let neg = dkey.as_ref().and_then(|dk| defer_neg_get(dk, fp));
+            let lowered = if let Some((name, kind, line)) = neg {
+                Err(crate::LowerError::UndefinedClass { name, kind, line })
+            } else {
+                let seed_index = self.seed_class_index();
+                let r = crate::lower_source_seeded(
+                    &file,
+                    &snippet,
+                    &self.seed_classes,
+                    self.seed_static,
+                    &self.seed_traits,
+                    &self.seed_globals,
+                    &self.seed_aliases,
+                    // S-70.2: the deferred bind resolves ONLY against the runtime
+                    // class table (+ spl_autoload below, in Zend's order) — never
+                    // the conditional registry of the lowering (phantom family).
+                    &|k| self.class_index.get(k).copied(),
+                    &self.seed_conditional,
+                    Some(seed_index),
+                    crate::DeferPolicy::No,
+                );
+                if let (Some(dk), Err(crate::LowerError::UndefinedClass { name, kind, line })) =
+                    (&dkey, &r)
+                {
+                    defer_neg_put(dk, fp, (name.clone(), *kind, *line));
+                }
+                r
+            };
+            match lowered {
                 Ok(p) => break p,
                 Err(crate::LowerError::UndefinedClass { name: missing, kind, line: eline }) => {
                     // The supertype may have been loaded (or become autoloadable)
@@ -6977,7 +7016,8 @@ impl<'m> Vm<'m> {
             }
         };
         let elide = self.elide_seed_len();
-        self.accumulate_seed(&program);
+        let seed_delta = Rc::new(self.seed_delta_of(&program));
+        self.apply_seed_delta(&seed_delta);
         let stubs = self.seed_stub_mask(&program);
         #[cfg(feature = "mem-census")]
         let netw = CensusNetWindow::open();
@@ -7004,7 +7044,15 @@ impl<'m> Vm<'m> {
         // Bridge the calling frame's scope only for the expression form: its
         // constructor arguments are re-evaluated inside the snippet and must
         // see the caller's variables live.
-        self.drive_unit(module, None, if expr { Some(caller) } else { None }, elide.map(|l| (&program, l)))
+        let bridge = if expr { Some(caller) } else { None };
+        match dkey {
+            // Published only when the lowering read nothing the fingerprint
+            // cannot see (same rule as the include path's `pure`).
+            Some(dk) if !program.used_conditional_seed => {
+                self.defer_link_publish(dk, fp, module, &program, elide, seed_delta, bridge)
+            }
+            _ => self.drive_unit(module, None, bridge, elide.map(|l| (&program, l))),
+        }
     }
 
     /// Fold a freshly-lowered unit's *new* classes into the accumulating seed image
@@ -7321,10 +7369,34 @@ impl<'m> Vm<'m> {
             }
             candidates.push(p.to_path_buf());
         }
-        candidates
-            .into_iter()
-            .find(|c| c.is_file())
-            .map(|c| std::fs::canonicalize(&c).unwrap_or(c))
+        // ext/standard's realpath cache: a resolved candidate is remembered for
+        // `realpath_cache_ttl` (120 s), per process; failures are not cached.
+        thread_local! {
+            static REALPATH: RefCell<HashMap<std::path::PathBuf, (std::path::PathBuf, std::time::Instant)>> =
+                RefCell::new(HashMap::default());
+        }
+        const TTL: std::time::Duration = std::time::Duration::from_secs(120);
+        let now = std::time::Instant::now();
+        for c in candidates {
+            let hit = REALPATH.with(|m| {
+                m.borrow().get(&c).filter(|(_, t)| now.duration_since(*t) < TTL).map(|(r, _)| r.clone())
+            });
+            if hit.is_some() {
+                return hit;
+            }
+            if c.is_file() {
+                let r = std::fs::canonicalize(&c).unwrap_or_else(|_| c.clone());
+                REALPATH.with(|m| {
+                    let mut m = m.borrow_mut();
+                    if m.len() >= 1 << 16 {
+                        m.clear();
+                    }
+                    m.insert(c, (r.clone(), now));
+                });
+                return Some(r);
+            }
+        }
+        None
     }
 
     /// `include`/`require`(`_once`) the file named by `path_val` (step 57, Phase 2).

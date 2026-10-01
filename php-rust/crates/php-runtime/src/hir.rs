@@ -117,6 +117,9 @@ pub struct DeferredDecl {
     pub kind_word: &'static str,
     /// Source line of the declaration, for diagnostics.
     pub line: Line,
+    /// Hash of `snippet`, computed once at lowering: the VM's
+    /// deferred-declaration cache key (with the file, line and length).
+    pub digest: u64,
 }
 
 /// A trait lowered to its flattened members (step 21). Stored owned so it can be

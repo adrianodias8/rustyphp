@@ -22,6 +22,9 @@ if (in_array('recipe', $resets, true)) {
         'Drupal\\Core\\Render\\Renderer::$contextCollection',
         'Drupal\\Component\\Utility\\Html::$seenIds',
         'Drupal\\Component\\Utility\\Html::$seenIdsInit',
+        // Grows by ~245 entries per request with every resetContainer()
+        // (both engines): a memory and time leak, not an output one.
+        'Drupal\\Component\\DependencyInjection\\ReverseContainer::$recordedServices',
     ]));
 }
 $handle = function_exists('frankenphp_handle_request') ? 'frankenphp_handle_request' : 'ferro_handle_request';
@@ -34,10 +37,11 @@ $handler = static function () use (&$kernel, $autoloader, $resets) {
     }
     $response = $kernel->handle($request);
     if (getenv('DRUPAL_WORKER_DEBUG')) {
-        file_put_contents(getenv('DRUPAL_WORKER_DEBUG'), sprintf("%s %s route=%s status=%d len=%d ob=%d\n",
+        file_put_contents(getenv('DRUPAL_WORKER_DEBUG'), sprintf("%s %s route=%s status=%d len=%d ob=%d rs=%d\n",
             $request->getMethod(), $request->getPathInfo(),
             $request->attributes->get('_route') ?? '-', $response->getStatusCode(),
-            strlen((string) $response->getContent()), ob_get_level()), FILE_APPEND);
+            strlen((string) $response->getContent()), ob_get_level(),
+            count((new \ReflectionProperty(\Drupal\Component\DependencyInjection\ReverseContainer::class, 'recordedServices'))->getValue())), FILE_APPEND);
     }
     $response->send();
     $kernel->terminate($request, $response);
@@ -64,7 +68,7 @@ $handler = static function () use (&$kernel, $autoloader, $resets) {
         // reset to those names.
         $keep = ['Drupal\\Core\\DrupalKernel', 'Drupal\\Core\\Site\\Settings', 'Drupal\\Core\\Database\\Database',
             'Drupal\\Component\\FileCache\\FileCacheFactory', 'Drupal\\Component\\FileCache\\FileCache',
-            'Drupal\\Core\\Extension\\ExtensionDiscovery', 'Drupal\\Component\\DependencyInjection\\ReverseContainer', 'Drupal'];
+            'Drupal\\Core\\Extension\\ExtensionDiscovery', 'Drupal'];
         $only = array_filter(explode(',', (string) getenv('DRUPAL_WORKER_STATICS')));
         $changed = [];
         foreach (get_declared_classes() as $c) {

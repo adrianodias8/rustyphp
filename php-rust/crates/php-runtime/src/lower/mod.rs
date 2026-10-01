@@ -1744,11 +1744,18 @@ impl<'f> Lowerer<'f> {
             snippet.push(b';');
         }
         let line_out = self.line_of(span);
+        let digest = {
+            use std::hash::{Hash, Hasher};
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            snippet.hash(&mut h);
+            h.finish()
+        };
         self.deferred.push(crate::hir::DeferredDecl {
             snippet: snippet.into(),
             name,
             kind_word,
             line: line_out,
+            digest,
         });
         self.deferred.len() - 1
     }

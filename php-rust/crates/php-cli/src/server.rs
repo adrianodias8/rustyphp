@@ -861,20 +861,74 @@ pub fn serve(addr: &str, mut rest: std::iter::Peekable<impl Iterator<Item = std:
         };
         return serve_workers(listener, cfg, script, n, max_requests);
     }
+    if workers > 0 {
+        return serve_classic_pool(listener, cfg, workers);
+    }
     log_line(&format!(
         "PHP 8.5.7 Development Server (http://{host}:{port}) started"
     ));
     for stream in listener.incoming() {
-        let Ok(mut stream) = stream else { continue };
-        let peer = stream
-            .peer_addr()
-            .map(|a| (a.ip().to_string(), a.port()))
-            .unwrap_or_else(|_| ("127.0.0.1".to_string(), 0));
-        let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(60)));
-        log_line(&format!("{}:{} Accepted", peer.0, peer.1));
-        handle_client(&cfg, &registry, &mut stream, peer.clone());
-        let _ = stream.flush();
-        log_line(&format!("{}:{} Closing", peer.0, peer.1));
+        let Ok(stream) = stream else { continue };
+        serve_connection(&cfg, &registry, stream);
+    }
+    0
+}
+
+/// One accepted connection in one-shot mode: one request, a fresh `Vm`.
+fn serve_connection(cfg: &ServerConfig, registry: &php_runtime::Registry, mut stream: TcpStream) {
+    let peer = stream
+        .peer_addr()
+        .map(|a| (a.ip().to_string(), a.port()))
+        .unwrap_or_else(|_| ("127.0.0.1".to_string(), 0));
+    let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(60)));
+    log_line(&format!("{}:{} Accepted", peer.0, peer.1));
+    handle_client(cfg, registry, &mut stream, peer.clone());
+    let _ = stream.flush();
+    log_line(&format!("{}:{} Closing", peer.0, peer.1));
+}
+
+// ---------------------------------------------------------------------------
+// Classic pool (`ferro -S host:port [router.php] --workers N`, no `--worker`):
+// php-fpm's shape — N threads accept on the shared socket and serve each
+// request exactly like the one-shot server (fresh `Vm`, nothing kept between
+// requests but the compile caches: units, deferred declarations, regexes,
+// realpaths, which are per thread like opcache's are per process).
+// ---------------------------------------------------------------------------
+
+fn serve_classic_pool(listener: TcpListener, cfg: ServerConfig, n: usize) -> u8 {
+    log_line(&format!(
+        "PHP 8.5.7 Development Server (http://{}:{}) started: {n} threads, one request per Vm",
+        cfg.host, cfg.port
+    ));
+    let cfg = std::sync::Arc::new(cfg);
+    let mut threads = Vec::with_capacity(n);
+    for i in 0..n {
+        let Ok(listener) = listener.try_clone() else {
+            eprintln!("Failed to share the listening socket");
+            return 1;
+        };
+        let cfg = cfg.clone();
+        // The one-shot server runs on the main thread: same stack here.
+        let t = std::thread::Builder::new()
+            .name(format!("ferro-classic-{i}"))
+            .stack_size(8 << 20)
+            .spawn(move || {
+                let registry = php_builtins::registry();
+                for stream in listener.incoming() {
+                    let Ok(stream) = stream else { continue };
+                    serve_connection(&cfg, &registry, stream);
+                }
+            });
+        match t {
+            Ok(t) => threads.push(t),
+            Err(e) => {
+                eprintln!("Failed to start a server thread: {e}");
+                return 1;
+            }
+        }
+    }
+    for t in threads {
+        let _ = t.join();
     }
     0
 }

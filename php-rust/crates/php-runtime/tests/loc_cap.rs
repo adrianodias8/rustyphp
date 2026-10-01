@@ -30,12 +30,12 @@ fn no_source_file_over_cap() {
     const SLACK_MAX: usize = 200;
     const CAP_C_MOD: usize = 2057;
     const CAP_B_MBSTRING: usize = 2032;
-    const CAP_VM_MOD: usize = 26552;
+    const CAP_VM_MOD: usize = 26625; // +71: deferred-decl cache call site, per-thread preg cache, realpath cache (classic-mode speed; the cache itself lives in vm/defercache.rs)
     const CAP_VM_HOST: usize = 7898;
     const CAP_VM_RUN: usize = 7650;
     const CAP_T_EVAL: usize = 4773;
     const CAP_T_BUILTINS: usize = 4772;
-    const CAP_LOWER_MOD: usize = 4006;
+    const CAP_LOWER_MOD: usize = 4013; // +7: DeferredDecl::digest
     const CAP_VM_DOM: usize = 3675;
     const CAP_BIG5: usize = 3372;
     const CAP_B_STRING: usize = 2865;
