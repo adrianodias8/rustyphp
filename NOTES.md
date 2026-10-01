@@ -93,6 +93,16 @@ Measured and dropped:
 wrk, 8 workers (`bench/results/2026-10-01-drupal-wrk-classic2-w8.md`): php-fpm 1354 req/s,
 ferro-classic **248** (was 219).
 
+Third pass: **single-pass `unserialize()`** (`vm/unser.rs`: allocation-free validation, then
+`Zval`s straight from the bytes; `R:`/`C:` payloads keep the tree path; byte-level integer
+parsing — `from_utf8` + `str::parse` was ~30 % of it) — 584 KB synthetic payload 3.54 → 2.68 ms
+(PHP 1.23), `strings/unserialize_x5` 0.733; `Key::from_bytes` no longer copies a string key twice.
+**`MethodIc` keyed on (receiver class, calling scope)**: resolution, private rebind and visibility
+are pure in that pair, so protected/private calls are cached too (before: public,
+scope-independent winners only). Drupal warm request ~25.9 → 24.2 ms; wrk 8 workers:
+ferro-classic **271** req/s, php-fpm 1280 in the same run
+(`bench/results/2026-10-01-drupal-wrk-classic3-w8.md`).
+
 Profile now (frame pointers, warm request): `run_loop` self 16 %, `Zval` drop/clone 7 %, allocator
 5 %, `resolve_method_runtime` 1.8 % (half from `dispatch_instance_call`), property resolution
 (`resolve_prop_access` + `PropInfo` map) ~3 %, `unserialize` 11 % inclusive (two allocations

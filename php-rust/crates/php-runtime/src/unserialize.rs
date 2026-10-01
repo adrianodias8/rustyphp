@@ -77,17 +77,35 @@ pub fn collect_alias_targets(s: &Ser, targets: &mut std::collections::HashSet<i6
     }
 }
 
-struct Parser<'a> {
-    b: &'a [u8],
-    i: usize,
+/// Check that `bytes` is ONE complete serialized value, without building
+/// anything. `Some(true)`: valid and free of `R:` aliases and `C:` records,
+/// so the VM may build it in a single pass (`Vm::unserialize_direct`);
+/// `Some(false)`: valid but needs the two-phase [`parse`] path; `None`:
+/// malformed (same acceptance as [`parse`]).
+pub fn validate(bytes: &[u8]) -> Option<bool> {
+    let mut p = Parser::new(bytes);
+    let mut simple = true;
+    p.skip_value(&mut simple)?;
+    (p.i == p.b.len()).then_some(simple)
 }
 
-impl Parser<'_> {
-    fn peek(&self) -> Option<u8> {
+/// Cursor over serialized bytes, shared by the tree parser, the validator
+/// and the VM's single-pass builder.
+pub(crate) struct Parser<'a> {
+    pub(crate) b: &'a [u8],
+    pub(crate) i: usize,
+}
+
+impl<'a> Parser<'a> {
+    pub(crate) fn new(b: &'a [u8]) -> Self {
+        Parser { b, i: 0 }
+    }
+
+    pub(crate) fn peek(&self) -> Option<u8> {
         self.b.get(self.i).copied()
     }
 
-    fn eat(&mut self, c: u8) -> Option<()> {
+    pub(crate) fn eat(&mut self, c: u8) -> Option<()> {
         if self.peek() == Some(c) {
             self.i += 1;
             Some(())
@@ -97,22 +115,96 @@ impl Parser<'_> {
     }
 
     /// Read up to (not including) `delim`, advancing past it.
-    fn take_until(&mut self, delim: u8) -> Option<&[u8]> {
+    pub(crate) fn take_until(&mut self, delim: u8) -> Option<&'a [u8]> {
         let start = self.i;
-        while self.peek().is_some_and(|c| c != delim) {
-            self.i += 1;
+        let off = self.b.get(start..)?.iter().position(|&c| c == delim)?;
+        self.i = start + off + 1;
+        Some(&self.b[start..start + off])
+    }
+
+    pub(crate) fn int_until(&mut self, delim: u8) -> Option<i64> {
+        parse_i64(self.take_until(delim)?)
+    }
+
+    /// The `<len>:"<bytes>"` chunk as a slice of the input (no copy).
+    pub(crate) fn quoted_slice(&mut self) -> Option<&'a [u8]> {
+        let len = self.usize_until(b':')?;
+        self.eat(b'"')?;
+        let bytes = self.b.get(self.i..self.i.checked_add(len)?)?;
+        self.i += len;
+        self.eat(b'"')?;
+        Some(bytes)
+    }
+
+    /// [`Self::value`]'s grammar without building: advances past one value,
+    /// clearing `simple` on an `R:` or `C:`.
+    fn skip_value(&mut self, simple: &mut bool) -> Option<()> {
+        let c = self.peek()?;
+        self.i += 1;
+        if c == b'N' {
+            return self.eat(b';');
         }
-        let slice = self.b.get(start..self.i)?;
-        self.eat(delim)?;
-        Some(slice)
+        self.eat(b':')?;
+        match c {
+            b'b' => {
+                if !matches!(self.peek()?, b'0' | b'1') {
+                    return None;
+                }
+                self.i += 1;
+                self.eat(b';')
+            }
+            b'i' | b'r' | b'R' => {
+                if c == b'R' {
+                    *simple = false;
+                }
+                self.int_until(b';').map(|_| ())
+            }
+            b'd' => parse_double(self.take_until(b';')?).map(|_| ()),
+            b's' => {
+                self.quoted_slice()?;
+                self.eat(b';')
+            }
+            b'a' => {
+                let n = self.usize_until(b':')?;
+                self.eat(b'{')?;
+                for _ in 0..n {
+                    if !matches!(self.peek()?, b'i' | b's') {
+                        return None;
+                    }
+                    self.skip_value(simple)?;
+                    self.skip_value(simple)?;
+                }
+                self.eat(b'}')
+            }
+            b'O' => {
+                self.quoted_slice()?;
+                self.eat(b':')?;
+                let n = self.usize_until(b':')?;
+                self.eat(b'{')?;
+                for _ in 0..n {
+                    if !matches!(self.peek()?, b'i' | b's') {
+                        return None;
+                    }
+                    self.skip_value(simple)?;
+                    self.skip_value(simple)?;
+                }
+                self.eat(b'}')
+            }
+            b'C' => {
+                *simple = false;
+                self.quoted_slice()?;
+                self.eat(b':')?;
+                let len = self.usize_until(b':')?;
+                self.eat(b'{')?;
+                self.b.get(self.i..self.i.checked_add(len)?)?;
+                self.i += len;
+                self.eat(b'}')
+            }
+            _ => None,
+        }
     }
 
-    fn int_until(&mut self, delim: u8) -> Option<i64> {
-        let s = self.take_until(delim)?;
-        std::str::from_utf8(s).ok()?.parse::<i64>().ok()
-    }
-
-    fn value(&mut self) -> Option<Ser> {
+    pub(crate) fn value(&mut self) -> Option<Ser> {
         match self.peek()? {
             b'N' => {
                 self.i += 1;
@@ -222,12 +314,7 @@ impl Parser<'_> {
     /// a string value ends with `;`, but an object's class name is followed by
     /// `:` (the property count), so callers consume the terminator themselves.
     fn quoted_bytes(&mut self) -> Option<Vec<u8>> {
-        let len = self.usize_until(b':')?;
-        self.eat(b'"')?;
-        let bytes = self.b.get(self.i..self.i.checked_add(len)?)?.to_vec();
-        self.i += len;
-        self.eat(b'"')?;
-        Some(bytes)
+        self.quoted_slice().map(<[u8]>::to_vec)
     }
 
     /// A string value / array key / property name: `<len>:"<bytes>";`.
@@ -237,15 +324,46 @@ impl Parser<'_> {
         Some(bytes)
     }
 
-    fn usize_until(&mut self, delim: u8) -> Option<usize> {
+    pub(crate) fn usize_until(&mut self, delim: u8) -> Option<usize> {
         let s = self.take_until(delim)?;
-        std::str::from_utf8(s).ok()?.parse::<usize>().ok()
+        let digits = s.strip_prefix(b"+").unwrap_or(s);
+        if digits.is_empty() {
+            return None;
+        }
+        digits.iter().try_fold(0usize, |acc, &c| {
+            c.is_ascii_digit().then_some(())?;
+            acc.checked_mul(10)?.checked_add((c - b'0') as usize)
+        })
+    }
+}
+
+/// `str::parse::<i64>` on bytes (optional `+`/`-`, one or more digits,
+/// overflow rejected) without the UTF-8 check and `str` round trip: integer
+/// parsing was ~30 % of `unserialize()`.
+fn parse_i64(s: &[u8]) -> Option<i64> {
+    let (neg, digits) = match s.first()? {
+        b'-' => (true, &s[1..]),
+        b'+' => (false, &s[1..]),
+        _ => (false, s),
+    };
+    if digits.is_empty() {
+        return None;
+    }
+    // Accumulate negatively so i64::MIN parses.
+    let v = digits.iter().try_fold(0i64, |acc, &c| {
+        c.is_ascii_digit().then_some(())?;
+        acc.checked_mul(10)?.checked_sub((c - b'0') as i64)
+    })?;
+    if neg {
+        Some(v)
+    } else {
+        v.checked_neg()
     }
 }
 
 /// Parse a serialized float body. PHP emits `INF` / `-INF` / `NAN` for the
 /// non-finite cases and a shortest-round-trip decimal otherwise.
-fn parse_double(s: &[u8]) -> Option<f64> {
+pub(crate) fn parse_double(s: &[u8]) -> Option<f64> {
     match s {
         b"INF" => return Some(f64::INFINITY),
         b"-INF" => return Some(f64::NEG_INFINITY),
@@ -307,6 +425,39 @@ mod tests {
         assert_eq!(parse(b"i:1;XX"), None); // trailing garbage
         assert_eq!(parse(b"b:2;"), None); // bad bool
         assert_eq!(parse(b"a:2:{i:0;i:9;}"), None); // count mismatch
+    }
+
+    #[test]
+    fn int_parsing_matches_str_parse() {
+        for c in [
+            "0", "-0", "+0", "42", "-42", "+42", "", "-", "+", "1a", " 1", "1 ", "--1", "+-1",
+            "9223372036854775807", "9223372036854775808", "-9223372036854775808",
+            "-9223372036854775809", "00012", "\u{663}",
+        ] {
+            assert_eq!(parse_i64(c.as_bytes()), c.parse::<i64>().ok(), "{c:?}");
+            let mut p = Parser::new(format!("{c}:").into_bytes().leak());
+            assert_eq!(p.usize_until(b':'), c.parse::<usize>().ok(), "{c:?}");
+        }
+    }
+
+    #[test]
+    fn validate_accepts_exactly_what_parse_accepts() {
+        let cases: &[&[u8]] = &[
+            b"N;", b"b:0;", b"b:2;", b"i:-3;", b"i:;", b"d:1.5;", b"d:INF;", b"d:x;",
+            b"s:3:\"a;b\";", b"s:2:\"abc\";", b"s:9:\"ab\";",
+            b"a:0:{}", b"a:1:{i:0;s:1:\"x\";}", b"a:1:{s:1:\"k\";a:1:{i:0;N;}}",
+            b"a:1:{d:1.0;i:1;}", b"a:2:{i:0;i:1;}", b"a:1:{i:0;i:1;}X",
+            b"O:8:\"stdClass\":1:{s:1:\"x\";i:5;}", b"O:8:\"stdClass\":1:{i:0;r:1;}",
+            b"O:8:\"stdClass\":1:{N;i:5;}", b"O:3:\"Foo\":0:{}",
+            b"C:3:\"Foo\":3:{abc}", b"C:3:\"Foo\":4:{abc}", b"R:1;", b"r:1;",
+            b"a:2:{i:0;a:0:{}i:1;R:2;}", b"", b"z", b"N", b"i:1;;",
+        ];
+        for c in cases {
+            assert_eq!(validate(c).is_some(), parse(c).is_some(), "{}", String::from_utf8_lossy(c));
+        }
+        assert_eq!(validate(b"a:1:{i:0;O:8:\"stdClass\":0:{}}"), Some(true));
+        assert_eq!(validate(b"a:2:{i:0;a:0:{}i:1;R:2;}"), Some(false));
+        assert_eq!(validate(b"C:3:\"Foo\":3:{abc}"), Some(false));
     }
 
     #[test]

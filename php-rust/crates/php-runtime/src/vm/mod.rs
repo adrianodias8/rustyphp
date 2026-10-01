@@ -48,6 +48,7 @@ use crate::hir::{
 mod arrays;
 mod calls;
 mod defercache;
+mod unser;
 use defercache::{defer_unit_key, lower_neg_get, lower_neg_put, revalidated_unit_key};
 // Without `op-census` only the arm/dump stubs and the unit tests use the
 // module — the counters are compiled out of run_loop.
@@ -12028,14 +12029,12 @@ impl<'m> Vm<'m> {
             let callee = self.instance_arg_ref_target(top, &this, method);
             self.materialize_arg_places(top, &mut args, callee)?;
         }
-        // INLINE CACHE (WP-30): this site's last scope-independent resolution
-        // for exactly this receiver class. Sound to skip resolve + private-
-        // rebind + visibility: the fill predicate below guarantees the
-        // outcome is identical for EVERY calling scope (public winner, no
-        // private same-name method anywhere in the ancestor chain —
-        // `Closure::bind` can bring any scope through this site).
+        // INLINE CACHE (WP-30): this site's last resolution for exactly this
+        // receiver class AND calling scope — resolve + private-rebind +
+        // visibility are pure in that pair (see `MethodIc`).
+        let scope = self.frames[top].class;
         if let Some(ic) = ic {
-            if let Some((defc, midx)) = ic.get(cid) {
+            if let Some((defc, midx)) = ic.get(cid, scope) {
                 let callee = &self.classes[defc].methods[midx].func;
                 let m = self.class_mod(defc);
                 let mut frame = self.pooled_frame(callee, m);
@@ -12070,16 +12069,8 @@ impl<'m> Vm<'m> {
         });
         match usable {
             Some((defc, midx)) => {
-                // Fill only when the resolution is scope-INdependent: a public
-                // winner with no private homonym in any proper ancestor (such
-                // a private would make `parent_private_rebind` fire for that
-                // ancestor's scope).
                 if let Some(ic) = ic {
-                    if self.classes[defc].methods[midx].visibility == Visibility::Public
-                        && !private_shadow_in_chain(&self.classes, cid, method)
-                    {
-                        ic.fill(cid, defc, midx);
-                    }
+                    ic.fill(cid, scope, defc, midx);
                 }
                 let callee = &self.classes[defc].methods[midx].func;
                 let m = self.class_mod(defc);
@@ -12398,13 +12389,14 @@ impl<'m> Vm<'m> {
             }
         }
         // INLINE CACHE (WP-30): keyed on the resolved `start` (self/parent/
-        // static targets revalidate naturally). Placed AFTER the enum-builtin
-        // shadowing above — `cases`/`from`/`tryFrom` return before resolution
-        // and can never fill. No private-rebind exists on this path, so the
-        // fill predicate is just "public winner" (visibility is the only
-        // scope-dependent step). LSB/forwarding/$this run identically below.
+        // static targets revalidate naturally) and the calling scope (the
+        // visibility check's only input beyond the class table). Placed AFTER
+        // the enum-builtin shadowing above — `cases`/`from`/`tryFrom` return
+        // before resolution and can never fill. LSB/forwarding/$this run
+        // identically below.
         let mut resolved = None;
-        let usable = match ic.and_then(|ic| ic.get(start)) {
+        let scope = self.frames[top].class;
+        let usable = match ic.and_then(|ic| ic.get(start, scope)) {
             Some(hit) => Some(hit),
             None => {
                 resolved = resolve_method_runtime(&self.classes, start, method);
@@ -12412,9 +12404,7 @@ impl<'m> Vm<'m> {
                     method_visible_from(&self.classes, self.frames[top].class, self.classes[defc].methods[midx].visibility, defc, method)
                 });
                 if let (Some(ic), Some((defc, midx))) = (ic, usable) {
-                    if self.classes[defc].methods[midx].visibility == Visibility::Public {
-                        ic.fill(start, defc, midx);
-                    }
+                    ic.fill(start, scope, defc, midx);
                 }
                 usable
             }
@@ -23153,15 +23143,17 @@ mod tests {
         let a = crate::bytecode::MethodIc::default();
         let b = crate::bytecode::MethodIc::default();
         assert!(a == b);
-        a.fill(7, 3, 2);
+        a.fill(7, Some(5), 3, 2);
         assert!(a == b);
-        assert_eq!(a.get(7), Some((3, 2)));
-        assert_eq!(a.get(8), None, "different receiver class misses");
+        assert_eq!(a.get(7, Some(5)), Some((3, 2)));
+        assert_eq!(a.get(8, Some(5)), None, "different receiver class misses");
+        assert_eq!(a.get(7, Some(6)), None, "different calling scope misses");
+        assert_eq!(a.get(7, None), None, "global scope is its own key");
         let c = a.clone();
-        c.fill(9, 4, 1);
-        assert_eq!(a.get(9), Some((4, 1)), "clone shares the cell");
+        c.fill(9, None, 4, 1);
+        assert_eq!(a.get(9, None), Some((4, 1)), "clone shares the cell");
         crate::bytecode::bump_ic_epoch();
-        assert_eq!(a.get(9), None, "epoch bump invalidates");
+        assert_eq!(a.get(9, None), None, "epoch bump invalidates");
     }
 
     #[test]

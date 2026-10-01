@@ -31,7 +31,7 @@ fn no_source_file_over_cap() {
     const CAP_C_MOD: usize = 2057;
     const CAP_B_MBSTRING: usize = 2032;
     const CAP_VM_MOD: usize = 26700; // +73 classic-mode caches (deferred decls, preg, realpath); +75 incremental unit_fp digests, prelude-prefix skip in run_linked, trait-include negative probe
-    const CAP_VM_HOST: usize = 7898;
+    const CAP_VM_HOST: usize = 7903; // +5: unserialize validate/direct dispatch (vm/unser.rs)
     const CAP_VM_RUN: usize = 7650;
     const CAP_T_EVAL: usize = 4773;
     const CAP_T_BUILTINS: usize = 4772;
@@ -42,7 +42,7 @@ fn no_source_file_over_cap() {
     const CAP_B_FILE: usize = 2761;
     const CAP_C_EXPR: usize = 2779;
     const CAP_B_DATE: usize = 2458;
-    const CAP_BYTECODE: usize = 2457;
+    const CAP_BYTECODE: usize = 2465; // +8: MethodIc keyed on (receiver, calling scope)
     const CAP_PREG: usize = 2295;
     const CAP_MEMCENSUS: usize = 2262;
     const CAP_LOWER_CLASS: usize = 2195;

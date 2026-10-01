@@ -253,37 +253,45 @@ impl Clone for PropIc {
 }
 
 /// Monomorphic per-op-site METHOD cache (the twin of [`PropIc`] for
-/// dispatch): `(epoch, receiver class_id + 1, defining ClassId, method
-/// idx)` of the last cacheable resolution. Filled ONLY for
-/// scope-independent outcomes: a **public** winner and — for instance
-/// calls — no proper ancestor declaring a `private` method of the same name
-/// (otherwise `parent_private_rebind` would make the resolution depend on
-/// the calling scope, and `Closure::bind` can bring ANY scope to this
-/// site). Same contract as PropIc: `Rc`-shared cell across the op's clones,
-/// state invisible to structural equality, per-run epoch against stale ids.
+/// dispatch): `(epoch, receiver class_id + 1, calling scope key, defining
+/// ClassId, method idx)` of the last resolution. Resolution, the private
+/// rebind (`parent_private_rebind`) and the visibility check are pure
+/// functions of (receiver class, calling scope, name) over the append-only
+/// class table, so keying on the scope as well makes EVERY visible outcome
+/// cacheable — protected and private calls included, and any scope a
+/// `Closure::bind` brings to the site simply misses. (Until 2026-10 the
+/// key was the receiver only, so only scope-independent public winners
+/// could be cached.) Same contract as PropIc: `Rc`-shared cell across the
+/// op's clones, state invisible to structural equality, per-run epoch
+/// against stale ids.
 #[derive(Debug)]
-pub struct MethodIc(Rc<std::cell::Cell<(u64, u32, u32, u32)>>);
+pub struct MethodIc(Rc<std::cell::Cell<(u64, u32, u32, u32, u32)>>);
 
 impl MethodIc {
     /// The cached `(defining ClassId, method idx)` when filled IN THIS RUN
-    /// for exactly this receiver class.
+    /// for exactly this receiver class and calling scope.
     #[inline]
-    pub fn get(&self, cid: usize) -> Option<(usize, usize)> {
-        let (epoch, cid1, defc, midx) = self.0.get();
-        (cid1 as usize == cid + 1 && epoch == ic_epoch())
+    pub fn get(&self, cid: usize, scope: Option<usize>) -> Option<(usize, usize)> {
+        let (epoch, cid1, sk, defc, midx) = self.0.get();
+        (cid1 as usize == cid + 1 && sk == PropIc::scope_key(scope) && epoch == ic_epoch())
             .then_some((defc as usize, midx as usize))
     }
 
     #[inline]
-    pub fn fill(&self, cid: usize, defc: usize, midx: usize) {
-        self.0
-            .set((ic_epoch(), cid as u32 + 1, defc as u32, midx as u32));
+    pub fn fill(&self, cid: usize, scope: Option<usize>, defc: usize, midx: usize) {
+        self.0.set((
+            ic_epoch(),
+            cid as u32 + 1,
+            PropIc::scope_key(scope),
+            defc as u32,
+            midx as u32,
+        ));
     }
 }
 
 impl Default for MethodIc {
     fn default() -> Self {
-        MethodIc(Rc::new(std::cell::Cell::new((0, 0, 0, 0))))
+        MethodIc(Rc::new(std::cell::Cell::new((0, 0, 0, 0, 0))))
     }
 }
 

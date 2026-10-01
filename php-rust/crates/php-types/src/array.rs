@@ -27,7 +27,7 @@ impl Key {
     pub fn from_bytes(bytes: &[u8]) -> Key {
         match canonical_int_key(bytes) {
             Some(i) => Key::Int(i),
-            None => Key::Str(PhpStr::new(bytes.to_vec())),
+            None => Key::Str(PhpStr::new(bytes)),
         }
     }
 

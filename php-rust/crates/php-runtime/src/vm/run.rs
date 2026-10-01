@@ -5951,7 +5951,7 @@ impl<'m> super::Vm<'m> {
                     let mut hit = None;
                     if let Some(Zval::Object(o)) = &self.frames[top].this {
                         let cid = o.borrow().class_id as usize;
-                        if let Some((defc, midx)) = ic.get(cid) {
+                        if let Some((defc, midx)) = ic.get(cid, self.frames[top].class) {
                             hit = Some((defc, midx, cid, Zval::Object(Rc::clone(o))));
                         }
                     }
@@ -7363,7 +7363,7 @@ impl<'m> super::Vm<'m> {
             if let Some(ridx) = stack.len().checked_sub(n + 1) {
                 if let Zval::Object(o) = &stack[ridx] {
                     let cid = o.borrow().class_id as usize;
-                    if let Some((defc, midx)) = ic.get(cid) {
+                    if let Some((defc, midx)) = ic.get(cid, self.frames[top].class) {
                         let callee = &self.classes[defc].methods[midx].func;
                         if callee.simple_call && callee.n_params as usize == n {
                             fast = Some((defc, midx, cid));
