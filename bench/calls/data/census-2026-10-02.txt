@@ -1,0 +1,572 @@
+== PHPR_OP_CENSUS: 405115 ops dispatched ==
+-- op counts (top 40) --
+       54963  13.57%  Sweep
+       46580  11.50%  LoadVar
+       32094   7.92%  PushConst
+       28069   6.93%  JumpIfFalse
+       22124   5.46%  StoreSlot
+       17047   4.21%  Ret
+       14727   3.64%  Jump
+       10912   2.69%  Pop
+        9851   2.43%  CallNsFallback
+        8972   2.21%  ThisPropGet
+        8935   2.21%  LoadVarPushConst
+        8892   2.19%  This
+        7487   1.85%  MethodCall
+        7260   1.79%  IterNext
+        6416   1.58%  FieldIsset
+        6386   1.58%  CheckArity
+        5980   1.48%  FetchDim
+        5758   1.42%  CmpJmpSC
+        5577   1.38%  Dup
+        4714   1.16%  IssetPath
+        4523   1.12%  StringifySlot
+        4443   1.10%  JumpIfTrue
+        4395   1.08%  Unary
+        4243   1.05%  CmpJmpConst
+        3991   0.99%  CoerceParams
+        3595   0.89%  PropSetPop
+        3506   0.87%  ClassConst
+        3182   0.79%  CmpJmp
+        3116   0.77%  ArrayInit
+        3036   0.75%  AssignPath
+        2952   0.73%  FillDefault
+        2916   0.72%  PropGetSlot
+        2879   0.71%  PushRef
+        2773   0.68%  InstanceOf
+        2670   0.66%  ConcatN
+        2600   0.64%  Stringify
+        2287   0.56%  IterInit
+        2071   0.51%  ArrayPush
+        1841   0.45%  LoadSlot
+        1681   0.41%  IterPop
+        1501   0.37%  ConstFetch
+        1400   0.35%  CallBuiltin
+        1353   0.33%  ConcatNConst
+        1320   0.33%  FieldAssign
+        1108   0.27%  StaticPropGet
+        1073   0.26%  ArrayInsert
+         939   0.23%  EmptyPath
+         900   0.22%  InitProps
+         900   0.22%  StampThrowable
+         881   0.22%  JumpIfNotNull
+         836   0.21%  CallValue
+         792   0.20%  StaticCall
+         778   0.19%  CoalesceFetchDim
+         747   0.18%  Include
+         740   0.18%  BinarySC
+         738   0.18%  PropGetSilent
+         700   0.17%  ThisMethodCall
+         696   0.17%  PushArgPlace
+         652   0.16%  PropIsset
+         645   0.16%  AllocDynamic
+         559   0.14%  FieldUnset
+         548   0.14%  InvokeCtor
+         517   0.13%  FetchDimList
+         517   0.13%  CmpJmpSS
+         511   0.13%  BinarySS
+         467   0.12%  PropIssetFetchGate
+         433   0.11%  EnumCase
+         421   0.10%  CoerceParam
+         396   0.10%  StaticCallDynamic
+         376   0.09%  CallHostBuiltin
+         363   0.09%  Binary
+         362   0.09%  NsShadowGuard
+         335   0.08%  ArrayAppendSpread
+         331   0.08%  PropGetSlotRecv
+         330   0.08%  BindRefTo
+         293   0.07%  MakeRef
+         277   0.07%  MakeClosure
+         268   0.07%  IncDecSlotJmp
+         238   0.06%  InvokeCtorArgs
+         232   0.06%  DeclareDeferred
+         216   0.05%  IncDecSlotPop
+         200   0.05%  InstanceOfDynamic
+         198   0.05%  Cast
+         168   0.04%  ConcatAssignSlot
+         161   0.04%  BinarySTDst
+         152   0.04%  CallHostBuiltinRef
+         141   0.03%  AllocStatic
+         137   0.03%  ClassConstFromValue
+         134   0.03%  CallHostBuiltinOut
+         130   0.03%  PropIncDec
+         114   0.03%  Alloc
+          97   0.02%  BinaryTC
+          91   0.02%  UnsetPath
+          90   0.02%  Clone
+          88   0.02%  IterNextRef
+          85   0.02%  ClassConstDyn
+          75   0.02%  InvokeMethod
+          70   0.02%  CallBuiltinRefCell
+          67   0.02%  CallBuiltinRef
+          65   0.02%  CallNsFallbackArgs
+          58   0.01%  PropGet
+          55   0.01%  BinaryDst
+          54   0.01%  DeclareFn
+          53   0.01%  ClosureStatic
+          45   0.01%  Swap
+          45   0.01%  StaticPropSet
+          43   0.01%  BinarySCDst
+          40   0.01%  BinaryTCPropSetPop
+          33   0.01%  PropUnset
+          32   0.01%  CallValueArgs
+          31   0.01%  IterInitRef
+          29   0.01%  AssignOpPath
+          29   0.01%  DefineConst
+          25   0.01%  LoadSuperglobal
+          24   0.01%  BinaryAdd
+          14   0.00%  MakeFcc
+          13   0.00%  BindRef
+          13   0.00%  Yield
+          10   0.00%  ClassNameStatic
+           9   0.00%  StaticGuard
+           9   0.00%  StaticAlias
+           9   0.00%  PropSet
+           8   0.00%  EndFinally
+           5   0.00%  LoadGlobal
+           5   0.00%  ParkReturn
+           5   0.00%  FieldEmpty
+           4   0.00%  BinarySSDst
+           3   0.00%  PropGetDynamic
+           3   0.00%  SuppressBegin
+           3   0.00%  SuppressEnd
+           2   0.00%  StaticPropGetDynamic
+           2   0.00%  PropDimGetConst
+           1   0.00%  StoreGlobal
+           1   0.00%  StoreSuperglobal
+           1   0.00%  IncDecSlot
+           1   0.00%  StaticStore
+           1   0.00%  Echo
+           1   0.00%  Exit
+-- op time, net of a 28.3 ns/op clock floor (top 40) --
+   3.998 ms  20.30%     405.8 ns/op        9851  CallNsFallback
+   2.509 ms  12.74%     147.2 ns/op       17047  Ret
+   1.976 ms  10.04%    5256.1 ns/op         376  CallHostBuiltin
+   1.809 ms   9.19%    2422.3 ns/op         747  Include
+   1.127 ms   5.72%     175.6 ns/op        6416  FieldIsset
+   0.897 ms   4.56%     119.8 ns/op        7487  MethodCall
+   0.841 ms   4.27%     233.8 ns/op        3595  PropSetPop
+   0.364 ms   1.85%    1567.1 ns/op         232  DeclareDeferred
+   0.324 ms   1.65%      81.3 ns/op        3991  CoerceParams
+   0.278 ms   1.41%      31.0 ns/op        8972  ThisPropGet
+   0.258 ms   1.31%      85.1 ns/op        3036  AssignPath
+   0.244 ms   1.24%       7.6 ns/op       32094  PushConst
+   0.236 ms   1.20%     178.7 ns/op        1320  FieldAssign
+   0.224 ms   1.14%      10.1 ns/op       22124  StoreSlot
+   0.199 ms   1.01%      27.5 ns/op        7260  IterNext
+   0.190 ms   0.96%     293.8 ns/op         645  AllocDynamic
+   0.178 ms   0.90%       3.8 ns/op       46580  LoadVar
+   0.175 ms   0.89%      30.4 ns/op        5758  CmpJmpSC
+   0.165 ms   0.84%      35.1 ns/op        4714  IssetPath
+   0.148 ms   0.75%       5.3 ns/op       28069  JumpIfFalse
+   0.141 ms   0.72%     156.8 ns/op         900  StampThrowable
+   0.129 ms   0.65%     229.9 ns/op         559  FieldUnset
+   0.128 ms   0.65%      91.6 ns/op        1400  CallBuiltin
+   0.123 ms   0.62%     917.3 ns/op         134  CallHostBuiltinOut
+   0.121 ms   0.61%     152.2 ns/op         792  StaticCall
+   0.110 ms   0.56%      18.4 ns/op        5980  FetchDim
+   0.104 ms   0.53%      24.4 ns/op        4243  CmpJmpConst
+   0.100 ms   0.51%      11.2 ns/op        8935  LoadVarPushConst
+   0.098 ms   0.50%     336.0 ns/op         293  MakeRef
+   0.098 ms   0.50%      33.4 ns/op        2916  PropGetSlot
+   0.092 ms   0.47%     168.7 ns/op         548  InvokeCtor
+   0.090 ms   0.46%      33.7 ns/op        2670  ConcatN
+   0.086 ms   0.44%     217.4 ns/op         396  StaticCallDynamic
+   0.081 ms   0.41%      17.8 ns/op        4523  StringifySlot
+   0.079 ms   0.40%     332.0 ns/op         238  InvokeCtorArgs
+   0.072 ms   0.36%      64.6 ns/op        1108  StaticPropGet
+   0.069 ms   0.35%      46.1 ns/op        1501  ConstFetch
+   0.068 ms   0.35%      81.6 ns/op         836  CallValue
+   0.068 ms   0.34%      26.1 ns/op        2600  Stringify
+   0.066 ms   0.34%      20.8 ns/op        3182  CmpJmp
+   0.064 ms   0.33%      92.0 ns/op         700  ThisMethodCall
+   0.063 ms   0.32%      11.3 ns/op        5577  Dup
+   0.063 ms   0.32%      18.0 ns/op        3506  ClassConst
+   0.058 ms   0.29%      78.0 ns/op         738  PropGetSilent
+   0.054 ms   0.27%     333.2 ns/op         161  BinarySTDst
+   0.053 ms   0.27%      67.7 ns/op         778  CoalesceFetchDim
+   0.050 ms   0.25%      11.4 ns/op        4395  Unary
+   0.048 ms   0.25%      21.1 ns/op        2287  IterInit
+   0.047 ms   0.24%     101.5 ns/op         467  PropIssetFetchGate
+   0.047 ms   0.24%   47138.7 ns/op           1  Exit
+   0.044 ms   0.23%      26.4 ns/op        1681  IterPop
+   0.042 ms   0.22%      14.7 ns/op        2879  PushRef
+   0.042 ms   0.21%       4.7 ns/op        8892  This
+   0.042 ms   0.21%       3.8 ns/op       10912  Pop
+   0.039 ms   0.20%      59.9 ns/op         652  PropIsset
+   0.039 ms   0.20%      28.8 ns/op        1353  ConcatNConst
+   0.038 ms   0.19%      35.2 ns/op        1073  ArrayInsert
+   0.038 ms   0.19%      12.1 ns/op        3116  ArrayInit
+   0.037 ms   0.19%     133.9 ns/op         277  MakeClosure
+   0.036 ms   0.18%      38.3 ns/op         939  EmptyPath
+   0.035 ms   0.18%      12.6 ns/op        2773  InstanceOf
+   0.035 ms   0.18%     304.7 ns/op         114  Alloc
+   0.033 ms   0.17%      16.2 ns/op        2071  ArrayPush
+   0.032 ms   0.16%      46.0 ns/op         696  PushArgPlace
+   0.028 ms   0.14%     417.6 ns/op          67  CallBuiltinRef
+   0.027 ms   0.14%      81.9 ns/op         335  ArrayAppendSpread
+   0.024 ms   0.12%     120.7 ns/op         198  Cast
+   0.022 ms   0.11%     163.3 ns/op         137  ClassConstFromValue
+   0.021 ms   0.11%     151.6 ns/op         141  AllocStatic
+   0.021 ms   0.11%     629.5 ns/op          33  PropUnset
+   0.020 ms   0.10%     377.3 ns/op          53  ClosureStatic
+   0.019 ms   0.10%     213.4 ns/op          90  Clone
+   0.019 ms   0.10%       4.3 ns/op        4443  JumpIfTrue
+   0.017 ms   0.09%      19.1 ns/op         900  InitProps
+   0.017 ms   0.09%     260.9 ns/op          65  CallNsFallbackArgs
+   0.017 ms   0.08%     307.3 ns/op          54  DeclareFn
+   0.017 ms   0.08%       2.6 ns/op        6386  CheckArity
+   0.016 ms   0.08%     123.0 ns/op         130  PropIncDec
+   0.015 ms   0.08%      45.7 ns/op         330  BindRefTo
+   0.013 ms   0.06%      24.7 ns/op         517  CmpJmpSS
+   0.013 ms   0.06%     181.8 ns/op          70  CallBuiltinRefCell
+   0.012 ms   0.06%      58.0 ns/op         200  InstanceOfDynamic
+   0.011 ms   0.06%      21.1 ns/op         517  FetchDimList
+   0.011 ms   0.06%     338.7 ns/op          32  CallValueArgs
+   0.010 ms   0.05%     111.8 ns/op          91  UnsetPath
+   0.010 ms   0.05%      66.8 ns/op         152  CallHostBuiltinRef
+   0.010 ms   0.05%     416.2 ns/op          24  BinaryAdd
+   0.010 ms   0.05%      27.4 ns/op         363  Binary
+   0.010 ms   0.05%     131.2 ns/op          75  InvokeMethod
+   0.009 ms   0.05%     668.0 ns/op          14  MakeFcc
+   0.009 ms   0.05%      27.8 ns/op         331  PropGetSlotRecv
+   0.009 ms   0.05%      25.0 ns/op         362  NsShadowGuard
+   0.008 ms   0.04%     274.8 ns/op          29  DefineConst
+   0.008 ms   0.04%     194.7 ns/op          40  BinaryTCPropSetPop
+   0.007 ms   0.04%     127.6 ns/op          58  PropGet
+   0.007 ms   0.04%      43.2 ns/op         168  ConcatAssignSlot
+   0.007 ms   0.04%     126.2 ns/op          55  BinaryDst
+   0.007 ms   0.03%       3.5 ns/op        1841  LoadSlot
+   0.006 ms   0.03%      64.9 ns/op          97  BinaryTC
+   0.006 ms   0.03%      69.3 ns/op          85  ClassConstDyn
+   0.005 ms   0.03%     180.1 ns/op          29  AssignOpPath
+   0.005 ms   0.03%     573.7 ns/op           9  PropSet
+   0.005 ms   0.02%       6.6 ns/op         740  BinarySC
+   0.004 ms   0.02%      10.4 ns/op         433  EnumCase
+   0.004 ms   0.02%       9.8 ns/op         421  CoerceParam
+   0.004 ms   0.02%      91.9 ns/op          45  StaticPropSet
+   0.004 ms   0.02%     788.5 ns/op           5  FieldEmpty
+   0.004 ms   0.02%       7.4 ns/op         511  BinarySS
+   0.003 ms   0.01%       0.9 ns/op        2952  FillDefault
+   0.002 ms   0.01%      26.7 ns/op          88  IterNextRef
+   0.002 ms   0.01%       0.1 ns/op       14727  Jump
+   0.002 ms   0.01%      37.6 ns/op          43  BinarySCDst
+   0.002 ms   0.01%      49.6 ns/op          31  IterInitRef
+   0.001 ms   0.01%     367.5 ns/op           4  BinarySSDst
+   0.001 ms   0.01%      90.3 ns/op          13  Yield
+   0.001 ms   0.01%     388.0 ns/op           3  PropGetDynamic
+   0.001 ms   0.00%     805.7 ns/op           1  Echo
+   0.001 ms   0.00%     325.7 ns/op           2  StaticPropGetDynamic
+   0.001 ms   0.00%      21.7 ns/op          25  LoadSuperglobal
+   0.000 ms   0.00%      35.9 ns/op          13  BindRef
+   0.000 ms   0.00%      46.5 ns/op          10  ClassNameStatic
+   0.000 ms   0.00%      71.9 ns/op           5  LoadGlobal
+   0.000 ms   0.00%      96.4 ns/op           3  SuppressBegin
+   0.000 ms   0.00%      27.4 ns/op           9  StaticGuard
+   0.000 ms   0.00%      22.7 ns/op           9  StaticAlias
+   0.000 ms   0.00%      96.7 ns/op           2  PropDimGetConst
+   0.000 ms   0.00%      23.6 ns/op           8  EndFinally
+   0.000 ms   0.00%      29.9 ns/op           5  ParkReturn
+   0.000 ms   0.00%       3.2 ns/op          45  Swap
+   0.000 ms   0.00%     138.7 ns/op           1  StoreGlobal
+   0.000 ms   0.00%     137.7 ns/op           1  StoreSuperglobal
+   0.000 ms   0.00%     137.7 ns/op           1  StaticStore
+   0.000 ms   0.00%      13.7 ns/op           3  SuppressEnd
+   0.000 ms   0.00%      13.7 ns/op           1  IncDecSlot
+   0.000 ms   0.00%       0.0 ns/op         881  JumpIfNotNull
+   0.000 ms   0.00%       0.0 ns/op       54963  Sweep
+   0.000 ms   0.00%      -3.8 ns/op         216  IncDecSlotPop
+   0.000 ms   0.00%      -0.8 ns/op         268  IncDecSlotJmp
+-- call ops by callee (gross ns, top 40) --
+   1.385 ms       270 calls    5131.3 ns/call  ns:unserialize
+   1.034 ms        27 calls   38280.9 ns/call  h:__pdo_run
+   0.931 ms       668 calls    1393.3 ns/call  ns:file_exists
+   0.521 ms         1 calls  521459.0 ns/call  h:__pdo_exec
+   0.217 ms      1942 calls     112.0 ns/call  ns:substr
+   0.205 ms      1250 calls     164.3 ns/call  ns:strrpos
+   0.176 ms        27 calls    6524.7 ns/call  h:__pdo_prepare
+   0.161 ms       693 calls     231.8 ns/call  ns:strtr
+   0.130 ms       245 calls     531.0 ns/call  ns:call_user_func_array
+   0.122 ms       392 calls     312.3 ns/call  ns:str_contains
+   0.106 ms         1 calls  105750.0 ns/call  h:__pdo_close
+   0.098 ms       190 calls     513.4 ns/call  ns:str_replace
+   0.062 ms       229 calls     271.3 ns/call  ns:explode
+   0.060 ms       177 calls     339.9 ns/call  ns:implode
+   0.058 ms         1 calls   58167.0 ns/call  h:__pdo_open
+   0.054 ms       393 calls     138.2 ns/call  ns:assert
+   0.051 ms        76 calls     677.0 ns/call  ns:array_unique
+   0.049 ms        80 calls     608.9 ns/call  ns:sprintf
+   0.043 ms        98 calls     437.1 ns/call  ns:array_diff
+   0.041 ms       434 calls      94.4 ns/call  ns:is_string
+   0.039 ms       306 calls     128.0 ns/call  b:array_key_exists
+   0.038 ms       400 calls      94.7 ns/call  ns:is_int
+   0.036 ms       178 calls     204.8 ns/call  ns:array_keys
+   0.036 ms        49 calls     730.4 ns/call  ns:array_flip
+   0.036 ms       320 calls     111.7 ns/call  ns:is_array
+   0.033 ms       330 calls     101.0 ns/call  b:is_int
+   0.033 ms        24 calls    1368.0 ns/call  ns:strpos
+   0.029 ms       306 calls      93.5 ns/call  b:count
+   0.025 ms       117 calls     215.8 ns/call  ns:array_values
+   0.024 ms        38 calls     639.2 ns/call  ns:class_exists
+   0.023 ms        25 calls     913.4 ns/call  ns:hash
+   0.022 ms        76 calls     292.3 ns/call  h:function_exists
+   0.020 ms       165 calls     120.9 ns/call  ns:strlen
+   0.019 ms       132 calls     144.2 ns/call  ns:count
+   0.018 ms       105 calls     174.2 ns/call  ns:htmlspecialchars
+   0.018 ms        69 calls     261.5 ns/call  ns:array_merge
+   0.016 ms       172 calls      92.8 ns/call  b:is_float
+   0.016 ms       160 calls      98.5 ns/call  h:spl_object_id
+   0.015 ms        14 calls    1065.4 ns/call  ns:serialize
+   0.013 ms       111 calls     120.2 ns/call  b:is_array
+   0.012 ms        32 calls     375.0 ns/call  ns:array_filter
+   0.012 ms        40 calls     298.9 ns/call  ns:array_intersect_key
+   0.012 ms        36 calls     320.5 ns/call  ns:array_combine
+   0.011 ms        34 calls     329.6 ns/call  ns:function_exists
+   0.011 ms        68 calls     164.2 ns/call  ns:str_starts_with
+   0.011 ms        75 calls     148.9 ns/call  b:in_array
+   0.011 ms        59 calls     178.0 ns/call  ns:array_slice
+   0.010 ms        17 calls     615.3 ns/call  ns:ini_set
+   0.010 ms        54 calls     186.7 ns/call  ns:str_ends_with
+   0.010 ms        33 calls     304.2 ns/call  ns:in_array
+   0.009 ms        33 calls     275.3 ns/call  ns:mb_check_encoding
+   0.009 ms        16 calls     549.7 ns/call  ns:filter_var
+   0.008 ms        50 calls     167.6 ns/call  ns:is_null
+   0.008 ms        21 calls     398.7 ns/call  ns:is_subclass_of
+   0.008 ms        34 calls     241.4 ns/call  ns:rtrim
+   0.008 ms        11 calls     716.0 ns/call  ns:mb_substr
+   0.008 ms        14 calls     559.4 ns/call  h:__pdo_create_function
+   0.007 ms        13 calls     557.9 ns/call  ns:parse_url
+   0.007 ms         2 calls    3500.0 ns/call  ns:spl_autoload_register
+   0.007 ms        32 calls     204.4 ns/call  ns:strtolower
+   0.006 ms         1 calls    6459.0 ns/call  h:__dom_load
+   0.006 ms         1 calls    6458.0 ns/call  ns:json_encode
+   0.006 ms        18 calls     354.3 ns/call  ns:array_intersect
+   0.006 ms        27 calls     234.4 ns/call  b:strcasecmp
+   0.006 ms        10 calls     629.2 ns/call  ns:array_map
+   0.006 ms        32 calls     192.7 ns/call  ns:is_iterable
+   0.006 ms        32 calls     180.9 ns/call  ns:dirname
+   0.005 ms        27 calls     194.5 ns/call  ns:range
+   0.005 ms         1 calls    5042.0 ns/call  h:__reflect_method_info
+   0.005 ms        19 calls     254.4 ns/call  ns:trim
+   0.005 ms         2 calls    2375.0 ns/call  ns:hash_hmac
+   0.004 ms        50 calls      88.4 ns/call  ns:is_float
+   0.004 ms         6 calls     708.5 ns/call  ns:array_replace
+   0.004 ms        45 calls      86.0 ns/call  ns:is_bool
+   0.004 ms         9 calls     407.3 ns/call  ns:drupal_valid_test_ua
+   0.003 ms        11 calls     310.5 ns/call  ns:header
+   0.003 ms        45 calls      75.9 ns/call  ns:is_object
+   0.003 ms        10 calls     337.5 ns/call  ns:base64_encode
+   0.003 ms         4 calls     822.8 ns/call  h:sprintf
+   0.003 ms        10 calls     320.7 ns/call  ns:strtoupper
+   0.003 ms         8 calls     395.8 ns/call  ns:rawurlencode
+   0.003 ms         3 calls    1041.3 ns/call  ns:array_merge_recursive
+   0.003 ms         3 calls     972.0 ns/call  h:defined
+   0.003 ms         3 calls     917.0 ns/call  ns:defined
+   0.003 ms         5 calls     541.8 ns/call  ns:stream_get_wrappers
+   0.003 ms         5 calls     533.4 ns/call  ns:stream_wrapper_register
+   0.003 ms         2 calls    1312.5 ns/call  ns:trigger_error
+   0.003 ms         4 calls     646.0 ns/call  ns:array_fill_keys
+   0.002 ms        23 calls     106.9 ns/call  b:is_object
+   0.002 ms         1 calls    2458.0 ns/call  h:__reflect_closure_info
+   0.002 ms         1 calls    2417.0 ns/call  ns:is_readable
+   0.002 ms         7 calls     333.3 ns/call  ns:array_diff_key
+   0.002 ms         6 calls     375.2 ns/call  b:array_keys
+   0.002 ms         1 calls    2209.0 ns/call  b:__date_from_format
+   0.002 ms         5 calls     441.6 ns/call  ns:stripos
+   0.002 ms         5 calls     433.4 ns/call  b:extension_loaded
+   0.002 ms         4 calls     531.2 ns/call  ns:session_status
+   0.002 ms         6 calls     333.3 ns/call  b:dirname
+   0.002 ms         1 calls    2000.0 ns/call  ns:session_set_save_handler
+   0.002 ms        10 calls     191.8 ns/call  ns:array_is_list
+   0.002 ms         1 calls    1917.0 ns/call  ns:is_file
+   0.002 ms         2 calls     958.5 ns/call  ns:array_reduce
+   0.002 ms         3 calls     625.0 ns/call  h:__reflect_new_no_ctor
+   0.002 ms         2 calls     916.5 ns/call  b:gmdate
+   0.002 ms         3 calls     611.0 ns/call  ns:method_exists
+   0.002 ms         4 calls     448.0 ns/call  ns:substr_count
+   0.002 ms         5 calls     358.2 ns/call  ns:property_exists
+   0.002 ms         1 calls    1750.0 ns/call  ns:random_bytes
+   0.002 ms         1 calls    1750.0 ns/call  h:__dom_save_xml
+   0.002 ms         7 calls     249.9 ns/call  h:__dom_attr
+   0.002 ms         3 calls     555.7 ns/call  h:define
+   0.002 ms         3 calls     555.3 ns/call  ns:preg_quote
+   0.002 ms         4 calls     406.5 ns/call  ns:time
+   0.002 ms         3 calls     527.7 ns/call  h:__reflect_class_modifiers
+   0.002 ms        15 calls     102.8 ns/call  ns:floor
+   0.001 ms         4 calls     354.2 ns/call  ns:pathinfo
+   0.001 ms         4 calls     354.2 ns/call  ns:array_key_exists
+   0.001 ms         3 calls     444.3 ns/call  ns:base_path
+   0.001 ms         3 calls     444.3 ns/call  h:__dom_info
+   0.001 ms        10 calls     129.3 ns/call  ns:strcasecmp
+   0.001 ms         5 calls     258.4 ns/call  ns:ltrim
+   0.001 ms         1 calls    1291.0 ns/call  h:spl_autoload_unregister
+   0.001 ms         2 calls     625.0 ns/call  ns:array_reverse
+   0.001 ms         6 calls     208.3 ns/call  b:strlen
+   0.001 ms         3 calls     403.0 ns/call  ns:rawurldecode
+   0.001 ms         1 calls    1208.0 ns/call  ns:crc32
+   0.001 ms         1 calls    1208.0 ns/call  ns:session_register_shutdown
+   0.001 ms         1 calls    1208.0 ns/call  ns:http_build_query
+   0.001 ms         7 calls     166.9 ns/call  ns:chr
+   0.001 ms         1 calls    1166.0 ns/call  ns:error_reporting
+   0.001 ms         5 calls     233.2 ns/call  h:class_exists
+   0.001 ms         1 calls    1084.0 ns/call  ns:bin2hex
+   0.001 ms         4 calls     271.0 ns/call  b:__tz_offset
+   0.001 ms         5 calls     216.6 ns/call  h:func_num_args
+   0.001 ms         3 calls     347.3 ns/call  ns:strcspn
+   0.001 ms         1 calls    1042.0 ns/call  ns:date_default_timezone_set
+   0.001 ms         1 calls    1041.0 ns/call  h:__dom_by_tag
+   0.001 ms         1 calls    1041.0 ns/call  h:__pdo_create_collation
+   0.001 ms         1 calls    1041.0 ns/call  h:__dom_new_doc
+   0.001 ms         4 calls     260.2 ns/call  ns:strncasecmp
+   0.001 ms         5 calls     191.8 ns/call  h:__reflect_class_real_name
+   0.001 ms         1 calls     958.0 ns/call  ns:html_entity_decode
+   0.001 ms         4 calls     229.2 ns/call  h:__weak_get
+   0.001 ms         2 calls     458.0 ns/call  ns:array_key_first
+   0.001 ms         1 calls     875.0 ns/call  ns:set_error_handler
+   0.001 ms         3 calls     291.7 ns/call  h:__reflect_class_loc
+   0.001 ms         1 calls     875.0 ns/call  h:spl_autoload_register
+   0.001 ms         1 calls     833.0 ns/call  h:set_include_path
+   0.001 ms         1 calls     833.0 ns/call  ns:mb_language
+   0.001 ms         1 calls     792.0 ns/call  ns:mb_internal_encoding
+   0.001 ms         1 calls     792.0 ns/call  ns:setlocale
+   0.001 ms         4 calls     187.8 ns/call  b:intdiv
+   0.001 ms         4 calls     187.8 ns/call  b:is_string
+   0.001 ms         1 calls     750.0 ns/call  b:__strtotime_tz
+   0.001 ms         2 calls     375.0 ns/call  h:ini_get
+   0.001 ms         1 calls     750.0 ns/call  h:get_include_path
+   0.001 ms         2 calls     375.0 ns/call  ns:basename
+   0.001 ms         1 calls     708.0 ns/call  ns:ob_get_level
+   0.001 ms         1 calls     708.0 ns/call  ns:ob_get_status
+   0.001 ms         1 calls     667.0 ns/call  h:implode
+   0.001 ms         1 calls     666.0 ns/call  ns:define
+   0.001 ms         1 calls     583.0 ns/call  ns:is_numeric
+   0.001 ms         2 calls     291.5 ns/call  h:error_reporting
+   0.001 ms         1 calls     583.0 ns/call  h:call_user_func
+   0.001 ms         1 calls     583.0 ns/call  ns:set_exception_handler
+   0.001 ms         4 calls     135.5 ns/call  b:abs
+   0.001 ms         1 calls     500.0 ns/call  ns:array_key_last
+   0.000 ms         1 calls     459.0 ns/call  b:str_split
+   0.000 ms         1 calls     458.0 ns/call  h:get_class
+   0.000 ms         1 calls     458.0 ns/call  b:date_default_timezone_get
+   0.000 ms         1 calls     417.0 ns/call  ns:get_class
+   0.000 ms         1 calls     416.0 ns/call  ns:microtime
+   0.000 ms         2 calls     187.5 ns/call  b:is_bool
+   0.000 ms         1 calls     375.0 ns/call  h:__dom_nav
+   0.000 ms         1 calls     375.0 ns/call  ns:gettype
+   0.000 ms         1 calls     334.0 ns/call  h:__weak_create
+   0.000 ms         1 calls     333.0 ns/call  ns:flush
+   0.000 ms         2 calls     166.5 ns/call  b:ord
+   0.000 ms         1 calls     250.0 ns/call  h:interface_exists
+   0.000 ms         1 calls     208.0 ns/call  b:is_scalar
+-- bigrams (top 40) --
+       16915  StoreSlot -> Sweep
+       15671  Sweep -> LoadVar
+       11990  JumpIfFalse -> Sweep
+        9441  Sweep -> Jump
+        8845  Sweep -> PushConst
+        8795  Pop -> Sweep
+        8424  PushConst -> Ret
+        6205  LoadVar -> FieldIsset
+        4864  This -> LoadVar
+        4862  FieldIsset -> JumpIfFalse
+        4586  Jump -> IterNext
+        4444  Jump -> Sweep
+        4441  JumpIfFalse -> LoadVar
+        4293  Sweep -> This
+        4069  LoadVar -> CallNsFallback
+        3977  IssetPath -> JumpIfFalse
+        3894  Sweep -> CmpJmpSC
+        3875  Sweep -> ThisPropGet
+        3838  JumpIfFalse -> PushConst
+        3800  Ret -> Pop
+        3763  PushConst -> IssetPath
+        3750  LoadVar -> Ret
+        3725  PushConst -> JumpIfFalse
+        3606  CoerceParams -> CheckArity
+        3595  PropSetPop -> Sweep
+        3429  Unary -> JumpIfFalse
+        3408  LoadVar -> MethodCall
+        3375  ClassConst -> PushConst
+        3304  Ret -> StoreSlot
+        3274  LoadVar -> LoadVar
+        3011  PushConst -> Jump
+        2985  AssignPath -> Pop
+        2984  IterNext -> LoadVar
+        2972  LoadVarPushConst -> FetchDim
+        2887  Jump -> JumpIfFalse
+        2781  Dup -> StoreSlot
+        2689  LoadVar -> ClassConst
+        2667  LoadVar -> InstanceOf
+        2662  Ret -> CmpJmp
+        2637  JumpIfTrue -> PushConst
+-- bigrams X -> Sweep (all) --
+       16915  StoreSlot -> Sweep
+       11990  JumpIfFalse -> Sweep
+        8795  Pop -> Sweep
+        4444  Jump -> Sweep
+        3595  PropSetPop -> Sweep
+        2307  CmpJmpConst -> Sweep
+        1950  CmpJmpSC -> Sweep
+        1674  IterPop -> Sweep
+         740  CmpJmp -> Sweep
+         591  Sweep -> Sweep
+         502  CmpJmpSS -> Sweep
+         424  FieldUnset -> Sweep
+         232  Ret -> Sweep
+         216  IncDecSlotPop -> Sweep
+         161  BinarySTDst -> Sweep
+          90  UnsetPath -> Sweep
+          64  JumpIfTrue -> Sweep
+          55  BinaryDst -> Sweep
+          54  DeclareFn -> Sweep
+          40  BinaryTCPropSetPop -> Sweep
+          40  BinarySCDst -> Sweep
+          33  PropUnset -> Sweep
+          29  DefineConst -> Sweep
+           9  StaticAlias -> Sweep
+           5  IncDecSlotJmp -> Sweep
+           4  BinarySSDst -> Sweep
+           3  EndFinally -> Sweep
+           1  Echo -> Sweep
+-- bigrams IncDecSlotJmp -> X (all) --
+         248  IncDecSlotJmp -> CmpJmpSC
+          15  IncDecSlotJmp -> CmpJmpSS
+           5  IncDecSlotJmp -> Sweep
+-- prop_set entry (S-176 typed) --
+        1310  prop_set ic_hit_plain
+         347  prop_set ic_hit_typed
+        1987  prop_set miss
+-- Binary/CmpJmp type pairs (top 40) --
+        2593  Identical (Long, Long)
+         290  Identical (ObjLike, ObjLike)
+         175  Lt (Long, Long)
+         137  BitOr (Long, Long)
+          69  BitAnd (Long, Long)
+          54  Eq (ObjLike, ObjLike)
+          48  Eq (Str, Long)
+          44  Identical (Array, Array)
+          30  Eq (Long, Long)
+          25  Identical (Str, Str)
+          22  NotIdentical (Long, Long)
+          16  Identical (Null, Str)
+          14  NotIdentical (Null, Str)
+           7  Sub (Long, Long)
+           6  Gt (Long, Long)
+           6  Eq (Str, Str)
+           4  NotIdentical (ObjLike, ObjLike)
+           3  NotIdentical (Array, Array)
+           1  NotIdentical (Str, Str)
+           1  NotIdentical (Null, ObjLike)
+-- FetchDim base x key --
+          28  base=Null key=Str
+        1330  base=Str key=Long
+        1322  base=Array key=Long
+        4013  base=Array key=Str
+          65  base=ObjLike key=ObjLike
+-- IncDecSlot slot tags --
+           1  Long
+-- ConcatAssign non-local sites (lhs bytes = O(n^2) copy volume) --
+          11 ev  lhs_b=0 rhs_b=784 avg_lhs=0  ArrElem(AssignOpPath)
+        hist log2(lhs): b0=11
+[Fri Oct  2 11:21:24 2026] 127.0.0.1:55922 [200]: GET /
+[Fri Oct  2 11:21:24 2026] 127.0.0.1:55922 Closing

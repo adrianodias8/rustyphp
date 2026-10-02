@@ -5,8 +5,8 @@
 if [ "$1" = build ]; then
   (cd /work/php-rust/php-rust && CARGO_TARGET_DIR=/target/census cargo build --release -p php-cli --features php-runtime/op-census 2>&1 | grep -E "^error" -A10)
 fi
-cd /scratch/drupal-srv-fe/web
-PHPR_OP_CENSUS=1 PHPR_OP_CENSUS_TIME=1 PHPR_GC=${GCMODE:-} /target/census/release/ferro -S 127.0.0.1:8245 .ht.router.php 2>/scratch/census.log >/dev/null & P=$!
+cd "${SITE:-/scratch/drupal-srv-fe}/web"
+PHPR_OP_CENSUS=1 PHPR_OP_CENSUS_TIME=1 PHPR_OP_CENSUS_TOP=${TOP:-40} PHPR_GC=${GCMODE:-} /target/census/release/ferro -S 127.0.0.1:8245 .ht.router.php 2>/scratch/census.log >/dev/null & P=$!
 sleep 1
 for i in 1 2 3 4 5; do curl -s -o /dev/null http://127.0.0.1:8245/; done
 sleep 0.5; kill $P; wait $P 2>/dev/null

@@ -148,6 +148,56 @@ In the same run, php-fpm's `handle()` is 3.92 ms (bootstrap 1.17, total 5.34) an
 3.90 ms. **`handle()` now: ferro 17.80 ms vs php-fpm 3.92 ms (4.5×, a 13.9 ms gap); the target is
 ≤ 7.8 ms.**
 
+**4. Call-cost breakdown** (`bench/calls/`, `bench/results/2026-10-02-call-cost-breakdown.md`).
+
+Method:
+
+- `callcost.php` prices one operation net of the loop that repeats it, on the oracle (opcache
+  on, JIT off, optimizer off: with it on, empty calls and constant work fold to 0 ns, which
+  Drupal's cross-file calls cannot) and on ferro.
+- The op-time census of a warm front page (`optime.sh`, now `TOP=`/`SITE=`) gives ferro's
+  count and time per op kind. `breakdown.py` groups them and prices PHP's side as count × unit
+  cost.
+- `unser-cache.php` times `unserialize()` on the site's own 227 cache rows (2.7 MiB): php 2.88
+  ms, ferro 5.42 ms (×1.88).
+
+Unit costs, php → ferro:
+
+- a user call: 5.5–12.5 ns → 52–136 ns (×6–13);
+- a trivial builtin: 2 ns → 48–94 ns;
+- property read / write / `isset($o->a->b)`: 2.6 / 2.8 / 7.2 ns → 18 / 52 / 134 ns;
+- array read / write: 3.5 / 4.5 ns → 32–35 / 48 ns;
+- foreach per element: 1.1 → 8.0 ns;
+- the empty loop iteration: 2.0 → 8.9 ns.
+
+Against the 13.9 ms `handle()` gap:
+
+| | gap | share |
+|---|---:|---:|
+| user calls (17k, ≈ 255 ns each in the request vs ≈ 8 ns) | 4.2 ms | ~30 % |
+| property access | 2.9 ms | ~21 % |
+| the 276k other simple ops | 2.2 ms | ~16 % |
+| arrays, paths, foreach | 1.0 ms | |
+| builtin call machinery | 0.55 ms | |
+| `file_exists` | 0.7 ms | |
+| `unserialize` | 0.6 ms | |
+| includes, PDO and other builtins (by subtraction) | ≈ 2.0 ms | |
+
+Cross-check: ≈ 14.4 ms explained against a 15.0 ms whole-request gap.
+
+**Calls are the largest single item but under a third; there is no dominant mechanism.** Every
+VM operation is ×6–19, and a call in the request costs ~4× its micro-benchmark price
+(arguments, coercion, defaults, cold caches, Ret's GC notes).
+
+Two cheap leads outside the VM loop:
+
+- `file_exists` costs 1.4 µs per Composer probe in the request against 0.42 µs in a loop
+  (likely the `..`-laden `vendor/composer/../../` paths);
+- `unserialize` ×1.88.
+
+For step 6, the largest item is the call path: frame setup, argument binding and coercion,
+Ret.
+
 ---
 
 # Session 10 — 2026-10-02 — Drupal request phases, zygote mode, memory, ferro-edge

@@ -528,10 +528,12 @@ impl OpCensus {
         let mut o = String::with_capacity(8192);
         let total: u64 = self.ops.iter().sum();
         let _ = writeln!(o, "== PHPR_OP_CENSUS: {total} ops dispatched ==");
+        // Rows per section (PHPR_OP_CENSUS_TOP, default 40; large = every op).
+        let top: usize = std::env::var("PHPR_OP_CENSUS_TOP").ok().and_then(|v| v.parse().ok()).unwrap_or(40);
         let mut idx: Vec<usize> = (0..N_OPS).collect();
         idx.sort_by_key(|&i| std::cmp::Reverse(self.ops[i]));
         let _ = writeln!(o, "-- op counts (top 40) --");
-        for &i in idx.iter().take(40) {
+        for &i in idx.iter().take(top) {
             if self.ops[i] == 0 {
                 break;
             }
@@ -556,7 +558,7 @@ impl OpCensus {
             let mut ti: Vec<usize> = (0..N_OPS).filter(|&i| self.ops[i] > 0).collect();
             ti.sort_by(|&a, &b| net(b).partial_cmp(&net(a)).unwrap());
             let _ = writeln!(o, "-- op time, net of a {floor:.1} ns/op clock floor (top 40) --");
-            for &i in ti.iter().take(40) {
+            for &i in ti.iter().take(top) {
                 let _ = writeln!(
                     o,
                     "{:>8.3} ms  {:5.2}%  {:>8.1} ns/op  {:>10}  {}",
@@ -572,7 +574,7 @@ impl OpCensus {
             let mut cv: Vec<_> = self.callee_ns.iter().collect();
             cv.sort_by_key(|(_, &(_, ns))| std::cmp::Reverse(ns));
             let _ = writeln!(o, "-- call ops by callee (gross ns, top 40) --");
-            for (n, &(c, ns)) in cv.iter().take(40) {
+            for (n, &(c, ns)) in cv.iter().take(top) {
                 let _ = writeln!(
                     o,
                     "{:>8.3} ms  {:>8} calls  {:>8.1} ns/call  {}",
