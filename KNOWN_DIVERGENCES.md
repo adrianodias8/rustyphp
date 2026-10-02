@@ -45,4 +45,7 @@ Fixed by the fork (tests in `baseline/repro/`): `count()` on a `Countable` throu
 call; `isset(Class::$static)`; `.=` quadratic for every non-local target and non-string operand;
 `.=` never calling `__toString()`; a namespaced call rebinding after a later declaration; host,
 by-reference and prelude builtins unshadowable inside a namespace; value-registry builtin names
-case-sensitive; `ReflectionFunction::getName()` case of an internal function.
+case-sensitive; `ReflectionFunction::getName()` case of an internal function; enum cases
+serialized as `O:` objects and `E:` rejected by `unserialize()` (`unserialize-enum.phpt`, session
+10); the cli-server's router run reporting the router in `SCRIPT_FILENAME`/`SCRIPT_NAME` and
+not walking a directory without an index back to its parent's (`baseline/cli-server-router.sh`).

@@ -50,6 +50,9 @@ function isolation_route(): void
         case '/objects':
             $o = new Box(); $o->v = 7; echo spl_object_id($o) > 0 ? "obj" : "-", $o->v;
             return;
+        case '/boot':  // superglobal types as the script saw them before any request
+            echo $GLOBALS['boot_sg'] ?? implode(',', array_map('gettype', [$_GET, $_POST, $_COOKIE, $_FILES, $_SERVER]));
+            return;
         case '/stateful':  // STATEFUL: differs by design
             Box::$n++; $GLOBALS['boot_box']->v++;
             echo "static=", Box::$n, " fn=", counter(), " boot=", $GLOBALS['boot_box']->v;

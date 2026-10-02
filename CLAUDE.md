@@ -56,6 +56,8 @@ PRIV=1 docker/run.sh bash -c 'OUT=/scratch/prof /work/php-rust/bench/profile.sh'
 bench/worker/bench-wrk.sh          # from the host: phpr worker vs php-fpm vs FrankenPHP
 bench/drupal/bench-wrk-drupal.sh   # from the host: Drupal, ARMS="fpm frankenphp ferro-worker ferro-classic"
 bench/drupal/scaling.sh            # from the host: 1xN threads vs Nx1 processes (--reuse-port)
+bench/edge/bench-wrk-edge.sh       # from the host: ferro-edge in front of php-fpm and ferro, Drupal anonymous
+docker/run.sh bash /work/php-rust/bench/drupal/heap-profile.sh      # one worker's memory by allocation site (heaptrack)
 docker/run.sh bash /work/php-rust/bench/drupal/ab-oneshot.sh        # Drupal warm request, HEAD vs tree
 docker/run.sh bash /work/php-rust/bench/drupal/optime.sh build      # per-op / per-callee time census
 docker/run.sh /work/php-rust/baseline/smoke-composer.sh             # and smoke-dbal.sh
@@ -75,4 +77,8 @@ drop-driven destructors (`vm/gcdrop.rs`); `PHPR_REVALIDATE_FREQ` (seconds)
 sets the server's include stat interval (opcache's `revalidate_freq`, 2 s
 under `-S`, 0 in the CLI). Server flags: `--workers N` without `--worker` is
 the classic pool (fresh Vm per request); `--reuse-port` lets several
-processes share the port.
+processes share the port; `--worker boot.php --zygote` boots the script once per
+single-threaded zygote process and forks a child per request (`FERRO_ZYGOTE_STATS=1`
+logs the fork cost; `--max-requests N` re-boots a zygote after N children, its first
+generation after 32 — a zygote is a snapshot and goes stale as the app's caches change). `ferro-edge` (crate `ferro-edge`) is a separate binary: a
+cache-tag aware reverse proxy, independent of the engine.

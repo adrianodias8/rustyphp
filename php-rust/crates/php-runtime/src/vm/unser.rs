@@ -14,6 +14,15 @@
 use super::*;
 use crate::unserialize::Parser;
 
+/// An unserialize failure PHP reports as "Error at offset N" (with `false`):
+/// carried as an error to unwind the builders, turned into the warning by
+/// `ho_unserialize`.
+pub(super) const UNSER_FAIL: &str = "\0unserialize-fail:";
+
+fn unser_fail(offset: usize) -> PhpError {
+    PhpError::Error(format!("{UNSER_FAIL}{offset}"))
+}
+
 impl<'m> super::Vm<'m> {
     /// Build an already-validated simple payload (see module docs).
     pub(super) fn unserialize_direct(&mut self, bytes: &[u8]) -> Result<Zval, PhpError> {
@@ -66,6 +75,14 @@ impl<'m> super::Vm<'m> {
                 Zval::Array(Rc::new(arr))
             }
             b'O' => self.ud_object(p, ctx, slot)?,
+            b'E' => {
+                let start = p.i - 2;
+                let raw = p.quoted_slice().ok_or_else(bad)?;
+                p.i += 1; // ';'
+                let v = self.unser_enum(raw, start, p.i)?;
+                ctx.objs.insert(slot, v.clone());
+                v
+            }
             _ => return Err(bad()),
         })
     }
@@ -94,6 +111,71 @@ impl<'m> super::Vm<'m> {
         Some(s)
     }
 
+    /// A builder's positioned failure (`unser::UNSER_FAIL`, e.g. an unknown
+    /// enum) becomes PHP's "Error at offset N of M bytes" warning and `false`.
+    pub(super) fn unser_offset_fail(&mut self, built: Result<Zval, PhpError>, nbytes: usize) -> Result<Zval, PhpError> {
+        match built {
+            Err(PhpError::Error(m)) if m.starts_with(UNSER_FAIL) => {
+                let off = &m[UNSER_FAIL.len()..];
+                self.diags.push(Diag::Warning(format!("unserialize(): Error at offset {off} of {nbytes} bytes")));
+                Ok(Zval::Bool(false))
+            }
+            r => r,
+        }
+    }
+    /// `E:<len>:"<Enum>:<Case>";` — the case singleton, after var_unserializer.re's
+    /// `E:` rule: the enum is looked up with autoload; a failure warns like PHP
+    /// and aborts the whole unserialize at the offset PHP reports (`start`, the
+    /// `E`, before the class checks; `end`, past `";`, after them).
+    pub(super) fn unser_enum(&mut self, raw: &[u8], start: usize, end: usize) -> Result<Zval, PhpError> {
+        let lossy = |b: &[u8]| String::from_utf8_lossy(b).into_owned();
+        if raw.is_empty() {
+            return Err(unser_fail(start + 2));
+        }
+        let Some(colon) = raw.iter().position(|&b| b == b':') else {
+            let msg = format!("unserialize(): Invalid enum name '{}' (missing colon)", lossy(raw));
+            self.diags.push(Diag::Warning(msg));
+            return Err(unser_fail(start));
+        };
+        let (class, case) = (&raw[..colon], &raw[colon + 1..]);
+        // zend_is_valid_class_name: label bytes and `\` only, no warning.
+        if !class.iter().all(|&c| c.is_ascii_alphanumeric() || c == b'_' || c == b'\\' || c >= 0x80) {
+            return Err(unser_fail(start));
+        }
+        let lower = class.to_ascii_lowercase();
+        if !self.class_index.contains_key(lower.as_slice()) {
+            self.try_autoload(class, &lower, None)?;
+        }
+        let Some(cid) = self.class_index.get(lower.as_slice()).copied() else {
+            self.diags.push(Diag::Warning(format!("unserialize(): Class '{}' not found", lossy(class))));
+            return Err(unser_fail(start));
+        };
+        if !matches!(self.classes[cid].instantiable, Instantiable::Enum) {
+            self.diags.push(Diag::Warning(format!("unserialize(): Class '{}' is not an enum", lossy(class))));
+            return Err(unser_fail(start));
+        }
+        if let Some(i) = self.enum_case_idx(cid, case) {
+            return Ok(Zval::Object(self.enum_case(cid, i as u32)));
+        }
+        let msg = if self.classes[cid].consts.iter().any(|k| k.name.as_ref() == case) {
+            format!("unserialize(): {}::{} is not an enum case", lossy(class), lossy(case))
+        } else {
+            format!("unserialize(): Undefined constant {}::{}", lossy(class), lossy(case))
+        };
+        self.diags.push(Diag::Warning(msg));
+        Err(unser_fail(end))
+    }
+
+    /// `O:` of an enum class: PHP's object_init_ex refuses it.
+    pub(super) fn unser_reject_enum(&self, cid: Option<ClassId>) -> Result<(), PhpError> {
+        match cid {
+            Some(cid) if matches!(self.classes[cid].instantiable, Instantiable::Enum) => Err(PhpError::Error(
+                format!("Cannot instantiate enum {}", String::from_utf8_lossy(&self.classes[cid].name)),
+            )),
+            _ => Ok(()),
+        }
+    }
+
     /// `O:<len>:"<class>":<n>:{...}` — `vm_ser_build`'s `Ser::Object` arm.
     fn ud_object(&mut self, p: &mut Parser<'_>, ctx: &mut UnserCtx, slot: i64) -> Result<Zval, PhpError> {
         let bad = || PhpError::Error("unserialize(): invalid input after validation".to_string());
@@ -113,6 +195,7 @@ impl<'m> super::Vm<'m> {
             self.try_autoload(class, &lower, None)?;
         }
         let cid = self.class_index.get(lower.as_slice()).copied();
+        self.unser_reject_enum(cid)?;
         if let Some(cid) = cid {
             if resolve_method_runtime(&self.classes, cid, b"__unserialize").is_some() {
                 let obj = self.vm_make_unserialized_object(class, Vec::new());

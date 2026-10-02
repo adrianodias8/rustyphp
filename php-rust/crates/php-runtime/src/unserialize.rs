@@ -31,6 +31,9 @@ pub enum Ser {
     ObjRef(i64),
     /// `R:<n>;` — a reference aliasing the value slot numbered `n`.
     AliasRef(i64),
+    /// `E:<len>:"<Enum>:<Case>";` — the raw name, the offset of the `E` and
+    /// the offset past the `";` (the two offsets PHP's errors report).
+    Enum(Vec<u8>, usize, usize),
 }
 
 /// Parse a complete serialized value. Returns `None` on any malformed input or
@@ -190,6 +193,10 @@ impl<'a> Parser<'a> {
                 }
                 self.eat(b'}')
             }
+            b'E' => {
+                self.quoted_slice()?;
+                self.eat(b';')
+            }
             b'C' => {
                 *simple = false;
                 self.quoted_slice()?;
@@ -232,6 +239,14 @@ impl<'a> Parser<'a> {
                 self.i += 1;
                 self.eat(b':')?;
                 Some(Ser::ObjRef(self.int_until(b';')?))
+            }
+            b'E' => {
+                let start = self.i;
+                self.i += 1;
+                self.eat(b':')?;
+                let raw = self.quoted_slice()?.to_vec();
+                self.eat(b';')?;
+                Some(Ser::Enum(raw, start, self.i))
             }
             b'R' => {
                 self.i += 1;

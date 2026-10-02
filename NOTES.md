@@ -24,6 +24,172 @@ except its step 4 (a bare-metal Symfony run), which still needs a machine.
 
 ---
 
+# Session 10 — 2026-10-02 — Drupal request phases, zygote mode, memory, ferro-edge
+
+**Owner's plan (2026-10-02), in order:** (1) classic-mode phases, ferro vs php-fpm; (2) zygote
+mode (a single-threaded parent per worker boots Drupal up to the handle boundary and forks a
+child per request: isolation battery, wrk vs the classic pool and php-fpm, the fork cost);
+(3) heap profile of one Drupal worker accounting for all 360 MB → `MEMORY_DRUPAL.md`; (4) Drupal's
+worker-mode growth recorded as an upstream Drupal issue, not chased; separately, a new crate
+`ferro-edge` (cache-tag aware reverse proxy: Purge-compatible BAN, stale-while-revalidate,
+request coalescing) in front of php-fpm and ferro, wrk'd on anonymous Drupal pages.
+
+**1. Request phases, classic mode** (`bench/drupal/phases.sh`: `phases.php` as `web/index.php` on
+copies of the base, one worker each, 60 sequential warm requests, medians of the last 50):
+
+| engine | bootstrap (to `handle()`) | handle | send | terminate | total |
+|---|---:|---:|---:|---:|---:|
+| nginx + php-fpm 8.5.7 + opcache | 1.04 ms | 3.58 ms | 0.10 ms | 0.08 ms | 4.80 ms |
+| ferro classic (`-S`, fresh Vm) | 2.24 ms | 18.52 ms | 0.03 ms | 0.34 ms | 21.13 ms |
+| `php -S`, no opcache (reference) | 1.03 ms | 3.56 ms | 0.28 ms | 0.08 ms | 4.89 ms |
+
+Bootstrap is ~10 % of a ferro request (and ~22 % of php-fpm's); the gap is `handle()`, ×5.2.
+Opcache barely moves php-fpm on this page (4.80 vs 4.89 ms). A zygote that skips bootstrap can
+therefore save at most ~2.2 ms per ferro request — unless the forked child also inherits warm
+state bootstrap does not build.
+
+**2. Zygote mode** (`ferro -S … --worker boot.php --zygote --workers N [--max-requests M]`,
+`php-cli/src/server/zygote.rs`).
+
+How it works:
+
+- A supervisor forks N single-threaded zygotes.
+- Each zygote runs the boot script. Its `ferro_handle_request` hook accepts a connection, reads
+  the request, `fork()`s, and the child handles the request on the inherited post-boot state,
+  writes the response and `_exit`s.
+- The child signals "response sent" on a socketpair, so the zygote accepts the next connection
+  while the child is still exiting (which made no measurable difference; kept for latency).
+- With `--max-requests M`, a zygote exits after M children and the supervisor re-boots it. The
+  limit is staggered by zygote index, and the first generation re-boots after 32 children.
+
+`bench/drupal/drupal-zygote.php` boots `DrupalKernel` with a synthetic request and optionally
+preloads a list: classes, interfaces and traits, plus `file:` entries for `.module`/`.inc`
+files and compiled Twig templates. `bench/drupal/preload-record.php` records that list from
+one warm front-page request on php.
+
+What it took:
+
+- **Superglobals seeded at boot.** Worker and zygote boot scripts saw NULL superglobals before
+  their first request (a `TypeError` in Drupal's request factory). They are now seeded at VM
+  construction, and `/boot` was added to `bench/worker/isolation.sh`.
+- **Two cli-server divergences**, found when the preload recorder ran under ferro's router mode:
+  - the router run reported the router in `SCRIPT_FILENAME`/`SCRIPT_NAME`;
+  - `translate()` did not walk a directory without an index back to its parent.
+
+  It is now a port of `php_cli_server_request_translate_vpath`;
+  `baseline/cli-server-router.sh` compares php -S with ferro -S, with and without a router, on
+  10 URLs: IDENTICAL.
+- **Enum (un)serialization (engine).** `serialize()` wrote an enum case as `O:` with
+  properties, and `unserialize()` rejected `E:`. So a cache row written by php
+  (`component_plugins` holds `ExtensionType` cases) made `getDefinitions()` return `false` in
+  every zygote child, and ferro's own round trip produced non-singleton enum objects. Fixed:
+  - `E:<len>:"Enum:Case";` is now parsed in all three unserialize stages;
+  - the case is resolved to its singleton, with autoload;
+  - failures follow PHP: the same warnings ("Undefined constant", "is not an enum case", "Class
+    'X' not found", "is not an enum", "missing colon") at PHP's offsets;
+  - `O:` on an enum throws "Cannot instantiate enum".
+
+  Covered by `baseline/repro/unserialize-enum.phpt` (validated on the oracle, both lowering
+  modes); the gate gained 3 passes (`Zend/tests/enum/unserialize*.phpt`, baseline now 3,107).
+  A/B against ef6dd8b7: geomeans zend_micro 0.983, zend_bench 1.000, arrays 0.995, strings
+  1.007, oop 0.999, autoload 1.039, symfony-boot 1.030. The rows above 1.05 sit inside their
+  spreads (ms quantisation: `ary2` re-measured at 15 rounds is 1.000).
+- **A stale snapshot halves the zygote.** On a freshly copied site the zygote boots before the
+  first requests settle Drupal's caches. Every child then recomputes what the snapshot holds
+  stale, at 9–10k minor faults and 26 req/s for one zygote. The same zygote re-booted gives
+  49.6 req/s at 3.5k faults. `--max-requests` with the early first re-boot fixes this.
+- **A one-line response difference** in the bench was the preload recording itself. php's
+  recording request (Host 127.0.0.1:8099) left its absolute RSS feed URL in Drupal's render
+  cache, which is not keyed by host. The bench now clears the render cache after recording.
+
+Isolation battery: zygote equals worker on every route except the second `/stateful`
+(`static=1`: each child starts from boot state). Worker and zygote report
+`SCRIPT_NAME=/index.php` (FrankenPHP's front-controller convention), where the one-shot router
+run now reports `/echo`, as php -S does.
+
+wrk, Drupal front page, page_cache off, warm preload list (978 names), `--max-requests 1000`,
+token-stripped bodies identical to php-fpm's on every arm
+(`bench/results/2026-10-02-drupal-wrk-zygote-w{1,4,8}.md`):
+
+| workers | php-fpm + opcache | ferro classic | **ferro zygote** | zygote ÷ classic |
+|---:|---:|---:|---:|---:|
+| 1 (8 conns) | — | 45.8 | **49.7** | 1.08 |
+| 4 | 724.7 | 163.7 | **174.4** | 1.07 |
+| 8 | 1,313.6 | 275.6 | **289.3** | 1.05 |
+
+Fork cost (FERRO_ZYGOTE_STATS, means over the run):
+
+| workers | `fork()` | fork → child running | child minor faults |
+|---:|---:|---:|---:|
+| 1 | 0.25 ms | 0.29 ms | 3.6k (~14 MB copied on write) |
+| 8 | 0.39–0.44 ms | 0.54–0.56 ms | 3.6–3.7k |
+
+Before the recycle fix, children took 9–10k faults and the zygote ran at half the classic pool.
+
+The zygote saves bootstrap and inherits compiled code, worth 5–8 % here. The remaining gap to
+php-fpm (×4.5) is `handle()`, as part 1 measured. Its p99 at one worker (407 ms) is the
+re-boot gap; with several zygotes the others cover it.
+
+**3. Memory of one worker** → `MEMORY_DRUPAL.md`. heaptrack (added to the image) on a
+`system-alloc` build attributes **151.2 MiB live between requests**:
+
+- bytecode 74.0 MiB (49 %);
+- lowered HIR 70.6 MiB (47 %), kept by `SeedDelta::new_classes` (full `ClassDecl`s with
+  bodies) and by the main unit's `Program`; 63.5 MiB of it belongs to include and
+  deferred-declaration units;
+- link and class tables 3.5 MiB, deferred-declaration index 1.9 MiB, the rest under 1 %.
+
+Resident memory:
+
+- the shipped mimalloc build: 294–370 MB (283 with `MIMALLOC_PURGE_DELAY=0`);
+- glibc: 262 MB;
+- code: 14 MB.
+
+opcache holds the same 999 files (5.2 MiB of source) in 15.7 MiB of scripts plus ≤ 18 MiB of
+interned strings, shared by all workers. Levers, in order: mimalloc purge (−87 MB RSS),
+signature-only seed `ClassDecl`s (up to −60 MiB), then bytecode density.
+
+**4.** Drupal's worker-mode growth is recorded in `MISSING_FOR_DRUPAL.md` as an upstream Drupal
+issue (engine-independent: FrankenPHP degrades the same way) and is no longer chased.
+
+**ferro-edge** (new crate `php-rust/crates/ferro-edge`, safe Rust on tokio + hyper 1, README
+in the crate):
+
+- caches what the origin marks public;
+- indexes it by the cache tags the origin sends (`X-Drupal-Cache-Tags`, `Purge-Cache-Tags`,
+  `Cache-Tags`, `Surrogate-Key`);
+- invalidates in the Varnish dialect Purge uses: `BAN` + `Purge-Cache-Tags`/`Cache-Tags` regex
+  over the tag list, `Surrogate-Key` exact, `X-Url`/`X-Host`, `PURGE`;
+- coalesces misses (a waiter re-checks `Vary`; hit-for-pass when the response is uncacheable);
+- does stale-while-revalidate with ETag revalidation, and stale-if-error;
+- bypasses on session cookies; keeps out of the cache an object fetched while a ban landed.
+
+21 tests: 8 unit tests and 13 end-to-end tests against a scripted origin.
+
+wrk on the anonymous front page, page max-age 3600 s, 4 origin workers
+(`bench/edge/bench-wrk-edge.sh`, `bench/results/2026-10-02-edge-wrk-w4.md`):
+
+| arm | req/s | p50 | p99 | origin req/s |
+|---|---:|---:|---:|---:|
+| php-fpm alone | 733 | 43.4 ms | 47.3 ms | — |
+| edge → php-fpm | 245,723 | 0.10 ms | 0.61 ms | 0 |
+| edge → php-fpm, BAN `node_list` every 100 ms | 224,726 | 0.11 ms | 6.07 ms | 9.3 |
+| edge → php-fpm left at max-age 0 (pass) | 735 | 43.3 ms | 47.1 ms | 738 |
+| ferro classic alone | 165 | 192.9 ms | 206.6 ms | — |
+| edge → ferro | 246,417 | 0.10 ms | 0.66 ms | 0 |
+| edge → ferro, BAN every 100 ms | 144,962 | 0.16 ms | 23.8 ms | 9.3 |
+| edge → ferro left at max-age 0 (pass) | 162 | 196.2 ms | 228.4 ms | 161 |
+
+What the table shows:
+
+- **Coalescing.** Under 10 bans/s the origin saw 9.3 req/s: one refetch per ban, not a
+  stampede.
+- **Ban latency.** The p99 under bans is the waiters queued behind that one refetch, so it
+  scales with the origin's latency.
+- **Pass-through.** The proxy costs nothing measurable when nothing is cached.
+
+---
+
 # Session 9 — 2026-10-02 — Drop-driven destructors (owner: "work on GC, smart, inspired by Rust projects")
 
 **Design** (`vm/gcdrop.rs`, `php-types` `Object::drop`; default, `PHPR_GC=classic` keeps the old

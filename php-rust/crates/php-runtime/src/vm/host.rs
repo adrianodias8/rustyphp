@@ -4440,12 +4440,18 @@ impl<'m> super::Vm<'m> {
         let bytes = convert::to_zstr_cast(&arg0, &mut self.diags);
         let nbytes = bytes.as_bytes().len();
         let parsed = match crate::unserialize::validate(bytes.as_bytes()) {
-            Some(true) => return self.unserialize_direct(bytes.as_bytes()),
+            Some(true) => {
+                let built = self.unserialize_direct(bytes.as_bytes());
+                return self.unser_offset_fail(built, nbytes);
+            }
             Some(false) => crate::unserialize::parse(bytes.as_bytes()),
             None => None,
         };
         match parsed {
-            Some(s) => self.vm_ser_to_zval(s),
+            Some(s) => {
+                let built = self.vm_ser_to_zval(s);
+                self.unser_offset_fail(built, nbytes)
+            }
             None => {
                 // PHP reports the failing offset; we do not track it, so report 0
                 // (matches `eval`, D-50).

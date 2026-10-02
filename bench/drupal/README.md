@@ -32,6 +32,13 @@ ARMS="fpm frankenphp ferro-worker ferro-classic" WORKERS=8 bench/drupal/bench-wr
 # classic-mode scaling: 1x1, 1xN threads, Nx1 processes (SO_REUSEPORT), per allocator
 # (needs a `--features system-alloc` build in /target/sysalloc for the second arm)
 N=8 bench/drupal/scaling.sh
+# zygote mode (drupal-zygote.php: boot once per zygote, fork per request; preload list
+# recorded by preload-record.php/preload-router.php on php; ZYGOTE_MAX_REQUESTS=1000)
+ARMS="fpm ferro-classic ferro-zygote" WORKERS=8 bench/drupal/bench-wrk-drupal.sh
+# request phases, classic: bootstrap / handle / send / terminate, php-fpm vs ferro vs php -S
+bench/drupal/phases.sh
+# ferro-edge in front of php-fpm and ferro (cached, under BAN, pass-through)
+WORKERS=4 bench/edge/bench-wrk-edge.sh
 ```
 
 Single-request timing and analysis (inside the image):
@@ -44,6 +51,9 @@ Single-request timing and analysis (inside the image):
 | `optime.sh [build]` | op-time census: ns per op kind and per called function (`/target/census`, `--features php-runtime/op-census`); `GCMODE=classic` for the old GC |
 | `oneshot-profile.sh` | perf record of warm requests (`CG=fp FERRO=/target/fp/release/ferro` with the frame-pointer build) |
 | `fold.py`, `buckets.py`, `within.py`, `hotlines.sh` | perf script analysis: self/inclusive/callers, by subsystem, a function's own machinery, hot source lines |
+| `heap-profile.sh`, `heap-buckets.py` | one classic worker's memory: RSS per allocator, heaptrack's live-between-requests bytes by owner and site (`MEMORY_DRUPAL.md`) |
+| `opcache-size.php` | what opcache holds for one front page (CLI, `-d opcache.enable_cli=1`) |
 
 Results: `MISSING_FOR_DRUPAL.md` (what was missing, install and page parity),
-`bench/results/*-drupal-*.md` (every wrk and scaling run) and `NOTES.md` (sessions 7–9).
+`bench/results/*-drupal-*.md` (every wrk and scaling run), `MEMORY_DRUPAL.md` and `NOTES.md`
+(sessions 7–10).

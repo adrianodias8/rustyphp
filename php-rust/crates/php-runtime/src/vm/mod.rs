@@ -1043,6 +1043,17 @@ pub fn run_module_with_hir<'m>(
             vm.frames[0].slots[slot] = Zval::Long(argv.len() as i64);
         }
     }
+    // A worker/zygote script boots before any request: PHP defines the
+    // superglobals in every SAPI (`$_GET` & co. empty arrays, `$_SERVER`
+    // from the environment), so seed them the CLI way with the script as
+    // argv[0] — they were NULL, and Drupal's boot calls
+    // Request::createFromGlobals() (zygote mode, session 10).
+    if argv.is_none() && php_types::sapi::web_request().is_none() && php_types::sapi::worker_hooks_installed() {
+        if let Some(prog) = vm.main_hir {
+            let script = vm.module.file.to_vec();
+            seed_cli_superglobals(&mut vm.superglobals, &mut vm.frames[0].slots, &prog.slots, &[&script]);
+        }
+    }
     // INI overrides and session auto-start
     vm.apply_ini_overrides(ini_overrides);
     if vm.ini.get_bool(b"session.auto_start") {
@@ -10665,6 +10676,11 @@ impl<'m> Vm<'m> {
                     None => Zval::Null,
                 },
             },
+            Ser::Enum(raw, start, end) => {
+                let v = self.unser_enum(&raw, start, end)?;
+                ctx.objs.insert(slot, v.clone());
+                v
+            }
             Ser::Null => Zval::Null,
             Ser::Bool(b) => Zval::Bool(b),
             Ser::Long(n) => Zval::Long(n),
@@ -10709,6 +10725,7 @@ impl<'m> Vm<'m> {
                     self.try_autoload(&class, &lower, None)?;
                 }
                 let cid = self.class_index.get(lower.as_slice()).copied();
+                self.unser_reject_enum(cid)?;
                 // `__unserialize` receives the raw data array INSTEAD of prop
                 // materialisation (PHP 7.4 protocol; wins over __wakeup).
                 if let Some(cid) = cid {

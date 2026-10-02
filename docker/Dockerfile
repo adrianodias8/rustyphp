@@ -50,3 +50,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
     && docker-php-ext-install -j"$(nproc)" gd \
     && rm -rf /var/lib/apt/lists/*
+
+# Session 10: heaptrack for the per-worker heap profile (MEMORY_DRUPAL.md),
+# run on a `--features system-alloc` build (mimalloc bypasses malloc).
+RUN apt-get update && apt-get install -y --no-install-recommends heaptrack \
+    && rm -rf /var/lib/apt/lists/*

@@ -109,6 +109,8 @@ with wrk; files in `bench/results/`):
 | FrankenPHP 1.12.7 worker (`recipe`) | 184 | 340 |
 | ferro worker (`recipe`) | 72 | 141 |
 | ferro classic pool (`--workers N`, a fresh Vm per request) | 161 | 294 |
+| ferro zygote (`--zygote --max-requests 1000`, session 10) | 174 | 289 (classic 276 in the same run) |
+| ferro-edge in front of either, page max-age 3600 s (session 10) | ~246,000 | — |
 
 Both worker runtimes **degrade from run to run** under the recipe (FrankenPHP 549 → 340 → 278,
 ferro 216 → 141 → 114 at 8 workers), so state still accumulates in Drupal itself after
@@ -116,6 +118,27 @@ ferro 216 → 141 → 114 at 8 workers), so state still accumulates in Drupal it
 Drupal — on both engines. Classic-pool scaling (`bench/drupal/scaling.sh`): 52 req/s for one
 worker, 73 % per-worker efficiency at 8, **identical with 8 threads or 8 processes** (php-fpm:
 86 %), so the per-thread caches are not what costs the scaling.
+
+## Upstream: Drupal's state growth under a worker loop (not chased further)
+
+Recorded as a **Drupal issue, not an engine one**, and no longer pursued here (owner decision,
+session 10). Evidence that it belongs to Drupal:
+
+- It is engine-independent: FrankenPHP (Zend 8.5.11) degrades the same way on the same
+  `drupal-worker.php` and `recipe` reset (549 → 340 → 278 req/s over three runs at 8 workers;
+  ferro 216 → 141 → 114).
+- Output stays correct (10/10 byte-identical to one-shot `php -S` with the recipe), so what
+  accumulates is cost, not visible state: per-request work grows while responses do not change.
+- Drupal 11 has no service resetter (`kernel.reset` / `ResetInterface`) and no supported
+  long-running mode. `resetContainer()` is the only reset, and it leaves process statics behind.
+  One of them, `ReverseContainer::$recordedServices`, was already found to grow by ~245 entries
+  per request; the others were not bisected.
+
+What a fix would take upstream: a `ResetInterface` sweep over request-scoped services (as
+Symfony's `services_resetter`), audit of the remaining class statics, and a worker entry point
+in core. Until then, ferro serves Drupal with a fresh state per request: the classic pool or
+the zygote mode (`--worker drupal-zygote.php --zygote`: Drupal booted once per zygote, a forked
+child per request, so nothing accumulates by construction — see NOTES.md session 10).
 
 ## Result
 

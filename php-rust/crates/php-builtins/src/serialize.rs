@@ -165,6 +165,20 @@ fn ser_body(out: &mut Vec<u8>, v: &Zval, sc: &mut SerCtx) -> Result<(), PhpError
                 }
                 return Ok(());
             }
+            // An enum case: `E:<len>:"<Enum>:<Case>";` (var.c), resolved back
+            // to the singleton by unserialize.
+            if obj.info.is_enum_case {
+                if let Some(Zval::Str(case)) = obj.props.get(b"name") {
+                    out.extend_from_slice(b"E:");
+                    out.extend_from_slice((cname.len() + 1 + case.as_bytes().len()).to_string().as_bytes());
+                    out.extend_from_slice(b":\"");
+                    out.extend_from_slice(cname);
+                    out.push(b':');
+                    out.extend_from_slice(case.as_bytes());
+                    out.extend_from_slice(b"\";");
+                    return Ok(());
+                }
+            }
             // An *uninitialized* typed property (`Undef`) is absent from the
             // wire format (Zend skips it; a lazy wrapper serialized with
             // SKIP_INITIALIZATION_ON_SERIALIZE keeps only materialized slots).

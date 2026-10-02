@@ -3,14 +3,19 @@
 # (DECISION_KERNEL.md §5): the same routes served by ONE worker across N
 # requests and by the one-shot cli-server, compared byte for byte (status,
 # the headers the script controls, body). Only /stateful may differ, in the
-# documented way. Also runs the one-shot routes on the oracle (`php -S`) so
-# the one-shot side is itself checked against PHP.
+# documented way, and SCRIPT_NAME (/echo): a worker reports its front controller
+# (/index.php, FrankenPHP's convention), the router run the request path, as
+# `php -S` does. Also runs the one-shot routes on the oracle (`php -S`) so the
+# one-shot side is itself checked against PHP (D-14, `ini_set('precision')`, is
+# the known difference). The zygote mode (`--worker … --zygote`: boot once,
+# fork a child per request) must equal the worker except on the second
+# /stateful: no request state survives its child.
 #   docker/run.sh /work/php-rust/bench/worker/isolation.sh
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PHPR="${PHPR:-/target/release/ferro}"; PHP="${PHP_ORACLE:-$(command -v php)}"
 S="${SCRATCH:-/scratch}/isolation"; rm -rf "$S"; mkdir -p "$S"
-ROUTES="/echo?a=1&b[]=2&b[]=3 /headers /warn /exit /throw /ob /ini /ini /handler /warn /shutdown /objects /stateful /stateful /nope /echo?x=y"
+ROUTES="/boot /echo?a=1&b[]=2&b[]=3 /headers /warn /exit /throw /ob /ini /ini /handler /warn /shutdown /objects /stateful /stateful /nope /echo?x=y"
 fetch() { # $1 base url  $2 out file
   : > "$2"
   for r in $ROUTES; do
@@ -24,11 +29,17 @@ cd "$HERE"
 "$PHPR" -S 127.0.0.1:8101 --worker isolation-worker.php --workers 1 >"$S/worker.log" 2>&1 & W=$!
 "$PHPR" -S 127.0.0.1:8102 isolation-oneshot.php >"$S/oneshot.log" 2>&1 & O=$!
 "$PHP" -S 127.0.0.1:8103 isolation-oneshot.php >"$S/oracle.log" 2>&1 & P=$!
+"$PHPR" -S 127.0.0.1:8104 --worker isolation-worker.php --zygote --workers 1 >"$S/zygote.log" 2>&1 & Z=$!
 sleep 1
 fetch http://127.0.0.1:8101 "$S/worker.txt"
 fetch http://127.0.0.1:8102 "$S/oneshot.txt"
 fetch http://127.0.0.1:8103 "$S/oracle.txt"
-kill $W $O $P 2>/dev/null; wait 2>/dev/null
+fetch http://127.0.0.1:8104 "$S/zygote.txt"
+kill $W $O $P 2>/dev/null; pkill -f "127.0.0.1:8104" 2>/dev/null; wait 2>/dev/null
 echo "--- worker vs one-shot (phpr):"; diff "$S/oneshot.txt" "$S/worker.txt" && echo IDENTICAL
+# The zygote is a worker SAPI (SCRIPT_NAME is the front controller, as in worker
+# mode) whose every request starts from the boot state: it must equal the worker
+# except on the second /stateful (static=1 where the worker counts 2).
+echo "--- zygote vs worker (phpr, only the second /stateful may differ):"; diff "$S/worker.txt" "$S/zygote.txt" && echo IDENTICAL
 echo "--- one-shot phpr vs oracle:"; diff "$S/oracle.txt" "$S/oneshot.txt" | sed 's/^/  /' | head -40
 echo "(full transcripts in $S)"

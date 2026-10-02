@@ -61,6 +61,7 @@ fn unsafe_only_where_declared() {
         ("php-builtins/src/file.rs", 5, "statvfs/access/utimes/flock"),
         ("php-runtime/src/vm/host.rs", 13, "flock/poll/kill/signal/sigprocmask"),
         ("php-cli/src/server.rs", 2, "localtime_r for the log timestamp"),
+        ("php-cli/src/server/zygote.rs", 9, "fork/waitpid/_exit for the zygote, clock_gettime/getrusage for its stats"),
         // Sound by local reasoning, documented at the site.
         ("php-builtins/src/mbstring.rs", 1, "from_utf8_unchecked on a prefix from_utf8 validated"),
         ("php-runtime/src/vm/mysqli.rs", 1, "non-UTF-8 SQL bytes passed through the mysql crate (relies on it only calling as_bytes)"),

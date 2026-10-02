@@ -9,6 +9,8 @@ vibe-coded end to end.**
 ferro script.php                                    # a drop-in for `php` on the CLI
 ferro -S 0.0.0.0:8080 -t web web/index.php --workers 8   # php-fpm-like pool: a fresh VM per request
 ferro -S 0.0.0.0:8080 --worker app.php              # boot once, serve requests in a loop
+ferro -S 0.0.0.0:8080 --worker boot.php --zygote --workers 8   # boot once, fork a child per request
+ferro-edge --upstream 127.0.0.1:8080                # cache-tag aware reverse proxy (Purge BAN, SWR, coalescing)
 ```
 
 Ferrophant is a fork of [francescotinti/php-rust](https://github.com/francescotinti/php-rust)
@@ -49,7 +51,7 @@ the previous build. Nothing is "believed to be faster".
 
 | what | number | where |
 |---|---:|---|
-| `Zend/tests` + `tests/` passing (of 6,172) | 3,104 | `baseline/zend-tests.md` |
+| `Zend/tests` + `tests/` passing (of 6,172) | 3,107 | `baseline/zend-tests.md` |
 | operator differential vs `php` | 37,835 cases, 0 mismatches | `cargo test -p php-types --test differential` |
 | Composer 2.10 `require monolog/monolog` | runs; `vendor/` byte-identical | `baseline/smoke-composer.sh` |
 | Doctrine DBAL 4.5 PHPUnit suite | 4,146 tests, 1 failure (the oracle's same 1) | `baseline/smoke-dbal.sh` |
@@ -57,6 +59,9 @@ the previous build. Nothing is "believed to be faster".
 | Drupal 11 front page, one-shot and worker mode | byte-identical to `php -S` (worker: 10/10 with the documented reset) | `bench/drupal/frontpage.sh`, `worker-leaks.sh` |
 | Drupal 11 front page, warm, one request (classic) | 19 ms (was 166 ms; `php -S` without opcache: 8–10 ms) | `bench/drupal/oneshot-time.sh`, NOTES.md sessions 8–9 |
 | Drupal under `wrk`, 8 workers, classic pool | **294 req/s** vs nginx+php-fpm+opcache 1,425 (0.21×) | `bench/results/2026-10-01-drupal-wrk-classic4-w8.md` |
+| Drupal under `wrk`, 8 workers, zygote mode (boot once, fork per request) | 289 req/s, 1.05× the classic pool in the same run | `bench/results/2026-10-02-drupal-wrk-zygote-w8.md` |
+| Drupal behind `ferro-edge` (page max-age 3600 s), 4 origin workers | ~246 k req/s cached; BAN `node_list` every 100 ms: 145–225 k req/s, 9.3 origin req/s | `bench/results/2026-10-02-edge-wrk-w4.md` |
+| one warm Drupal worker's memory | 151 MiB live (bytecode 74, HIR 71); RSS 294–370 MB; opcache: ~34 MiB shared | `MEMORY_DRUPAL.md` |
 | Drupal under `wrk`, 8 workers, worker mode | 141 req/s vs FrankenPHP worker 340, php-fpm 1,425 (both workers degrade run to run: Drupal state) | `bench/results/2026-10-02-drupal-wrk-worker-w8.md` |
 | Symfony HttpKernel request, in-process | 7.9× the time of `php -n` | `bench/results/2026-09-30-slices-2-3.md` |
 | Symfony under `wrk`, worker mode, 4 workers | **1.08× nginx+php-fpm+opcache**, **0.63× FrankenPHP worker** | `bench/results/2026-09-30-wrk-w4.md` |
@@ -149,7 +154,7 @@ test (RSS sampled under `wrk`).
 
 ```
 php-rust/            the Cargo workspace (crates: php-types, php-runtime, php-builtins,
-                     php-cli -> `ferro`, phpt-runner, php-server)
+                     php-cli -> `ferro`, phpt-runner, php-server, ferro-edge)
 baseline/            corpus gate, repro and divergence .phpt files, smoke tests
 bench/               benchmark set, A/B and profiling scripts, worker-mode harness, results
 docker/              the one image everything runs in
@@ -165,12 +170,15 @@ NOTES.md               the session log
 1. The call/frame layout: a contiguous value stack with the frame state in
    locals — the safe-Rust prototype (`bench/proto/`) halves a call; a
    multi-site refactor of the VM.
-2. The per-worker working set (360 MB resident for one Drupal worker): it
-   scales the same on threads and processes (73 % at 8 vs php-fpm's 86 %),
-   so the lever is the size, not sharing it between threads.
+2. The per-worker working set (`MEMORY_DRUPAL.md`: 151 MiB live, half of
+   it HIR kept only to seed the next request's class image; the rest of the
+   294–370 MB resident is the allocator): signature-only seed classes, the
+   mimalloc purge delay, then bytecode density.
 3. Destructor timing at return and generator teardown (D-24, D-25).
-4. Drupal's per-request state under worker mode: what still accumulates
-   after `resetContainer()` on both FrankenPHP and ferro.
+4. Zygote mode: overlap a zygote's re-boot with its replacement (a single
+   zygote has a ~2 s gap), and cut the copy-on-write faults refcount writes
+   cause in children. Drupal's own worker-mode growth is an upstream issue
+   (`MISSING_FOR_DRUPAL.md`).
 5. An on-disk bytecode cache for the CLI (the 15.8 ms startup floor), and
    a bare-metal run with hardware counters.
 

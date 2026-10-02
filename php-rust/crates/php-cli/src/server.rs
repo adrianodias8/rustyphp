@@ -20,6 +20,8 @@ use php_types::sapi::WebRequest;
 
 use crate::mime::MIME_TYPE_MAP;
 
+mod zygote;
+
 /// The 404 page of the cli-server, byte-identical (URI interpolated).
 const ERROR_PAGE_HEAD: &str = "<!doctype html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>404 Not Found</title><style>\nbody { background-color: #fcfcfc; color: #333333; margin: 0; padding:0; }\nh1 { font-size: 1.5em; font-weight: normal; background-color: #9999cc; min-height:2em; line-height:2em; border-bottom: 1px inset black; margin: 0; }\nh1, p { padding-left: 10px; }\ncode.url { background-color: #eeeeee; font-family:monospace; padding:0 2px;}\n</style>\n</head><body><h1>Not Found</h1><p>The requested resource <code class=\"url\">";
 const ERROR_PAGE_TAIL: &str = "</code> was not found on this server.</p></body></html>";
@@ -332,78 +334,54 @@ enum Resolved {
     NotFound,
 }
 
-/// Translate a decoded, normalized path against the docroot; an unresolved
-/// path falls back to the DOCROOT index.php with the whole decoded path as
-/// PATH_INFO (oracle-pinned: SCRIPT_NAME=/index.php, PHP_SELF=
-/// /index.php/robots.txt) — this is what serves WordPress' virtual routes
-/// (/robots.txt, /wp-json/) without a router script.
+/// Translate a decoded, normalized path against the docroot — php -S's
+/// `php_cli_server_request_translate_vpath`, step for step: walk BACK from
+/// the full path to its longest existing prefix (what was cut off is
+/// PATH_INFO). A file is the target (a `.php` one a script, anything else
+/// static — static with PATH_INFO stays unresolved, oracle-pinned); a
+/// directory resolves to its own `index.php` / `index.html`, and to nothing
+/// when it has neither (php -S: 404, or the router with nothing resolved).
+/// The docroot is the last prefix, so `/robots.txt` or `/wp-json/` reach
+/// `/index.php` with the whole path as PATH_INFO, while `/sub/nope` under a
+/// directory `sub/` without an index does not.
 fn translate(docroot: &Path, path: &[u8]) -> Resolved {
-    match translate_walk(docroot, path) {
-        Resolved::NotFound => {
-            let root_index = docroot.join("index.php");
-            if root_index.is_file() {
-                return Resolved::Script(root_index, b"/index.php".to_vec(), Some(path.to_vec()));
+    let mut cut = path.len();
+    loop {
+        let prefix = &path[..cut];
+        let rel = prefix.strip_prefix(b"/").unwrap_or(prefix);
+        let fs = if rel.is_empty() { docroot.to_path_buf() } else { docroot.join(std::ffi::OsStr::from_bytes(rel)) };
+        if let Ok(meta) = std::fs::metadata(&fs) {
+            let path_info = (cut < path.len()).then(|| path[cut..].to_vec());
+            if meta.is_dir() {
+                for idx in [&b"index.php"[..], &b"index.html"[..]] {
+                    let cand = fs.join(std::ffi::OsStr::from_bytes(idx));
+                    if cand.is_file() {
+                        let mut vpath = prefix.to_vec();
+                        if !vpath.ends_with(b"/") {
+                            vpath.push(b'/');
+                        }
+                        vpath.extend_from_slice(idx);
+                        return if idx.ends_with(b".php") {
+                            Resolved::Script(cand, vpath, path_info)
+                        } else if path_info.is_none() {
+                            Resolved::Static(cand)
+                        } else {
+                            Resolved::NotFound
+                        };
+                    }
+                }
+                return Resolved::NotFound;
             }
-            Resolved::NotFound
-        }
-        hit => hit,
-    }
-}
-
-/// The docroot walk: longest existing file prefix wins (the remainder is
-/// PATH_INFO for scripts), a directory tries `index.php` then `index.html`
-/// (cli-server order).
-fn translate_walk(docroot: &Path, path: &[u8]) -> Resolved {
-    let rel = &path[1.min(path.len())..];
-    let mut acc = docroot.to_path_buf();
-    let mut vpath: Vec<u8> = Vec::new();
-    let segs: Vec<&[u8]> = if rel.is_empty() {
-        Vec::new()
-    } else {
-        rel.split(|&b| b == b'/').collect()
-    };
-    for (i, seg) in segs.iter().enumerate() {
-        if seg.is_empty() {
-            continue;
-        }
-        acc.push(std::ffi::OsStr::from_bytes(seg));
-        vpath.push(b'/');
-        vpath.extend_from_slice(seg);
-        let Ok(meta) = std::fs::metadata(&acc) else { return Resolved::NotFound };
-        if meta.is_file() {
-            let rest: Vec<u8> = segs[i + 1..]
-                .iter()
-                .flat_map(|s| {
-                    let mut v = vec![b'/'];
-                    v.extend_from_slice(s);
-                    v
-                })
-                .collect();
-            let path_info = (!rest.is_empty()).then_some(rest);
-            if vpath.to_ascii_lowercase().ends_with(b".php") {
-                return Resolved::Script(acc, vpath, path_info);
+            if prefix.to_ascii_lowercase().ends_with(b".php") {
+                return Resolved::Script(fs, prefix.to_vec(), path_info);
             }
-            return if path_info.is_none() {
-                Resolved::Static(acc)
-            } else {
-                Resolved::NotFound
-            };
+            return if path_info.is_none() { Resolved::Static(fs) } else { Resolved::NotFound };
         }
-    }
-    // Landed on a directory: try the index files.
-    for idx in [&b"index.php"[..], &b"index.html"[..]] {
-        let cand = acc.join(std::ffi::OsStr::from_bytes(idx));
-        if cand.is_file() {
-            vpath.push(b'/');
-            vpath.extend_from_slice(idx);
-            return if idx.ends_with(b".php") {
-                Resolved::Script(cand, vpath, None)
-            } else {
-                Resolved::Static(cand)
-            };
+        if cut == 0 {
+            return Resolved::NotFound;
         }
+        cut = path[..cut].iter().rposition(|&b| b == b'/').unwrap_or(0);
     }
-    Resolved::NotFound
 }
 
 /// Whether the script sent header `name` (lowercase): PHP's cli-server then
@@ -455,6 +433,9 @@ struct ServerConfig {
     port: u16,
     docroot: PathBuf,
     router: Option<PathBuf>,
+    /// The router argument as typed (`$_SERVER['SCRIPT_FILENAME']` while a
+    /// router runs for a path that resolves to nothing — oracle-pinned).
+    router_arg: Option<PathBuf>,
 }
 
 /// One request/response cycle on an accepted connection.
@@ -517,8 +498,17 @@ fn handle_client(
     // head (yes: the oracle emits a malformed response there).
     let mut router_prefix: Vec<u8> = Vec::new();
     if let Some(router) = &cfg.router {
+        // The router runs with the SAPI variables of the request's own
+        // resolution (php -S: a resolved script or static file is
+        // SCRIPT_FILENAME, its path SCRIPT_NAME, PHP_SELF with PATH_INFO);
+        // with nothing resolved, the router as typed and the request path.
+        let (reported, vpath, path_info) = match translate(&cfg.docroot, &decoded) {
+            Resolved::Script(file, vpath, path_info) => (Some(file), vpath, path_info),
+            Resolved::Static(file) => (Some(file), decoded.clone(), None),
+            Resolved::NotFound => (cfg.router_arg.clone(), decoded.clone(), None),
+        };
         let outcome = run_php(
-            cfg, registry, &req, &peer, router, decoded.clone(), None, query.clone(),
+            cfg, registry, &req, &peer, router, vpath, path_info, query.clone(), reported.as_deref(),
         );
         match outcome {
             Some((outcome, routed)) if routed => {
@@ -542,7 +532,7 @@ fn handle_client(
 
     match translate(&cfg.docroot, &decoded) {
         Resolved::Script(file, vpath, path_info) => {
-            match run_php(cfg, registry, &req, &peer, &file, vpath, path_info, query) {
+            match run_php(cfg, registry, &req, &peer, &file, vpath, path_info, query, None) {
                 Some((outcome, _)) => {
                     let detail = fatal_detail(&outcome);
                     let code = write_php_response(
@@ -638,6 +628,8 @@ fn run_php(
     vpath: Vec<u8>,
     path_info: Option<Vec<u8>>,
     query: Option<Vec<u8>>,
+    // What SCRIPT_FILENAME reports when it is not `file` (a router run).
+    reported: Option<&Path>,
 ) -> Option<(php_runtime::Outcome, bool)> {
     let source = std::fs::read(file).ok()?;
     let request_time = std::time::SystemTime::now()
@@ -658,7 +650,7 @@ fn run_php(
         server_host: cfg.host.clone(),
         server_port: cfg.port,
         doc_root: cfg.docroot.as_os_str().as_bytes().to_vec(),
-        script_filename: file.as_os_str().as_bytes().to_vec(),
+        script_filename: reported.unwrap_or(file).as_os_str().as_bytes().to_vec(),
         request_time,
     };
     php_types::sapi::set_web_request(Rc::new(web));
@@ -809,6 +801,7 @@ pub fn serve(addr: &str, mut rest: std::iter::Peekable<impl Iterator<Item = std:
     let mut workers: usize = 0;
     let mut max_requests: u64 = 0;
     let mut reuse_port = false;
+    let mut zygote = false;
     while let Some(arg) = rest.next() {
         let bytes = arg.as_os_str().as_bytes();
         if bytes == b"-t" {
@@ -820,6 +813,9 @@ pub fn serve(addr: &str, mut rest: std::iter::Peekable<impl Iterator<Item = std:
                 .next()
                 .and_then(|n| n.to_string_lossy().parse().ok())
                 .unwrap_or(0);
+        } else if bytes == b"--zygote" {
+            // With --worker: boot once per zygote, fork a child per request.
+            zygote = true;
         } else if bytes == b"--reuse-port" {
             // SO_REUSEPORT: several ferro processes serve one port, the
             // kernel spreading connections (php-fpm-style process pools).
@@ -838,6 +834,7 @@ pub fn serve(addr: &str, mut rest: std::iter::Peekable<impl Iterator<Item = std:
         eprintln!("Directory {} does not exist.", docroot.display());
         return 1;
     };
+    let router_arg = router.clone();
     let router = router.map(|r| std::fs::canonicalize(&r).unwrap_or(r));
     // The cli-server chdirs to the docroot (oracle-pinned: getcwd() there,
     // relative fopen resolves against it).
@@ -849,6 +846,7 @@ pub fn serve(addr: &str, mut rest: std::iter::Peekable<impl Iterator<Item = std:
         port,
         docroot,
         router,
+        router_arg,
     };
     let listener = match bind_listener(host, port, reuse_port) {
         Ok(l) => l,
@@ -864,6 +862,9 @@ pub fn serve(addr: &str, mut rest: std::iter::Peekable<impl Iterator<Item = std:
         } else {
             workers
         };
+        if zygote {
+            return zygote::serve_zygote(listener, cfg, script, n, max_requests);
+        }
         return serve_workers(listener, cfg, script, n, max_requests);
     }
     if workers > 0 {
@@ -1026,43 +1027,8 @@ fn connection_thread(
     let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(60)));
     let _ = stream.set_nodelay(true);
     while let Some(req) = read_request(&mut stream) {
-        let head = req.method == b"HEAD";
-        let host = header_value(&req.headers, b"host").map(|v| v.to_vec());
-        let conn_hdr = header_value(&req.headers, b"connection").map(|v| v.to_ascii_lowercase());
-        let keep_alive = match conn_hdr.as_deref() {
-            Some(b"close") => false,
-            Some(b"keep-alive") => true,
-            _ => req.protocol >= (1, 1),
-        };
-        let meta = PendingRequest { protocol: req.protocol, head, keep_alive, host };
-        let query = match req.target.iter().position(|&b| b == b'?') {
-            Some(p) if p + 1 < req.target.len() => Some(req.target[p + 1..].to_vec()),
-            _ => None,
-        };
-        let request_time = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs_f64())
-            .unwrap_or(0.0);
-        // The worker script stands in for /index.php (FrankenPHP's
-        // convention): SCRIPT_NAME is the front controller, the request
-        // path travels in REQUEST_URI.
-        let web = WebRequest {
-            method: req.method,
-            protocol: req.protocol,
-            request_uri: req.target,
-            vpath: b"/index.php".to_vec(),
-            path_info: None,
-            query_string: query,
-            headers: req.headers,
-            body: req.body,
-            remote_addr: peer.0.clone(),
-            remote_port: peer.1,
-            server_host: cfg.host.clone(),
-            server_port: cfg.port,
-            doc_root: cfg.docroot.as_os_str().as_bytes().to_vec(),
-            script_filename: script.as_os_str().as_bytes().to_vec(),
-            request_time,
-        };
+        let (web, meta) = worker_web_request(req, &peer, &cfg, &script);
+        let keep_alive = meta.keep_alive;
         let (reply_tx, reply_rx) = std::sync::mpsc::sync_channel(1);
         if tx.send(WorkerJob { web, reply: reply_tx }).is_err() {
             return;
@@ -1073,6 +1039,54 @@ fn connection_thread(
             return;
         }
     }
+}
+
+/// A parsed request as the worker SAPI sees it (the worker script stands in
+/// for /index.php) and what the connection needs to write its response.
+fn worker_web_request(
+    req: HttpRequest,
+    peer: &(String, u16),
+    cfg: &ServerConfig,
+    script: &std::path::Path,
+) -> (WebRequest, PendingRequest) {
+    let head = req.method == b"HEAD";
+    let host = header_value(&req.headers, b"host").map(|v| v.to_vec());
+    let conn_hdr = header_value(&req.headers, b"connection").map(|v| v.to_ascii_lowercase());
+    let keep_alive = match conn_hdr.as_deref() {
+        Some(b"close") => false,
+        Some(b"keep-alive") => true,
+        _ => req.protocol >= (1, 1),
+    };
+    let meta = PendingRequest { protocol: req.protocol, head, keep_alive, host };
+    let query = match req.target.iter().position(|&b| b == b'?') {
+        Some(p) if p + 1 < req.target.len() => Some(req.target[p + 1..].to_vec()),
+        _ => None,
+    };
+    let request_time = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs_f64())
+        .unwrap_or(0.0);
+    // The worker script stands in for /index.php (FrankenPHP's
+    // convention): SCRIPT_NAME is the front controller, the request
+    // path travels in REQUEST_URI.
+    let web = WebRequest {
+        method: req.method,
+        protocol: req.protocol,
+        request_uri: req.target,
+        vpath: b"/index.php".to_vec(),
+        path_info: None,
+        query_string: query,
+        headers: req.headers,
+        body: req.body,
+        remote_addr: peer.0.clone(),
+        remote_port: peer.1,
+        server_host: cfg.host.clone(),
+        server_port: cfg.port,
+        doc_root: cfg.docroot.as_os_str().as_bytes().to_vec(),
+        script_filename: script.as_os_str().as_bytes().to_vec(),
+        request_time,
+    };
+    (web, meta)
 }
 
 /// Serialise a worker response: status line, `Date`, keep-alive, the

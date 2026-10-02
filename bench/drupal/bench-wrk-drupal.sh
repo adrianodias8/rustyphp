@@ -5,6 +5,10 @@
 #   ferro-worker   ferro -S --worker drupal-worker.php, RESET=recipe (step 2)
 #   ferro-classic  ferro -S .ht.router.php --workers N: N threads, a fresh Vm per
 #                  request through Drupal's own index.php (php-fpm's model)
+#   ferro-zygote   ferro -S --worker drupal-zygote.php --zygote --workers N: N
+#                  zygotes boot Drupal once (preloading what a front-page request
+#                  declares, recorded on php), a forked child per request,
+#                  re-booted every ZYGOTE_MAX_REQUESTS (default 1000) children
 #   fpm            nginx -> php-fpm 8.5.7, opcache on, static pool of N, Drupal's index.php
 #   frankenphp     FrankenPHP worker mode, the same drupal-worker.php + recipe
 # Run from the host. Responses are checked against php-fpm's (token-stripped)
@@ -17,11 +21,11 @@ REPO="$(cd "$HERE/../.." && pwd)"; ROOT="$(cd "$REPO/.." && pwd)"
 IMAGE="${RUSTYPHP_IMAGE:-rustyphp-dev:8.5.7}"
 WORKERS="${WORKERS:-4}"; CONNS="${CONNS:-32}"; THREADS="${THREADS:-2}"
 DURATION="${DURATION:-15s}"; WARMUP="${WARMUP:-5s}"; R="${R:-3}"
-FK_THREADS="${FK_THREADS:-$((2 * WORKERS))}"; FK_GOMAXPROCS="${FK_GOMAXPROCS:-}"
+FK_THREADS="${FK_THREADS:-$((2 * WORKERS))}"; FK_GOMAXPROCS="${FK_GOMAXPROCS:-}"; ZYGOTE_MAX_REQUESTS="${ZYGOTE_MAX_REQUESTS:-1000}"
 ARMS="${ARMS:-fpm frankenphp ferro-worker ferro-classic}"
 NET=rustyphp-drupal
 OUT="${OUT:-$REPO/bench/results/$(date -u +%Y-%m-%d)-drupal-wrk-w$WORKERS.md}"
-cleanup() { for c in ferro-worker ferro-classic fpm nginx frankenphp; do docker rm -f "$c" >/dev/null 2>&1; done; docker network rm "$NET" >/dev/null 2>&1; }
+cleanup() { for c in ferro-worker ferro-classic ferro-zygote fpm nginx frankenphp; do docker rm -f "$c" >/dev/null 2>&1; done; docker network rm "$NET" >/dev/null 2>&1; }
 trap cleanup EXIT; cleanup
 docker network create "$NET" >/dev/null
 MOUNTS=(-v "$ROOT":/work:ro -v rustyphp-scratch:/scratch)
@@ -29,10 +33,26 @@ TMP="$(mktemp -d)"
 
 # ---- fresh copies of the base, writable by every server's user ----
 docker run --rm "${MOUNTS[@]}" "$IMAGE" bash -c '
-  for s in fe fc fpm fk; do rm -rf /scratch/drupal-b-$s; cp -a /scratch/drupal-base /scratch/drupal-b-$s; done
+  for s in fe fc zy fpm fk; do rm -rf /scratch/drupal-b-$s; cp -a /scratch/drupal-base /scratch/drupal-b-$s; done
   cp /work/php-rust/bench/drupal/drupal-worker.php /scratch/drupal-b-fe/web/drupal-worker.php
+  cp /work/php-rust/bench/drupal/drupal-zygote.php /scratch/drupal-b-zy/web/drupal-zygote.php
   cp /work/php-rust/bench/drupal/drupal-worker.php /scratch/drupal-b-fk/web/index.php
-  chmod -R a+rwX /scratch/drupal-b-fe /scratch/drupal-b-fc /scratch/drupal-b-fpm /scratch/drupal-b-fk'
+  chmod -R a+rwX /scratch/drupal-b-fe /scratch/drupal-b-fc /scratch/drupal-b-zy /scratch/drupal-b-fpm /scratch/drupal-b-fk
+  # the zygote preload list: what one front-page request declares and includes, recorded on php
+  cd /scratch/drupal-b-zy/web && cp /work/php-rust/bench/drupal/preload-r*.php .
+  PRELOAD_LIST=/scratch/drupal-b-zy/preload.txt php -S 127.0.0.1:8099 preload-router.php >/dev/null 2>&1 & srv=$!
+  for i in $(seq 1 30); do curl -s -o /dev/null -f http://127.0.0.1:8099/ && break; sleep 1; done
+  # the list is written by a shutdown function, after the response went out;
+  # keep the list of the second (warm) request: the first also rebuilds Drupal caches
+  for i in $(seq 1 50); do [[ -s /scratch/drupal-b-zy/preload.txt ]] && break; sleep 0.2; done
+  rm -f /scratch/drupal-b-zy/preload.txt; curl -s -o /dev/null http://127.0.0.1:8099/
+  for i in $(seq 1 50); do [[ -s /scratch/drupal-b-zy/preload.txt ]] && break; sleep 0.2; done
+  kill $srv; wait $srv 2>/dev/null
+  # Drupal render-caches absolute URLs (the RSS feed link) without the host: drop
+  # what the recording request rendered under 127.0.0.1:8099 (Twig stays compiled)
+  cd /scratch/drupal-b-zy && php vendor/drush/drush/drush.php -r web -q cache:clear render
+  chmod -R a+rwX /scratch/drupal-b-zy
+  echo "zygote preload: $(wc -l </scratch/drupal-b-zy/preload.txt) names" >&2'
 
 # ---- servers ----
 docker run -d --name ferro-worker --network "$NET" "${MOUNTS[@]}" -v rustyphp-target:/target:ro "$IMAGE" bash -c "
@@ -40,6 +60,9 @@ docker run -d --name ferro-worker --network "$NET" "${MOUNTS[@]}" -v rustyphp-ta
   exec /target/release/ferro -S 0.0.0.0:8080 -t /scratch/drupal-b-fe/web --worker drupal-worker.php --workers $WORKERS" >/dev/null
 docker run -d --name ferro-classic --network "$NET" "${MOUNTS[@]}" -v rustyphp-target:/target:ro "$IMAGE" bash -c "
   cd /scratch/drupal-b-fc/web && exec /target/release/ferro -S 0.0.0.0:8080 -t /scratch/drupal-b-fc/web .ht.router.php --workers $WORKERS 2>/dev/null" >/dev/null
+docker run -d --name ferro-zygote --network "$NET" "${MOUNTS[@]}" -v rustyphp-target:/target:ro "$IMAGE" bash -c "
+  cd /scratch/drupal-b-zy/web && DRUPAL_ROOT=/scratch/drupal-b-zy/web ZYGOTE_PRELOAD=/scratch/drupal-b-zy/preload.txt FERRO_ZYGOTE_STATS=1 \
+  exec /target/release/ferro -S 0.0.0.0:8080 -t /scratch/drupal-b-zy/web --worker drupal-zygote.php --zygote --workers $WORKERS --max-requests $ZYGOTE_MAX_REQUESTS 2>/scratch/zygote-$WORKERS.log" >/dev/null
 sed "s/^pm.max_children = .*/pm.max_children = $WORKERS/; /SYMFONY_DIR/d" "$REPO/bench/worker/fpm/zz-bench.conf" >"$TMP/zz-bench.conf"
 docker run -d --name fpm --network "$NET" "${MOUNTS[@]}" -v "$TMP/zz-bench.conf":/usr/local/etc/php-fpm.d/zz-bench.conf:ro \
   -v "$REPO/bench/worker/fpm/opcache.ini":/usr/local/etc/php/conf.d/opcache.ini:ro php:8.5.7-fpm >/dev/null
@@ -104,7 +127,7 @@ done
   echo "- check (token-stripped body of \`/\`): $check"
   echo
   echo "| server | req/s | p50 | p99 | ferro ÷ this |"; echo "|---|---:|---:|---:|---:|"
-  fe=""; for a in ferro-worker ferro-classic; do [[ -s "$TMP/$a.rps" ]] && { fe="$(median_of <"$TMP/$a.rps")"; break; }; done
+  fe=""; for a in ferro-worker ferro-classic ferro-zygote; do [[ -s "$TMP/$a.rps" ]] && { fe="$(median_of <"$TMP/$a.rps")"; break; }; done
   for arm in $ARMS; do
     rps="$(median_of <"$TMP/$arm.rps")"
     echo "| $arm | $rps | $(lat_ms <"$TMP/$arm.p50") | $(lat_ms <"$TMP/$arm.p99") | $(awk -v a="$fe" -v b="$rps" 'BEGIN{ if (b>0 && a>0) printf "%.2f", a/b; else print "-" }') |"

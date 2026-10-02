@@ -753,6 +753,9 @@ Zend/tests/enum/traits-constants.phpt
 Zend/tests/enum/traits-no-cases-method.phpt
 Zend/tests/enum/traits.phpt
 Zend/tests/enum/unit-cases.phpt
+Zend/tests/enum/unserialize-non-enum.phpt
+Zend/tests/enum/unserialize-non-existent-case.phpt
+Zend/tests/enum/unserialize.phpt
 Zend/tests/enum/var_dump-nested.phpt
 Zend/tests/enum/var_dump-reference.phpt
 Zend/tests/enum/var_export.phpt
