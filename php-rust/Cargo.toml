@@ -7,6 +7,7 @@ members = [
     "crates/php-cli",
     "crates/phpt-runner",
     "crates/php-server",
+    "crates/ferro-edge",
 ]
 
 [workspace.package]

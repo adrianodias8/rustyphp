@@ -1,0 +1,23 @@
+[package]
+name = "ferro-edge"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# A cache-tag aware HTTP reverse proxy for PHP applications (Drupal first):
+# Purge/Varnish-compatible BAN, stale-while-revalidate, request coalescing.
+# Independent of the engine: it fronts php-fpm (through nginx) or ferro alike.
+
+[[bin]]
+name = "ferro-edge"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "net", "time", "sync", "macros"] }
+hyper = { version = "1", features = ["http1", "server", "client"] }
+hyper-util = { version = "0.1", features = ["client-legacy", "http1", "tokio"] }
+http-body-util = "0.1"
+http = "1"
+bytes = "1"
+regex = "1"
+mimalloc.workspace = true
