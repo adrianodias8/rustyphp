@@ -198,6 +198,38 @@ Two cheap leads outside the VM loop:
 For step 6, the largest item is the call path: frame setup, argument binding and coercion,
 Ret.
 
+**5. Memory** (`MEMORY_DRUPAL.md`, "After session 11").
+
+- **Method bodies dropped from the seed image.** `ClassDecl::seed_copy` drops them from the
+  copies of a unit's unconditional classes kept in `SeedDelta`; conditional classes keep
+  theirs, since a later unit may compile them in full while they are unlinked. Nothing reads
+  the bodies afterwards: compile stubs linked seed classes, and reflection uses compiled data.
+  - One warm worker's live heap: **151 → 64.7 MiB** (HIR 70.6 → 17.4, bytecode 74 → 41.7: units
+    had been compiling bodies from the seed that nothing ran).
+  - RSS: 294–370 → **223 MB** (mimalloc), 262 → 188 MB (glibc); on a fresh copy, 583 → 411 MB.
+  - Neutral for speed: interleaved Drupal one-shot 21.16 → 21.02 ms, `handle()` 18.73 → 18.80
+    ms; bench geomeans 0.998–1.045, with the >1.05 rows inside their spreads.
+  - Gates: corpus 0 pass→fail, Composer identical, DBAL same single failure (peak RSS 408 → 337
+    MB), isolation and worker-leaks 10/10, front pages identical.
+- **`MIMALLOC_PURGE_DELAY=0`: not adopted.** It saves −11 MB per worker after the change above,
+  but large-buffer work pays (`str_replace` 1.3 MB ×1.43, `unserialize` ×1.14, startup
+  ×1.06–1.08). Drupal one-shot 22.45 → 22.79 ms, and 8 threads give 264 vs 277 req/s.
+- **Scaling re-run** (`bench/results/2026-10-02-drupal-scaling-n8.md`; `scaling.sh` now reports
+  RSS):
+
+  | allocator | 1×1 | 1×8 threads | RSS | 8×1 processes | RSS |
+  |---|---:|---:|---:|---:|---:|
+  | mimalloc | 45.7 | 277 (76 %) | **1.60 GB** | 278 (76 %) | 1.73 GB |
+  | purge 0 | 46.2 | 264 (71 %) | 1.49 GB | 266 (72 %) | 1.68 GB |
+  | system | 38.7 | 210 (68 %) | 1.35 GB | 212 (68 %) | 1.48 GB |
+
+  Session 8 measured 2.2 GB at 8 workers. Threads and processes still scale the same, now at
+  76 % (73 % before); php-fpm is at 86 %. Absolute req/s are not comparable across days on this
+  host, which is why only interleaved A/Bs count.
+
+**`handle()` this session: 17.80 ms** (best interleaved run, after the rebase; 18.80 ms in a
+noisier later run where php-fpm read 4.14) **vs php-fpm 3.92 ms — 4.5×.** Target ≤ 7.8 ms.
+
 ---
 
 # Session 10 — 2026-10-02 — Drupal request phases, zygote mode, memory, ferro-edge

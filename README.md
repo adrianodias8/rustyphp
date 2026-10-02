@@ -61,7 +61,7 @@ the previous build. Nothing is "believed to be faster".
 | Drupal under `wrk`, 8 workers, classic pool | **294 req/s** vs nginx+php-fpm+opcache 1,425 (0.21×) | `bench/results/2026-10-01-drupal-wrk-classic4-w8.md` |
 | Drupal under `wrk`, 8 workers, zygote mode (boot once, fork per request) | 289 req/s, 1.05× the classic pool in the same run | `bench/results/2026-10-02-drupal-wrk-zygote-w8.md` |
 | Drupal behind `ferro-edge` (page max-age 3600 s), 4 origin workers | ~246 k req/s cached; BAN `node_list` every 100 ms: 145–225 k req/s, 9.3 origin req/s | `bench/results/2026-10-02-edge-wrk-w4.md` |
-| one warm Drupal worker's memory | 151 MiB live (bytecode 74, HIR 71); RSS 294–370 MB; opcache: ~34 MiB shared | `MEMORY_DRUPAL.md` |
+| one warm Drupal worker's memory | 65 MiB live (bytecode 42, HIR 17; was 151); RSS 223 MB (was 294–370); 1.6 GB for 8 workers; opcache: ~34 MiB shared | `MEMORY_DRUPAL.md` |
 | Drupal under `wrk`, 8 workers, worker mode | 141 req/s vs FrankenPHP worker 340, php-fpm 1,425 (both workers degrade run to run: Drupal state) | `bench/results/2026-10-02-drupal-wrk-worker-w8.md` |
 | Symfony HttpKernel request, in-process | 7.9× the time of `php -n` | `bench/results/2026-09-30-slices-2-3.md` |
 | Symfony under `wrk`, worker mode, 4 workers | **1.08× nginx+php-fpm+opcache**, **0.63× FrankenPHP worker** | `bench/results/2026-09-30-wrk-w4.md` |
@@ -170,10 +170,9 @@ NOTES.md               the session log
 1. The call/frame layout: a contiguous value stack with the frame state in
    locals — the safe-Rust prototype (`bench/proto/`) halves a call; a
    multi-site refactor of the VM.
-2. The per-worker working set (`MEMORY_DRUPAL.md`: 151 MiB live, half of
-   it HIR kept only to seed the next request's class image; the rest of the
-   294–370 MB resident is the allocator): signature-only seed classes, the
-   mimalloc purge delay, then bytecode density.
+2. The per-worker working set (`MEMORY_DRUPAL.md`: 65 MiB live after
+   dropping method bodies from the seed image, 223 MB resident): bytecode
+   density next (42 MiB vs opcache's ~16 for the same files).
 3. Destructor timing at return and generator teardown (D-24, D-25).
 4. Zygote mode: overlap a zygote's re-boot with its replacement (a single
    zygote has a ~2 s gap), and cut the copy-on-write faults refcount writes

@@ -47,25 +47,28 @@ measure() {  # prints the median req/s of R runs, CONNS connections
   printf '%s\n' "${v[@]}" | sort -n | awk '{a[NR]=$1} END{print a[int((NR+1)/2)]}'
 }
 
+rss() {  # total resident MB of the ferro processes, after the runs
+  docker exec ferro-scal sh -c 'ps -C ferro -o rss=' | awk '{t+=$1} END{printf "%.0f", t/1024}'
+}
 rows=()
 for spec in $BINS; do
   name=${spec%%=*}; bin=${spec#*=}
   start "$bin" 1 1;    one=$(measure 4)
-  start "$bin" 1 "$N"; thr=$(measure $((N * 4)))
-  start "$bin" "$N" 1; prc=$(measure $((N * 4)))
+  start "$bin" 1 "$N"; thr=$(measure $((N * 4))); thr_rss=$(rss)
+  start "$bin" "$N" 1; prc=$(measure $((N * 4))); prc_rss=$(rss)
   eff() { awk -v r="$1" -v o="$one" -v n="$2" 'BEGIN{printf "%.0f %%", 100 * r / (n * o)}'; }
   echo "$name: 1x1 $one | 1x$N $thr ($(eff "$thr" "$N")) | ${N}x1 $prc ($(eff "$prc" "$N"))" >&2
-  rows+=("| $name | $one | $thr | $(eff "$thr" "$N") | $prc | $(eff "$prc" "$N") |")
+  rows+=("| $name | $one | $thr | $(eff "$thr" "$N") | $thr_rss MB | $prc | $(eff "$prc" "$N") | $prc_rss MB |")
 done
 {
   echo "# Drupal classic-mode scaling: threads vs processes — $(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo
   echo "- ferro $(git -C "$REPO" rev-parse --short HEAD), classic mode (fresh Vm per request), front page, page_cache off"
   echo "- wrk: $THREADS threads, 4 connections per worker, $DURATION per run, $R runs (median), $WARMUP warm-up; $(docker run --rm "$IMAGE" nproc) CPUs in the VM, shared by wrk and the servers"
-  echo "- efficiency = req/s / (workers x the same binary's 1x1 req/s)"
+  echo "- efficiency = req/s / (workers x the same binary's 1x1 req/s); RSS = total resident MB of the ferro processes after the runs"
   echo
-  echo "| allocator | 1x1 req/s | 1x$N (threads) | efficiency | ${N}x1 (processes, SO_REUSEPORT) | efficiency |"
-  echo "|---|---:|---:|---:|---:|---:|"
+  echo "| allocator | 1x1 req/s | 1x$N (threads) | efficiency | RSS | ${N}x1 (processes, SO_REUSEPORT) | efficiency | RSS |"
+  echo "|---|---:|---:|---:|---:|---:|---:|---:|"
   printf '%s\n' "${rows[@]}"
 } | tee "$OUT"
 echo "wrote $OUT"

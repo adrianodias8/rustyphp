@@ -280,6 +280,25 @@ pub struct ClassDecl {
     pub end_line: Line,
 }
 
+impl ClassDecl {
+    /// The copy a unit leaves in the VM's seed class image (`SeedDelta`): the
+    /// declaration without its method bodies. Later units lower against the
+    /// image for names, parents, signatures, properties and constants; a
+    /// seed class they already link compiles to a stub, so its bodies are
+    /// never read again — and held 63 MiB of a Drupal worker
+    /// (MEMORY_DRUPAL.md). `None` when there is no body to drop.
+    pub fn seed_copy(&self) -> Option<ClassDecl> {
+        if self.methods.iter().all(|m| m.decl.body.is_empty()) {
+            return None;
+        }
+        let mut c = self.clone();
+        for m in &mut c.methods {
+            m.decl.body = Vec::new();
+        }
+        Some(c)
+    }
+}
+
 /// One class attribute `#[Name(args...)]` retained for runtime reflection. The
 /// arguments are kept as lowered expressions (evaluated lazily by the VM), so a
 /// named/spread argument list reflects exactly as written.

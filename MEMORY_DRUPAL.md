@@ -89,7 +89,35 @@ buffer, 37,021 strings). That is ~34 MiB in all, shared by every php-fpm worker.
 - **4.3× opcache** for one worker, and 4.3 × N for N workers;
 - about 28 bytes per byte of source, against opcache's ~6.5.
 
-## Levers, by size (none applied yet)
+## After session 11 (method bodies dropped from the seed image)
+
+`ClassDecl::seed_copy` (`hir.rs`) drops method bodies from the copies of a unit's
+unconditional classes that go into `SeedDelta` (`vm/mod.rs::seed_delta_of`); conditional classes
+keep theirs.
+
+Same profile (`heap-profile.sh`, 30 requests):
+
+| | before | after |
+|---|---:|---:|
+| live heap between requests | 151.2 MiB | **64.7 MiB** |
+| HIR | 70.6 MiB | 17.4 MiB (7.2 of it the main script's `Program`) |
+| bytecode | 74.0 MiB | 41.7 MiB |
+| per-request peak | +9.4 MiB | +5.9 MiB |
+| RSS, mimalloc default | 294–370 MB | **223 MB** |
+| RSS, `MIMALLOC_PURGE_DELAY=0` | 283 MB | 212 MB |
+| RSS, glibc | 262 MB | 188 MB |
+| RSS on a fresh copy (first requests rebuild Drupal's caches) | 583 MB | 411 MB |
+
+The bytecode fell with the HIR, by 40–50 % at every compile site: units compiled bodies from
+the seed image that nothing ran. The new copies cost ~7 MiB (`clone` sites). Responses are
+unchanged: every gate, the Drupal front pages, the worker-mode battery, Composer and DBAL
+(DBAL's peak RSS: 408 → 337 MB).
+
+`MIMALLOC_PURGE_DELAY=0`: −11 MB after this change, but large-buffer work pays for the
+purge-and-refault (`str_replace` on 1.3 MB ×1.43, `unserialize` ×1.14, startup ×1.06–1.08); not
+adopted.
+
+## Levers, by size (as identified before session 11)
 
 1. **Allocator retention: up to −87 MB RSS per worker, no engine change.** Set mimalloc's
    purge delay to 0 at startup (`mi_option_set(mi_option_purge_delay, 0)`, or the

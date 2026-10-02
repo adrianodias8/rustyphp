@@ -7195,13 +7195,13 @@ impl<'m> Vm<'m> {
         // bootstraps); exposed by defer-always, whose `\0deferred\0N`
         // placeholders made unregistered seed entries common (hk panic
         // "prefix misaligned at id 180, runtime len=179").
-        let new_classes: Vec<Rc<crate::hir::ClassDecl>> = program
-            .classes
-            .get(l..)
-            .unwrap_or(&[])
-            .iter()
-            .filter(|cd| !self.class_index.contains_key(&cd.name.to_ascii_lowercase()))
-            .cloned()
+        // Method bodies are dropped from unconditional classes (the unit
+        // declares them; a later unit stubs them); a conditional one keeps
+        // its bodies, as a later unit may compile it in full while unlinked.
+        let new_classes: Vec<Rc<crate::hir::ClassDecl>> = (l..program.classes.len())
+            .map(|i| (i, &program.classes[i]))
+            .filter(|(_, cd)| !self.class_index.contains_key(&cd.name.to_ascii_lowercase()))
+            .map(|(i, cd)| match program.conditional_classes.contains(&i) { true => None, false => cd.seed_copy() }.map_or_else(|| Rc::clone(cd), Rc::new))
             .collect();
         // S-70.2: carry the tail's conditional provenance so the folded seed
         // remembers which entries are declaration-dependent.
