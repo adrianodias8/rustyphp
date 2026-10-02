@@ -1949,6 +1949,7 @@ dependencies = [
  "mago-span",
  "mago-syntax",
  "mago-syntax-core",
+ "memchr",
  "mimalloc",
  "mysql",
  "onig",

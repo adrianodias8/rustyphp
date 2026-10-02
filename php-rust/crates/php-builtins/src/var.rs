@@ -463,6 +463,8 @@ pub(crate) fn export_into(out: &mut Vec<u8>, v: &Zval, level: usize, seen: &mut 
         Zval::Undef | Zval::Null | Zval::ArgPlace(_) => out.extend_from_slice(b"NULL"),
         Zval::Bool(true) => out.extend_from_slice(b"true"),
         Zval::Bool(false) => out.extend_from_slice(b"false"),
+        // PHP_INT_MIN has no literal (`-9223372036854775808` parses as a float).
+        Zval::Long(i64::MIN) => out.extend_from_slice(b"-9223372036854775807-1"),
         Zval::Long(n) => out.extend_from_slice(n.to_string().as_bytes()),
         Zval::Double(d) => out.extend_from_slice(&export_float(*d)),
         Zval::Str(s) => export_str(out, s.as_bytes()),

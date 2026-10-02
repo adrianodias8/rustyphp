@@ -1096,7 +1096,6 @@ Zend/tests/return_types/return_reference_separation.phpt
 Zend/tests/self_in_eval.phpt
 Zend/tests/serialize/bug69761.phpt
 Zend/tests/serialize/bug70121.phpt
-Zend/tests/serialize/bug70253.phpt
 Zend/tests/serialize/bug73900.phpt
 Zend/tests/static_variables/static_variable_in_private_trait_method.phpt
 Zend/tests/static_variables/static_variables_recursive.phpt

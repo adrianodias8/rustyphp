@@ -40,6 +40,10 @@ relocation (the scenario passes; `baseline/repro/static-prop-ref-across-include.
 | D-23 | `f(...$args)` where the KNOWN function `f` has by-reference parameters is a compile error ("spread call to a by-reference function") | binds the reference elements (dynamic `$f(...$args)` already does) | `spread-to-known-byref-function.phpt` | session 7 |
 | D-24 | a returning function's locals (and `foreach` temporaries) are destructed at the caller's next statement boundary, after the caller used the return value: `echo f();` prints `r[local]` | inside the return, before the value is used: `[local]r` | `destructor-at-return.phpt` | session 9 (both GC engines; the frame's teardown ORDER already matches) |
 | D-25 | unsetting a suspended generator destructs what its frames hold at the statement boundary, outer frame first: `G[d2][d1]` | at the unset, inner (`yield from`) generator first: `[d1][d2]G` | `generator-teardown-destructors.phpt` | session 9 |
+| D-26 | freeing a container destructs an element's own properties after the container's later elements: `[W(7, o: W(0)), W(9)]` prints `7 9 0` (drop-mode destructors run from a FIFO queue) | depth first, as refcounts reach zero: `7 0 9` | `nested-destructor-order.phpt` | session 12 |
+| D-27 | `unserialize()` sets fields without the class's checks: a typed property takes any value, a dynamic property is created silently, a corrupt mangled name (`"\0P-c"`) is accepted | `TypeError: Cannot assign string to property T::$i of type int`; `Deprecated: Creation of dynamic property`; `Notice: Corrupt member variable name` and failure | `unserialize-property-checks.phpt` | session 12 |
+| D-28 | `unserialize()` ignores its `$options` (`allowed_classes`, `max_depth`; the default depth limit, 4096, holds) | objects of other classes become `__PHP_Incomplete_Class`; `max_depth` warns and fails | `unserialize-options.phpt` | session 12 |
+| D-29 | the "implements the Serializable interface" deprecation is raised before the script runs, with the line of its first statement | when the declaration is reached, with the declaration's line | `serializable-deprecation-line.phpt` | session 12 |
 
 Fixed by the fork (tests in `baseline/repro/`): `count()` on a `Countable` through any dynamic
 call; `isset(Class::$static)`; `.=` quadratic for every non-local target and non-string operand;
@@ -47,5 +51,9 @@ call; `isset(Class::$static)`; `.=` quadratic for every non-local target and non
 by-reference and prelude builtins unshadowable inside a namespace; value-registry builtin names
 case-sensitive; `ReflectionFunction::getName()` case of an internal function; enum cases
 serialized as `O:` objects and `E:` rejected by `unserialize()` (`unserialize-enum.phpt`, session
-10); the cli-server's router run reporting the router in `SCRIPT_FILENAME`/`SCRIPT_NAME` and
+10); `unserialize()`'s failure behaviour: error offset always 0, trailing data rejected instead of
+warned, no autoload / delayed `__wakeup` / `__unserialize` before a malformed byte, overflowing
+`i:` rejected, `S:` unsupported, abstract / interface / trait classes instantiated
+(`unserialize-failure-semantics.phpt`, session 12); `var_export(PHP_INT_MIN)`
+(`var-export-int-min.phpt`); the cli-server's router run reporting the router in `SCRIPT_FILENAME`/`SCRIPT_NAME` and
 not walking a directory without an index back to its parent's (`baseline/cli-server-router.sh`).

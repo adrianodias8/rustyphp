@@ -14,13 +14,13 @@ fn create_encode_decode_roundtrip() {
     im.filled_rectangle(0, 0, 39, 29, 0x00FF00);
     let png = im.encode("png", -1, 0).expect("png encode");
     assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
-    let back = GdImg::decode("png", &png).expect("png decode");
+    let back = GdImg::decode("png", &png, None).expect("png decode");
     assert_eq!(back.sx(), 40);
     assert_eq!(back.get_pixel(5, 5), 0x00FF00);
 
     let jpg = im.encode("jpeg", 82, 0).expect("jpeg encode");
     assert_eq!(&jpg[..3], &[0xFF, 0xD8, 0xFF]);
-    assert!(GdImg::decode("jpeg", &jpg).is_some());
+    assert!(GdImg::decode("jpeg", &jpg, None).is_some());
 }
 
 #[test]
@@ -41,7 +41,7 @@ fn error_callback_formats_va_args() {
     gdio::ensure_error_handler();
     let _ = gdio::take_errors();
     // Not a JPEG: libgd reports through the error method with printf args.
-    assert!(GdImg::decode("jpeg", b"this is not a jpeg at all").is_none());
+    assert!(GdImg::decode("jpeg", b"this is not a jpeg at all", None).is_none());
     let errors = gdio::take_errors();
     assert!(
         errors.iter().any(|e| e.contains("starts with 0x74 0x68")),

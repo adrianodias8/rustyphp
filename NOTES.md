@@ -24,6 +24,43 @@ except its step 4 (a bare-metal Symfony run), which still needs a machine.
 
 ---
 
+# Session 12 — 2026-10-02 — step 6(c): file_exists and unserialize
+
+The owner's revision of step 6: (c) first — find why `file_exists` costs 1.4 µs in-request, add a
+PHP-faithful realpath/stat cache; profile `unserialize` on the cache rows and fix the top cost;
+report handle() after each — then (b) a ≤ 5-day spike (branch + feature flag) rebuilding the
+call/return path and property access in the dispatch loop, scoped unsafe in the frame stack and
+dispatch only (SAFETY comments, Miri, census pins), killed unless handle() drops ≥ 2.5 ms on the
+interleaved phase bench; a pass writes DECISION_VM_CORE.md.
+
+**handle(): 16.27 ms vs php-fpm 3.55 ms** (base 16.41 in the same interleaved run).
+Details and tables: `bench/results/2026-10-02-file-exists-unserialize.md`.
+
+- **file_exists.** Not slow in ferro specifically: both engines make ~675 calls per request
+  (Composer PSR-4 probes of module classes) and pay the kernel path walk (php 0.42 ms, ferro
+  0.61 ms per request by perf). The 1.4 µs census figure carried census overhead. PHP does not
+  cache this (`php_stat` FS_EXISTS = `access(F_OK)`), so no cache was added — it would diverge
+  (a file created by another process must be seen at once). `file_exists` now uses
+  `access(F_OK)` like PHP: −0.07 ms.
+- **unserialize.** The top cost was the validation pass reading every byte before the build.
+  `vm/unser.rs` is now a single-pass port of `var_unserializer.re`: −12 % on the rows
+  (ferro/php 2.06 → 1.81), and PHP's failure behaviour comes with it — exact error offsets,
+  "Extra data" warning instead of `false`, autoload before the bad byte, delayed
+  `__wakeup`/`__unserialize` that still run on failure (and destructor suppression),
+  overflowing `i:` clamped with a warning, `S:`, the 4096 depth limit, abstract / interface /
+  trait refusal, "Erroneous data format" for `Serializable`. Warnings are raised one at a time
+  (two queued diagnostics made the second bypass a user error handler). One more corpus pass
+  (`bug70253.phpt`, baseline 3112). A per-call key cache was tried and reverted (+6 %).
+- `var_export(PHP_INT_MIN)` fixed; the `gdio_smoke` test, broken since session 11's `decode`
+  signature change, fixed.
+- New known divergences: D-26 nested destructor order, D-27 unserialize property checks, D-28
+  unserialize options, D-29 Serializable deprecation line.
+
+Gates: cargo test (only the known root-only `logging` failure), gate.sh PASS (57 repro, 0
+pass→fail), ab.sh geomean 0.998.
+
+---
+
 # Session 11 — 2026-10-02 — ferro-edge production check, rebase, call-cost breakdown, memory
 
 **Owner's plan (2026-10-02), in order.** Target: **Drupal `handle()` within 2× php-fpm

@@ -1457,10 +1457,10 @@ fn arg_os_path(argv: &[Zval], ctx: &mut Ctx) -> std::ffi::OsString {
 }
 
 /// `file_exists`: true if the path exists (following symlinks → a broken
-/// symlink is `false`, oracle-verified).
+/// symlink is `false`, oracle-verified). Like php_stat: `access(F_OK)`, uncached
+/// (no attribute fetch; Composer's PSR-4 probing makes ~670 per Drupal request).
 pub fn file_exists(argv: &[Zval], ctx: &mut Ctx) -> Result<Zval, PhpError> {
-    let p = arg_os_path(argv, ctx);
-    Ok(Zval::Bool(std::fs::metadata(&p).is_ok()))
+    Ok(Zval::Bool(access_ok(argv, ctx, libc::F_OK)))
 }
 
 pub fn is_file(argv: &[Zval], ctx: &mut Ctx) -> Result<Zval, PhpError> {

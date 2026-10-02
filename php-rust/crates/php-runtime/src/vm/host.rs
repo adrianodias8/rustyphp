@@ -4439,14 +4439,13 @@ impl<'m> super::Vm<'m> {
         let arg0 = first.deref_clone();
         let bytes = convert::to_zstr_cast(&arg0, &mut self.diags);
         let nbytes = bytes.as_bytes().len();
-        let parsed = match crate::unserialize::validate(bytes.as_bytes()) {
-            Some(true) => {
-                let built = self.unserialize_direct(bytes.as_bytes());
-                return self.unser_offset_fail(built, nbytes);
-            }
-            Some(false) => crate::unserialize::parse(bytes.as_bytes()),
-            None => None,
-        };
+        if nbytes == 0 {
+            return Ok(Zval::Bool(false));
+        }
+        if !crate::unserialize::has_alias_or_custom(bytes.as_bytes()) {
+            return self.unserialize_single(bytes.as_bytes());
+        }
+        let parsed = crate::unserialize::parse(bytes.as_bytes());
         match parsed {
             Some(s) => {
                 let built = self.vm_ser_to_zval(s);

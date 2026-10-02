@@ -3844,8 +3844,8 @@ fn unserialize_values_observable() {
 fn unserialize_malformed_is_false() {
     assert_eq!(out("<?php echo @unserialize('z') === false ? 'F' : 'T';"), "F");
     assert_eq!(out("<?php echo @unserialize('') === false ? 'F' : 'T';"), "F");
-    // Trailing garbage after a valid value is rejected too.
-    assert_eq!(out("<?php echo @unserialize('i:1;XX') === false ? 'F' : 'T';"), "F");
+    // Trailing data after a valid value only warns (PHP 8.3+): the value stands.
+    assert_eq!(out("<?php var_dump(@unserialize('i:1;XX'));"), "int(1)\n");
 }
 
 /// Round-trip a freshly serialized value through unserialize and back.

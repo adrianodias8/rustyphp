@@ -2199,6 +2199,7 @@ Zend/tests/serialize/bug34045.phpt
 Zend/tests/serialize/bug64354.phpt
 Zend/tests/serialize/bug70187.phpt
 Zend/tests/serialize/bug70187_2.phpt
+Zend/tests/serialize/bug70253.phpt
 Zend/tests/serialize/bug76502.phpt
 Zend/tests/serialize/serializable_deprecation.phpt
 Zend/tests/shift_001.phpt
