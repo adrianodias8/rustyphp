@@ -59,6 +59,17 @@ Details and tables: `bench/results/2026-10-02-file-exists-unserialize.md`.
 Gates: cargo test (only the known root-only `logging` failure), gate.sh PASS (57 repro, 0
 pass→fail), ab.sh geomean 0.998.
 
+**Step 6(b), the VM-core spike — killed after day 1 on the measured ceiling.** Prototype on the local
+branch `spike/vm-core` (`b354c884`, feature `vm-core`, no unsafe needed): an inner hot-op loop
+with `ip` in a register, frame switches on MethodCall/Ret, `$this` property IC hits. Micro: loop
+−35 %, calls −11 %, `$this` reads −19 %; **Drupal handle() 16.71 → 17.27 ms (worse)** — Drupal's
+wide op mix enters and leaves the loop constantly. The profile bounds the whole scope (dispatch
+3.4 %, calls ~9 %, property access ~6.5 % of the request) at ~1.8 ms even if fully realised, under
+the 2.5 ms line, so per the criterion it stops here; DECISION_VM_CORE.md is not written. Details:
+`bench/results/2026-10-02-vm-core-spike.md`. The profile's larger items outside the scope:
+value drops (`drop_glue` 6.2 % self + `mi_free` 2.5 %), namespace-fallback builtin calls,
+`field_isset` (5.4 %).
+
 ---
 
 # Session 11 — 2026-10-02 — ferro-edge production check, rebase, call-cost breakdown, memory
