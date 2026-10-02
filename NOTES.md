@@ -24,6 +24,105 @@ except its step 4 (a bare-metal Symfony run), which still needs a machine.
 
 ---
 
+# Session 11 — 2026-10-02 — ferro-edge production check, rebase, call-cost breakdown, memory
+
+**Owner's plan (2026-10-02), in order.** Target: **Drupal `handle()` within 2× php-fpm
+(~7 ms) in 6 weeks**; report `handle()` ms every session (`bench/drupal/phases.sh`).
+
+1. Zygote: no more performance work; it stays as a mode.
+2. ferro-edge production check: real Drupal + Purge module round trip (edit a node, verify that
+   exactly the right pages are banned), session-cookie bypass, mixed anon/auth wrk.
+3. Rebase `next` onto upstream `main`; record their performance changes on the Drupal phase
+   bench (`handle()` ms).
+4. Call-cost breakdown: one user function call end to end (argument binding, frame setup, body,
+   return), ferro vs php, times the total calls per Drupal request: how much of the 14.9 ms
+   `handle()` gap it explains. Same for property access and array ops if calls do not explain
+   most of it.
+5. Memory: drop method bodies from the retained HIR, A/B the mimalloc purge delay at 0, then
+   re-run the scaling experiment. One session.
+6. Then a 3-day scoped-`unsafe` spike on whatever step 4 shows is largest, behind a flag.
+   Killed below +15 % Drupal req/s.
+
+**2. ferro-edge production check** (`bench/edge/purge-roundtrip.sh`, results
+`bench/results/2026-10-02-edge-purge-{fpm,ferro}.md`).
+
+The site is a real Drupal 11 with Purge 8.x-3.7 from composer: `purge`,
+`purge_queuer_coretags`, `purge_purger_http` and `purge_purger_http_tagsheader`. Page max-age is
+3600, and there are 12 promoted articles (the base install has no content types: an `article`
+type is created). Purge's HTTP Bundled Purger sends `BAN http://edge:8081/`.
+
+Per run, the script:
+
+1. warms 9 pages through the edge;
+2. records each page's `Purge-Cache-Tags` from the origin;
+3. edits node 1 (drush) and works the queue;
+4. compares the pages the edge dropped with the pages whose tags were invalidated
+   (`node:1 node:1:revisions node_list node_list:article`).
+
+Both purger configurations pass on both origins (php-fpm and ferro):
+
+- **`Purge-Cache-Tags: [invalidations:separated_pipe]`**, the Varnish regex convention. The
+  edge drops `/`, `/node`, `/rss.xml`, `/node/1`, and also `/node/10`–`/node/12` (`node:1`
+  matches `node:10`), exactly as Varnish would. It keeps `/node/2` and `/user/login`.
+- **`Surrogate-Key: [invalidations:separated_pipe]`**, exact. ferro-edge now splits
+  Surrogate-Key on `|`, `,` and whitespace. It drops exactly the 4 pages carrying an invalidated
+  tag.
+
+In both, the pages showing node 1 serve its new title through the edge right after the BAN.
+New `--log-bans` flag: each BAN and how many objects it removed.
+
+Session bypass: an admin's `SESS…` cookie always passes. Their pages are logged in
+(drupalSettings uid 1), the node edit form returns 200, and anonymous `/` stays a HIT that
+never shows the admin's page.
+
+Mixed wrk, front page, 10 % of requests with the admin's session, 10 s warm-up with the same
+mix:
+
+| origin (4 workers) | origin alone | behind ferro-edge | edge hit / pass |
+|---|---:|---:|---|
+| php-fpm + opcache | 683 req/s (p99 56 ms) | 5,887 req/s (p99 54 ms) | 79,653 / 9,095 |
+| ferro classic | 143 req/s (p99 244 ms) | 1,191 req/s (p99 257 ms) | 16,075 / 1,941 |
+
+Behind the edge, throughput is bounded by the authenticated share on the origin. Pass is about
+10.2 % of requests, i.e. no anonymous request is lost to a pass.
+
+Found on the way:
+
+- **ferro could not render the admin's node edit form.** Two engine gaps, both fixed:
+  - **`imagegd2()` was missing.** Drupal's GD toolkit is "available" only if `imagegd2` exists.
+    The distribution's libgd 2.3 is built without the GD/GD2 formats ("GD2 image support has
+    been disabled"), unlike PHP's bundled libgd. New `php-types/src/gdformat.rs` ports
+    php-src's `gd_gd.c`/`gd_gd2.c` in safe Rust: byte-identical output for GD, GD2 raw and GD2
+    compressed (zlib `compress()` parameters: memLevel 8), and readers for gd, gd2, gd2part and
+    `imagecreatefromstring`. `imagegd`/`imagegd2` and the readers were added to the prelude.
+    gdio.rs gains two `SAFETY` lines (raw pixel and colour-header stores); the census pin is
+    now 47. Test: `gd-gd2-format.phpt`.
+  - **`ReflectionFunction` on a builtin's first-class callable** (`strlen(...)`) threw
+    "Function {closure}() does not exist". Twig's `ReflectionCallable` broke on a Drupal Twig
+    function (`navigation:title`). It now reflects as an internal function, like the string
+    path. Test: `reflection-closure-builtin-fcc.phpt`.
+- **Purge's late-runtime processor** sent the BAN at the end of the editing (drush) request
+  without the entity's own tag: `node:1` was queued (`CacheTagsQueuer::$invalidatedTags`) but
+  neither sent nor left in the queue. With the queue worked explicitly (`drush p:queue-work`,
+  processor `drush_purge_queue_work`), all 4 tags go out in one BAN. This is recorded as a Purge
+  behaviour; the round trip uses the explicit processor.
+- **A cold classic pool looks 10× slower.** Each worker thread compiles on its first requests
+  (thread-local caches), e.g. 215 ms for `/` on a fresh 4-thread pool against 22.7 ms warm.
+  Hence the warm-up in the mixed wrk.
+- **A/B against ef6dd8b7** (`/target/prev`): geomeans arrays 0.999, strings 1.003, oop 0.996,
+  zend_bench 1.017, zend_micro 1.015, autoload 1.001, symfony-boot 1.007. `zend_micro_bench`'s
+  `$this->x = 0`, `$this->x += 2` (+17 %) and `new Foo()` (+15 %) persist at 15 rounds.
+  Bisected:
+  - they come from the six added prelude functions (session 10's `prelude_gd.php` makes them
+    1.000);
+  - they do not move with the script's path or with heap padding;
+  - they vanish when `Foo::write_prop` runs alone (65.3 vs 66.5 ms per million);
+  - Drupal's warm request is unchanged (interleaved one-shot, median 21.38 → 21.18 ms).
+
+  So this is a whole-script context effect inside micro_bench.php, recorded and not chased.
+
+---
+
 # Session 10 — 2026-10-02 — Drupal request phases, zygote mode, memory, ferro-edge
 
 **Owner's plan (2026-10-02), in order:** (1) classic-mode phases, ferro vs php-fpm; (2) zygote
@@ -90,7 +189,8 @@ What it took:
   - `O:` on an enum throws "Cannot instantiate enum".
 
   Covered by `baseline/repro/unserialize-enum.phpt` (validated on the oracle, both lowering
-  modes); the gate gained 3 passes (`Zend/tests/enum/unserialize*.phpt`, baseline now 3,107).
+  modes); the gate gained 7 passes (`Zend/tests/enum/*serializ*.phpt`, baseline now 3,111; first
+  counted as 3 — the gate's list was read through `tail`).
   A/B against ef6dd8b7: geomeans zend_micro 0.983, zend_bench 1.000, arrays 0.995, strings
   1.007, oop 0.999, autoload 1.039, symfony-boot 1.030. The rows above 1.05 sit inside their
   spreads (ms quantisation: `ary2` re-measured at 15 rounds is 1.000).

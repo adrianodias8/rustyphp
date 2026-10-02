@@ -136,6 +136,36 @@ function imagecreatefromtga(string $filename)
     return __gd_load('imagecreatefromtga', $filename, 'tga', 'TGA');
 }
 
+function imagecreatefromgd(string $filename)
+{
+    return __gd_load('imagecreatefromgd', $filename, 'gd', 'GD');
+}
+function imagecreatefromgd2(string $filename)
+{
+    return __gd_load('imagecreatefromgd2', $filename, 'gd2', 'GD2');
+}
+function imagecreatefromgd2part(string $filename, int $x, int $y, int $width, int $height)
+{
+    if ($width < 1) {
+        throw new ValueError('imagecreatefromgd2part(): Argument #4 ($width) must be greater than or equal to 1');
+    }
+    if ($height < 1) {
+        throw new ValueError('imagecreatefromgd2part(): Argument #5 ($height) must be greater than or equal to 1');
+    }
+    $d = __gd_read_for('imagecreatefromgd2part', $filename);
+    if ($d === false) {
+        return false;
+    }
+    $r = __gd_decode('gd2part', $d, $x, $y, $width, $height);
+    if (isset($r['h'])) {
+        return GdImage::__wrap($r['h']);
+    }
+    foreach ($r['errs'] ?? array() as $e) {
+        __warning_from_caller('imagecreatefromgd2part(): ' . $e);
+    }
+    __warning_from_caller('imagecreatefromgd2part(): "' . $filename . '" is not a valid GD2 file');
+    return false;
+}
 function imagecreatefromstring(string $data)
 {
     $r = __gd_decode_auto($data);
@@ -435,6 +465,46 @@ function __gd_output(GdImage $image, string $kind, string $fn, $file, int $q1, i
         return false;
     }
     return true;
+}
+
+// imagegd/imagegd2 write through a plain fopen() in ext/gd (no stream
+// wrappers), with their own warning; an empty path means the output.
+function __gd_output_path(GdImage $image, string $kind, string $fn, ?string $file, int $q1, int $q2): bool
+{
+    if ($file !== null && str_contains($file, "\0")) {
+        throw new ValueError($fn . '(): Argument #2 ($file) must not contain any null bytes');
+    }
+    $r = __gd_encode($image->__h, $kind, $q1, $q2);
+    if (!is_string($r)) {
+        foreach (is_array($r) ? ($r['errs'] ?? array()) : array() as $e) {
+            __warning_from_caller($fn . '(): ' . $e);
+        }
+        return false;
+    }
+    if ($file === null || $file === '') {
+        echo $r;
+        return true;
+    }
+    if (@file_put_contents($file, $r) === false) {
+        __warning_from_caller($fn . '(): Unable to open "' . $file . '" for writing');
+        return false;
+    }
+    return true;
+}
+function imagegd(GdImage $image, ?string $file = null): bool
+{
+    return __gd_output_path($image, 'gd', 'imagegd', $file, 0, 0);
+}
+function imagegd2(GdImage $image, ?string $file = null, int $chunk_size = 128, int $mode = IMG_GD2_RAW): bool
+{
+    if ($chunk_size < -2147483648 || $chunk_size > 2147483647) {
+        __warning_from_caller('imagegd2(): Argument #3 ($chunk_size) must be between -2147483648 and 2147483647');
+        return false;
+    }
+    if ($chunk_size === -1) {
+        $chunk_size = 128;
+    }
+    return __gd_output_path($image, 'gd2', 'imagegd2', $file, $chunk_size, $mode);
 }
 
 function imagejpeg(GdImage $image, $file = null, int $quality = -1): bool

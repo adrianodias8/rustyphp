@@ -39,7 +39,10 @@ fn errs_payload(errs: Vec<String>) -> Zval {
 /// Sniff the image format of a byte buffer the way `_php_image_create_from_string`
 /// does (php_getimagetype order), returning the gdio codec name.
 pub(super) fn sniff_format(d: &[u8]) -> Option<&'static str> {
-    if d.len() >= 3 && d[0] == 0xFF && d[1] == 0xD8 && d[2] == 0xFF {
+    // ext/gd's _php_image_type tries GD2 ("gd2\0") first
+    if d.len() >= 4 && d[..4] == *b"gd2\0" {
+        Some("gd2")
+    } else if d.len() >= 3 && d[0] == 0xFF && d[1] == 0xD8 && d[2] == 0xFF {
         Some("jpeg")
     } else if d.len() >= 8 && d[..8] == *b"\x89PNG\r\n\x1a\n" {
         Some("png")
@@ -101,8 +104,12 @@ impl<'m> Vm<'m> {
         let kind = self.gd_arg_str(&args, 0);
         let data = self.gd_arg_str(&args, 1);
         let kind = String::from_utf8_lossy(&kind).into_owned();
+        // imagecreatefromgd2part's source rectangle: args 2..=5
+        let part = (args.len() >= 6).then(|| {
+            (self.gd_arg_i32(&args, 2), self.gd_arg_i32(&args, 3), self.gd_arg_i32(&args, 4), self.gd_arg_i32(&args, 5))
+        });
         let _ = gdio::take_errors();
-        match GdImg::decode(&kind, &data) {
+        match GdImg::decode(&kind, &data, part) {
             Some(im) => {
                 let _ = gdio::take_errors();
                 let mut a = PhpArray::new();
@@ -124,7 +131,7 @@ impl<'m> Vm<'m> {
             put(&mut a, "unknown", Zval::Bool(true));
             return Ok(Zval::Array(std::rc::Rc::new(a)));
         };
-        match GdImg::decode(kind, &data) {
+        match GdImg::decode(kind, &data, None) {
             Some(im) => {
                 let _ = gdio::take_errors();
                 let mut a = PhpArray::new();

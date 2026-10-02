@@ -16,6 +16,7 @@ pub mod sapi;
 pub mod stream;
 pub mod tz;
 pub mod gdio;
+pub mod gdformat;
 pub mod big5;
 pub mod fsown;
 pub mod html4;

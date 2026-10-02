@@ -36,15 +36,17 @@ Allowed from `--ban-allow` (default loopback and private ranges):
 | request | effect |
 |---|---|
 | `BAN` + `Purge-Cache-Tags: <regex>` or `Cache-Tags: <regex>` | removes objects whose space-joined tag list matches — Varnish's `ban("obj.http.Cache-Tags ~ " + req.http.Cache-Tags)`, so `node:1` also matches `node:10`; anchor it (`(^|\s)node:1(\s|$)`) for exact tags |
-| `BAN` + `Surrogate-Key: a b c` | exact tags |
+| `BAN` + `Surrogate-Key: a b c` (or `a\|b\|c`, `a,b,c`) | exact tags — with Purge, `Surrogate-Key: [invalidations:separated_pipe]` bans exactly the invalidated tags |
 | `BAN` + `X-Url: <regex>` (or `Purge-Url`), optional `X-Host: <regex>` | URL (path and query) ban |
 | `PURGE /path?query` | every variant of that URL |
 | `STATS /` | counters (hit, stale, miss, coalesced, pass, upstream, errors, bans, objects, bytes) |
 
 The answer carries `X-Edge-Banned: <n>`. A fetch in flight when a ban lands
 is answered but not stored. A Purge "HTTP Bundled Purger" pointed at the edge
-with method `BAN` and header `Purge-Cache-Tags: [invalidations:separator|]`
-(or `Cache-Tags`) works as with Varnish.
+with method `BAN` and header `Purge-Cache-Tags: [invalidations:separated_pipe]`
+(or `Cache-Tags`) works as with Varnish, over-banning included (`node:1` takes
+`node:10`); `Surrogate-Key: [invalidations:separated_pipe]` bans exactly.
+`--log-bans` prints each ban and how many objects it removed.
 
 ## Under load
 

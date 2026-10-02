@@ -237,13 +237,18 @@ async fn ban_by_cache_tags_varnish_semantics() {
     assert_eq!(h.get("/t1?ttl=60&tags=node:1+node_list").await.cache(), "MISS");
     assert_eq!(h.get("/t2?ttl=60&tags=node:10").await.cache(), "MISS");
     assert_eq!(h.get("/t3?ttl=60&tags=user:1").await.cache(), "HIT");
-    // exact keys
+    // exact keys, space- or pipe-separated (Purge's [invalidations:separated_pipe])
     let b = h.req("BAN", "/", &[("surrogate-key", "user:1 nothing")]).await;
     assert_eq!(b.headers["x-edge-banned"], "1");
+    h.get("/t1?ttl=60&tags=node:1+node_list").await;
+    h.get("/t2?ttl=60&tags=node:10").await;
+    let b = h.req("BAN", "/", &[("surrogate-key", "node:1|config:x")]).await;
+    assert_eq!(b.headers["x-edge-banned"], "1", "pipe-separated keys are exact: node:10 survives");
+    assert_eq!(h.get("/t2?ttl=60&tags=node:10").await.cache(), "HIT");
     assert_eq!(h.get("/t3?ttl=60&tags=user:1").await.cache(), "MISS");
-    // everything
+    // everything: t2 and t3
     let b = h.req("BAN", "/", &[("cache-tags", ".*")]).await;
-    assert_eq!(b.headers["x-edge-banned"], "3");
+    assert_eq!(b.headers["x-edge-banned"], "2");
 }
 
 #[tokio::test]

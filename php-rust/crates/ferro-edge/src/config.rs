@@ -18,7 +18,8 @@ usage: ferro-edge --upstream HOST:PORT [options]
   --session-cookies P    cookie-name prefixes that bypass the cache (default SESS,SSESS,NO_CACHE)
   --keep-cookies         forward other cookies on cacheable requests (default: strip them)
   --expose-tags          keep cache-tag headers on client responses (default: strip them)
-  --stats-interval S     print counters to stderr every S seconds (default 0: off)";
+  --stats-interval S     print counters to stderr every S seconds (default 0: off)
+  --log-bans             print every BAN/PURGE and how many objects it removed";
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -36,6 +37,7 @@ pub struct Config {
     pub keep_cookies: bool,
     pub expose_tags: bool,
     pub stats_interval: u64,
+    pub log_bans: bool,
 }
 
 impl Default for Config {
@@ -58,6 +60,7 @@ impl Default for Config {
             keep_cookies: false,
             expose_tags: false,
             stats_interval: 0,
+            log_bans: false,
         }
     }
 }
@@ -93,6 +96,7 @@ impl Config {
                 }
                 "--keep-cookies" => cfg.keep_cookies = true,
                 "--expose-tags" => cfg.expose_tags = true,
+                "--log-bans" => cfg.log_bans = true,
                 "--stats-interval" => cfg.stats_interval = num(&flag, &value()?)?,
                 _ => return Err(format!("unknown option {flag}")),
             }

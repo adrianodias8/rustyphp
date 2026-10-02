@@ -363,7 +363,14 @@ impl Edge {
                 }
             }
             if let Some(v) = h.get("surrogate-key") {
-                let keys: Vec<&str> = v.to_str().unwrap_or("").split_ascii_whitespace().collect();
+                // Space-separated (Fastly), or `|` / `,` (what Purge's
+                // `[invalidations:separated_pipe|comma]` tokens produce).
+                let keys: Vec<&str> = v
+                    .to_str()
+                    .unwrap_or("")
+                    .split(|c: char| c.is_ascii_whitespace() || c == '|' || c == ',')
+                    .filter(|k| !k.is_empty())
+                    .collect();
                 n += st.ban_tags(&keys);
                 any = true;
             }
@@ -384,6 +391,13 @@ impl Edge {
             }
         }
         self.stats.banned.fetch_add(n as u64, Relaxed);
+        if self.cfg.log_bans {
+            let shown: Vec<String> = ["purge-cache-tags", "cache-tags", "surrogate-key", "x-url", "x-host"]
+                .iter()
+                .filter_map(|k| h.get(*k).map(|v| format!("{k}: {}", String::from_utf8_lossy(v.as_bytes()))))
+                .collect();
+            eprintln!("ferro-edge: {} {} [{}] -> {n} objects", req.method(), req.uri(), shown.join("; "));
+        }
         let mut r = text(StatusCode::OK, if req.method().as_str() == "PURGE" { "Purged.\n" } else { "Ban added.\n" });
         r.headers_mut().insert("x-edge-banned", HeaderValue::from(n));
         r

@@ -748,11 +748,15 @@ Zend/tests/enum/no-write-properties-cache-slot.phpt
 Zend/tests/enum/no-write-properties.phpt
 Zend/tests/enum/print_r.phpt
 Zend/tests/enum/reflectionclass.phpt
+Zend/tests/enum/serialization-round-trip.phpt
+Zend/tests/enum/serialize.phpt
 Zend/tests/enum/static-methods.phpt
 Zend/tests/enum/traits-constants.phpt
 Zend/tests/enum/traits-no-cases-method.phpt
 Zend/tests/enum/traits.phpt
 Zend/tests/enum/unit-cases.phpt
+Zend/tests/enum/unserialize-const.phpt
+Zend/tests/enum/unserialize-missing-colon.phpt
 Zend/tests/enum/unserialize-non-enum.phpt
 Zend/tests/enum/unserialize-non-existent-case.phpt
 Zend/tests/enum/unserialize.phpt

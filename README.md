@@ -51,7 +51,7 @@ the previous build. Nothing is "believed to be faster".
 
 | what | number | where |
 |---|---:|---|
-| `Zend/tests` + `tests/` passing (of 6,172) | 3,107 | `baseline/zend-tests.md` |
+| `Zend/tests` + `tests/` passing (of 6,172) | 3,111 | `baseline/zend-tests.md` |
 | operator differential vs `php` | 37,835 cases, 0 mismatches | `cargo test -p php-types --test differential` |
 | Composer 2.10 `require monolog/monolog` | runs; `vendor/` byte-identical | `baseline/smoke-composer.sh` |
 | Doctrine DBAL 4.5 PHPUnit suite | 4,146 tests, 1 failure (the oracle's same 1) | `baseline/smoke-dbal.sh` |

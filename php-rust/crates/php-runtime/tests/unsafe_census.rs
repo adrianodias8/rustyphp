@@ -50,7 +50,7 @@ fn unsafe_only_where_declared() {
         ("php-types/src/zstr.rs", 15, "single-allocation refcounted string (Miri-checked in CI)"),
         ("php-types/src/array.rs", 2, "inline element teardown in PhpArray::drop"),
         // C libraries through FFI.
-        ("php-types/src/gdio.rs", 45, "libgd FFI"),
+        ("php-types/src/gdio.rs", 47, "libgd FFI; raw pixel / colour-header writes for the native GD/GD2 readers (gdformat.rs)"),
         ("php-types/src/tidyio.rs", 58, "libtidy FFI"),
         ("php-types/src/xsltio.rs", 51, "libxslt FFI"),
         ("php-types/src/zlibio.rs", 7, "zlib FFI"),

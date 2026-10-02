@@ -19,7 +19,7 @@ $response->send();
 $t3 = hrtime(true);
 $kernel->terminate($request, $response);
 $t4 = hrtime(true);
-$engine = function_exists('ferro_handle_request') ? 'ferro' : (PHP_SAPI === 'fpm-fcgi' ? 'php-fpm' : PHP_SAPI);
+$engine = getenv('PHASES_ENGINE') ?: (function_exists('ferro_handle_request') ? 'ferro' : (PHP_SAPI === 'fpm-fcgi' ? 'php-fpm' : PHP_SAPI));
 file_put_contents(getenv('PHASES_LOG') ?: '/scratch/phases.log', sprintf("%s %.3f %.3f %.3f %.3f %.3f %d\n",
     $engine, ($t1 - $t0) / 1e6, ($t2 - $t1) / 1e6, ($t3 - $t2) / 1e6, ($t4 - $t3) / 1e6, ($t4 - $t0) / 1e6,
     strlen((string) $response->getContent())), FILE_APPEND);

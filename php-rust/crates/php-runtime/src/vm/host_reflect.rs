@@ -323,6 +323,16 @@ impl<'m> super::Vm<'m> {
             }
             return match self.find_user_function(&nm) {
                 Some(func) => Ok(Zval::Array(Rc::new(self.build_func_descriptor(func, None)?))),
+                // A builtin's first-class callable (`strlen(...)`): reflected
+                // as an internal function under its lowercase name, with no
+                // parameter metadata — the string path's residue (WP-17).
+                None if self.is_name_callable(&nm) => {
+                    let mut d = PhpArray::new();
+                    d.insert(Key::from_bytes(b"name"), Zval::Str(PhpStr::new(nm.to_ascii_lowercase())));
+                    d.insert(Key::from_bytes(b"params"), Zval::Array(Rc::new(PhpArray::new())));
+                    d.insert(Key::from_bytes(b"returnType"), Zval::Bool(false));
+                    Ok(Zval::Array(Rc::new(d)))
+                }
                 None => Ok(Zval::Bool(false)),
             };
         }

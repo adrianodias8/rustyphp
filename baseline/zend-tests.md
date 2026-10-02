@@ -7,12 +7,12 @@
 - platform: `Linux 6.17.8-orbstack-00308-g8f9c941121b1 aarch64`, Debian GNU/Linux 13 (trixie), in Docker
 - measured: 2026-10-01T22:53:45Z
 - wall time: 243s
-- advanced by hand 2026-10-02 (session 10): +3 `Zend/tests/enum/unserialize*.phpt` (enum `E:` serialization), reported as new passes by `gate.sh`
+- advanced by hand 2026-10-02 (session 10): +7 `Zend/tests/enum/{unserialize,unserialize-non-enum,unserialize-non-existent-case,unserialize-const,unserialize-missing-colon,serialize,serialization-round-trip}.phpt` (enum `E:` serialization), reported as new passes by `gate.sh`
 
 | scope | total | pass | fail | skip | pass rate (of runnable) |
 |---|---:|---:|---:|---:|---:|
-| `tests/` + `Zend/tests/` | 6172 | 3107 | 1594 | 1471 | 66.1% |
-| `Zend/tests/` only | 5305 | 2715 | 1383 | 1207 | 66.3% |
+| `tests/` + `Zend/tests/` | 6172 | 3111 | 1590 | 1471 | 66.2% |
+| `Zend/tests/` only | 5305 | 2719 | 1379 | 1207 | 66.4% |
 | `tests/` only | 867 | 392 | 211 | 264 | 65.0% |
 
 Upstream's claim for `Zend/tests/` (README/COVERAGE, pin S-175, macOS, oracle 8.5.7):

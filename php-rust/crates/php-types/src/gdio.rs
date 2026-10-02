@@ -205,6 +205,12 @@ pub fn ensure_error_handler() {
 }
 
 /// Drain the libgd messages recorded since the last call.
+/// Record a message the way libgd's error callback does (for code that
+/// reimplements a libgd reader, `gdformat`).
+pub fn push_error(msg: &str) {
+    GD_ERRORS.with(|e| e.borrow_mut().push(msg.to_string()));
+}
+
 pub fn take_errors() -> Vec<String> {
     GD_ERRORS.with(|e| std::mem::take(&mut *e.borrow_mut()))
 }
@@ -260,6 +266,39 @@ impl GdImg {
     pub fn palette_open(&self, i: usize) -> bool {
         self.raw().open[i] != 0
     }
+    /// Store a pixel value raw (`tpixels` / `pixels`), without blending or
+    /// special colours — what libgd's own readers do. Out of range: ignored.
+    pub fn put_raw_pixel(&mut self, x: i32, y: i32, v: i32) {
+        if x < 0 || y < 0 || x >= self.sx() || y >= self.sy() {
+            return;
+        }
+        let r = self.raw();
+        let (tc, rows, trows) = (r.true_color != 0, r.pixels, r.tpixels);
+        // SAFETY: 0 <= x < sx and 0 <= y < sy were checked above; libgd allocates `sy` rows of `sx` entries in `tpixels` (truecolor) or `pixels` (palette), and `&mut self` is the only handle to this image.
+        unsafe { if tc { *(*trows.add(y as usize)).add(x as usize) = v } else { *(*rows.add(y as usize)).add(x as usize) = v as u8 } }
+    }
+    /// Restore the colour header a GD/GD2 file carries: count, transparent
+    /// index, the 256 (r, g, b, a) entries (alpha left as is when `None`), and
+    /// the first `colors_total` entries marked allocated.
+    pub fn set_color_header(&mut self, colors_total: i32, transparent: i32, palette: Option<&[(i32, i32, i32, Option<i32>)]>) {
+        // SAFETY: `&mut self` is the only handle to this live image; these are plain integer fields of the struct libgd allocated.
+        let r = unsafe { &mut *self.0 };
+        r.colors_total = colors_total;
+        r.transparent = transparent;
+        if let Some(p) = palette {
+            for (i, &(red, green, blue, alpha)) in p.iter().enumerate().take(MAX_COLORS) {
+                r.red[i] = red;
+                r.green[i] = green;
+                r.blue[i] = blue;
+                if let Some(a) = alpha {
+                    r.alpha[i] = a;
+                }
+            }
+            for i in 0..(colors_total.clamp(0, MAX_COLORS as i32) as usize) {
+                r.open[i] = 0;
+            }
+        }
+    }
     /// `imageantialias` writes the AA flag directly (as ext/gd does).
     pub fn set_antialias(&mut self, on: bool) {
         unsafe { (*self.0).aa = on as c_int };
@@ -277,8 +316,19 @@ impl GdImg {
     }
 
     /// Decode `data` with the given codec ("jpeg", "png", …).
-    pub fn decode(kind: &str, data: &[u8]) -> Option<GdImg> {
+    /// `part` is the source rectangle (x, y, w, h) of a `gd2part` decode.
+    pub fn decode(kind: &str, data: &[u8], part: Option<(i32, i32, i32, i32)>) -> Option<GdImg> {
         ensure_error_handler();
+        // libgd's own formats: distribution builds leave them out (gdformat)
+        match kind {
+            "gd" => return crate::gdformat::decode_gd(data),
+            "gd2" => return crate::gdformat::decode_gd2(data),
+            "gd2part" => {
+                let (x, y, w, h) = part?;
+                return crate::gdformat::decode_gd2_part(data, x, y, w, h);
+            }
+            _ => {}
+        }
         let n = data.len() as c_int;
         let p = data.as_ptr() as *const c_void;
         Self::from_raw(unsafe {
@@ -300,6 +350,12 @@ impl GdImg {
     /// knobs (jpeg quality, png level, webp quality, avif quality+speed).
     pub fn encode(&self, kind: &str, q1: i32, q2: i32) -> Option<Vec<u8>> {
         ensure_error_handler();
+        match kind {
+            "gd" => return Some(crate::gdformat::encode_gd(self)),
+            // q1 = chunk size, q2 = IMG_GD2_RAW / IMG_GD2_COMPRESSED
+            "gd2" => return Some(crate::gdformat::encode_gd2(self, q1, q2)),
+            _ => {}
+        }
         let mut size: c_int = 0;
         let ptr = unsafe {
             match kind {

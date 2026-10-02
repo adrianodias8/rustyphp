@@ -61,6 +61,9 @@ worker mode is what removes that.
 | 41 | `$map[$k][] = $v` through `WeakMap` / a by-reference `ArrayAccess::offsetGet()` (variable- and property-rooted) | engine (VM) | Twig `ExpressionParsers::getPrecedenceChanges()` | fixed — `arrayaccess-byref-offsetget-nested-write.phpt` |
 | 42 | `touch()` on an existing directory | builtin | Drupal's Twig cache (`MTimeProtectedFastFileStorage`) | fixed — `touch-existing-directory.phpt` |
 | 43 | `DOMDocument::saveXML()` wrote namespace declarations in source order (libxml2 writes them first) | ext/dom | `RssResponseRelativeUrlFilter` (`/rss.xml`) | fixed — `dom-savexml-nsdecl-first.phpt` |
+| 44 | `serialize()` wrote enum cases as `O:` objects and `unserialize()` rejected `E:` (session 10) | engine (serialize) | a php-written `component_plugins` cache row (`ExtensionType` cases): `getDefinitions()` returned `false` | fixed — `unserialize-enum.phpt` |
+| 45 | `imagegd2()` / `imagegd()` / `imagecreatefromgd*()` missing: the distribution's libgd has no GD/GD2 formats (session 11) | ext/gd | the GD image toolkit counts as unavailable without `imagegd2` → the node edit form's image toolkit lookup threw (500 for an admin) | fixed — native `gdformat.rs`, `gd-gd2-format.phpt` |
+| 46 | `ReflectionFunction` on a builtin's first-class callable (`strlen(...)`) threw "Function {closure}() does not exist" (session 11) | reflection | Twig's `ReflectionCallable` compiling a Drupal Twig function (`navigation:title` in the admin toolbar) | fixed — `reflection-closure-builtin-fcc.phpt` |
 
 ## Worker mode (step 2)
 
