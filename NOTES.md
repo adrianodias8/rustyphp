@@ -121,6 +121,33 @@ Found on the way:
 
   So this is a whole-script context effect inside micro_bench.php, recorded and not chased.
 
+**3. Rebased onto upstream `main`** (22cb583e; it had 16 commits since our base 9d4ef5ba).
+
+- Upstream's only engine change is **L-RT1, "Ret in place"** (`vm/run.rs`, +29 lines): a plain
+  frame (no `$this`, iterators, `ext` or dynamic variables) is torn down in place instead of
+  being moved through `pop` + `recycle_frame`. Everything else is their session harness,
+  diaries and gap reports, deleted again as in f30b4d5f.
+- Conflicts: only the `run.rs` cap line, at each of our commits that touched it (resolved as our
+  value + 29), and modify/delete on the harness files. L-RT1's comment was translated, and its
+  equivalence with our drop-driven `gc_note_frame`/`recycle_frame` checked: the admitted
+  frame's last `Rc` field, `ret_cell`, drops after slots and stack in both paths.
+- The rebased branch differs from the old `next` only by L-RT1 and the cap line. It passes
+  `cargo test` and `gate.sh` (0 pass→fail, 54 repro tests). The old head is tagged locally as
+  `next-pre-rebase-2026-10-02`.
+
+Upstream's effect, A = `next` before the rebase, B = after:
+
+| measure | A | B | B/A |
+|---|---:|---:|---:|
+| bench/ab.sh geomeans | | | arrays 1.004, strings 1.006, oop 1.005, zend_bench 0.991, zend_micro 0.985, autoload 1.007, symfony-boot 0.991 |
+| calls in zend_micro (`self::f()`, `Foo::f()`) | | | 0.916, 0.921 |
+| Drupal warm one-shot, median of 8 interleaved | 20.43 ms | 20.12 ms | 0.985 |
+| **Drupal `handle()`** (`phases.sh`, FERRO/FERRO_B, 6 interleaved rounds) | **18.18 ms** | **17.80 ms** | 0.979 |
+
+In the same run, php-fpm's `handle()` is 3.92 ms (bootstrap 1.17, total 5.34) and php -S's is
+3.90 ms. **`handle()` now: ferro 17.80 ms vs php-fpm 3.92 ms (4.5×, a 13.9 ms gap); the target is
+≤ 7.8 ms.**
+
 ---
 
 # Session 10 — 2026-10-02 — Drupal request phases, zygote mode, memory, ferro-edge
