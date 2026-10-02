@@ -30,7 +30,7 @@ fn no_source_file_over_cap() {
     const SLACK_MAX: usize = 200;
     const CAP_C_MOD: usize = 2057;
     const CAP_B_MBSTRING: usize = 2032;
-    const CAP_VM_MOD: usize = 26792; // +73 classic-mode caches (deferred decls, preg, realpath); +75 incremental unit_fp digests, prelude-prefix skip in run_linked, trait-include negative probe; +26 include index/memo plumbing in run_include; +66 drop-driven destructor hooks (vm/gcdrop.rs: fields, note/sweep/collect branches, Zend teardown order)
+    const CAP_VM_MOD: usize = 26793; // +73 classic-mode caches (deferred decls, preg, realpath); +75 incremental unit_fp digests, prelude-prefix skip in run_linked, trait-include negative probe; +26 include index/memo plumbing in run_include; +66 drop-driven destructor hooks (vm/gcdrop.rs: fields, note/sweep/collect branches, Zend teardown order); +1 D-24/D-25 sentinel ignores
     const CAP_VM_HOST: usize = 7903; // +5: unserialize validate/direct dispatch (vm/unser.rs)
     const CAP_VM_RUN: usize = 7650;
     const CAP_T_EVAL: usize = 4773;

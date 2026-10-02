@@ -34,6 +34,13 @@ every measured number and where each session stopped.
 - **Comments in English.** The code was translated from Italian; keep it so.
 - **Never push to `upstream`** (it is disabled on purpose). `origin` is
   github.com/adrianodias8/rustyphp; work on `next`.
+- **`run_loop` is layout-sensitive.** Never grow an op arm in `vm/run.rs`:
+  put new logic in an `#[inline(never)]` helper (its own file under `vm/`)
+  and run the whole `bench/ab.sh` — a fast path added inside the `FieldIsset`
+  arm cost 3–8 % on unrelated ops (NOTES.md session 8).
+- **Only interleaved timings count.** The host carries background load:
+  compare binaries with `bench/drupal/ab-oneshot.sh` / `bench/ab.sh`
+  (alternating rounds), never two separate runs.
 - OrbStack's bind mount can lag a host-side edit by up to a minute: if
   `cargo build` finishes in 0.1 s without `Compiling …`, `touch` the file
   inside the container and check the binary's timestamp before measuring.
@@ -47,7 +54,25 @@ docker/run.sh ../baseline/gate.sh
 docker/run.sh bash -c 'PHPR_A=/target/prev/release/ferro PHPR_B=/target/release/ferro /work/php-rust/bench/ab.sh'
 PRIV=1 docker/run.sh bash -c 'OUT=/scratch/prof /work/php-rust/bench/profile.sh'
 bench/worker/bench-wrk.sh          # from the host: phpr worker vs php-fpm vs FrankenPHP
+bench/drupal/bench-wrk-drupal.sh   # from the host: Drupal, ARMS="fpm frankenphp ferro-worker ferro-classic"
+bench/drupal/scaling.sh            # from the host: 1xN threads vs Nx1 processes (--reuse-port)
+docker/run.sh bash /work/php-rust/bench/drupal/ab-oneshot.sh        # Drupal warm request, HEAD vs tree
+docker/run.sh bash /work/php-rust/bench/drupal/optime.sh build      # per-op / per-callee time census
+docker/run.sh /work/php-rust/baseline/smoke-composer.sh             # and smoke-dbal.sh
 ```
+
+Profiling (perf annotate crashes on these binaries): a frame-pointer +
+line-table build in `/target/fp` (`CARGO_PROFILE_RELEASE_DEBUG=line-tables-only
+RUSTFLAGS="-C force-frame-pointers=yes" CARGO_TARGET_DIR=/target/fp`), recorded
+with `--call-graph fp`, then `bench/drupal/fold.py` (self/inclusive/callers),
+`buckets.py` (by subsystem), `within.py`, and `hotlines.sh` (source lines and
+instructions, via gimli's `addr2line` installed in `/target/tools`).
 
 Environment switches: `PHPR_REG_LOWER`, `PHPR_UNIT_CACHE=0`, `PHPR_DUMP_OPS=1`,
 `PHPR_LOG=debug|trace`; the `PHPR_*` names are upstream's and are kept.
+`PHPR_GC=classic` selects the note/sweep GC engine instead of the default
+drop-driven destructors (`vm/gcdrop.rs`); `PHPR_REVALIDATE_FREQ` (seconds)
+sets the server's include stat interval (opcache's `revalidate_freq`, 2 s
+under `-S`, 0 in the CLI). Server flags: `--workers N` without `--worker` is
+the classic pool (fresh Vm per request); `--reuse-port` lets several
+processes share the port.

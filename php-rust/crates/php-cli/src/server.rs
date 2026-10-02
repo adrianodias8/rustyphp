@@ -808,6 +808,7 @@ pub fn serve(addr: &str, mut rest: std::iter::Peekable<impl Iterator<Item = std:
     let mut worker: Option<PathBuf> = None;
     let mut workers: usize = 0;
     let mut max_requests: u64 = 0;
+    let mut reuse_port = false;
     while let Some(arg) = rest.next() {
         let bytes = arg.as_os_str().as_bytes();
         if bytes == b"-t" {
@@ -819,6 +820,10 @@ pub fn serve(addr: &str, mut rest: std::iter::Peekable<impl Iterator<Item = std:
                 .next()
                 .and_then(|n| n.to_string_lossy().parse().ok())
                 .unwrap_or(0);
+        } else if bytes == b"--reuse-port" {
+            // SO_REUSEPORT: several ferro processes serve one port, the
+            // kernel spreading connections (php-fpm-style process pools).
+            reuse_port = true;
         } else if bytes == b"--max-requests" {
             max_requests = rest
                 .next()
@@ -845,7 +850,7 @@ pub fn serve(addr: &str, mut rest: std::iter::Peekable<impl Iterator<Item = std:
         docroot,
         router,
     };
-    let listener = match TcpListener::bind((host, port)) {
+    let listener = match bind_listener(host, port, reuse_port) {
         Ok(l) => l,
         Err(e) => {
             eprintln!("Failed to listen on {host}:{port} (reason: {e})");
@@ -1198,4 +1203,23 @@ fn worker_thread(
             });
         }
     }
+}
+
+/// Bind the listening socket; with `reuse_port`, SO_REUSEPORT lets several
+/// ferro processes bind the same address (`--reuse-port`).
+fn bind_listener(host: &str, port: u16, reuse_port: bool) -> std::io::Result<TcpListener> {
+    if !reuse_port {
+        return TcpListener::bind((host, port));
+    }
+    use std::net::ToSocketAddrs;
+    let addr = (host, port)
+        .to_socket_addrs()?
+        .next()
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "no address"))?;
+    let sock = socket2::Socket::new(socket2::Domain::for_address(addr), socket2::Type::STREAM, None)?;
+    sock.set_reuse_address(true)?;
+    sock.set_reuse_port(true)?;
+    sock.bind(&addr.into())?;
+    sock.listen(1024)?;
+    Ok(sock.into())
 }

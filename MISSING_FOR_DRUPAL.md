@@ -93,6 +93,30 @@ are process infrastructure the booted kernel depends on (`Settings::$instance`,
 `Database::$connections`/`$databaseInfo`, `FileCache*`, `DrupalKernel::$isEnvironmentInitialized`):
 resetting those breaks the next request (500).
 
+A fourth static joined the recipe in session 7: `ReverseContainer::$recordedServices` grows by
+~245 entries per request with every `resetContainer()` — on both engines — a memory and time leak
+that never shows in the output.
+
+## Throughput (sessions 8–9)
+
+Front page, anonymous, `page_cache` uninstalled, every server on a copy of the same base,
+token-stripped bodies identical to php-fpm's (`bench/drupal/bench-wrk-drupal.sh`, 12-CPU VM shared
+with wrk; files in `bench/results/`):
+
+| server | 4 workers | 8 workers |
+|---|---:|---:|
+| nginx + php-fpm 8.5.7 + opcache | 753 | 1,425 |
+| FrankenPHP 1.12.7 worker (`recipe`) | 184 | 340 |
+| ferro worker (`recipe`) | 72 | 141 |
+| ferro classic pool (`--workers N`, a fresh Vm per request) | 161 | 294 |
+
+Both worker runtimes **degrade from run to run** under the recipe (FrankenPHP 549 → 340 → 278,
+ferro 216 → 141 → 114 at 8 workers), so state still accumulates in Drupal itself after
+`resetContainer()`; with that reset, a worker is slower than a classic per-request server for
+Drupal — on both engines. Classic-pool scaling (`bench/drupal/scaling.sh`): 52 req/s for one
+worker, 73 % per-worker efficiency at 8, **identical with 8 threads or 8 processes** (php-fpm:
+86 %), so the per-thread caches are not what costs the scaling.
+
 ## Result
 
 `drush site:install standard` (SQLite) completes under ferro: **14.5 s vs 2.1 s** for the oracle

@@ -133,6 +133,12 @@ A local slot that is a reference simply *holds* a `Zval::Ref`; readers `deref_cl
 - PHP destructors never run from Rust `Drop`; teardown is an explicit sweep. `Drop for Object`
   (`object.rs:366`) only orders handle-id release, through a depth-bounded trampoline
   (`drop_bounded`, `:315`) so a 500k-node linked list does not overflow the native stack.
+  *Fork, session 9:* that sweep engine is now `PHPR_GC=classic`. The default is drop-driven
+  (`vm/gcdrop.rs`): the object registry holds `Weak`s, `Drop for Object` resurrects an object
+  whose `__destruct` has not run under its own id and queues it for the VM's next statement
+  boundary, weak handles follow the resurrection by id, cycle collection snapshots the live
+  registry and runs the classic collector, and freed handle ids are released at the statement
+  boundary or the next user `new` (Zend's reuse order).
 
 ## 5. How shared values are mutated
 
@@ -245,6 +251,13 @@ The value model already contains hand-written `unsafe` refcounting (`ZStr`) and 
   thread-local, keyed by path + a fingerprint of the VM's class/function tables (`Vm::unit_fp`,
   `:7095`), owns `Rc<Module>`, ways-evicted. Kill switch `PHPR_UNIT_CACHE=0` (`:16168`). Used for
   `include`d units, and for the main script in the server.
+- *Fork, session 8:* the same cache now also holds each **deferred class declaration** (a
+  defer-always unit's classes were re-parsed and re-compiled on every request: 64 % of a warm
+  Drupal request), plus the **negative result** of a lowering that stopped on a missing supertype
+  (`vm/defercache.rs`, `lower_neg_*`) so a trait using a trait is cached too. The server adds a
+  per-thread include index (raw path → resolved path, unit key, memoized hit), opcache's
+  `revalidate_freq` for the include stat (`PHPR_REVALIDATE_FREQ`, 2 s under `-S`), a per-thread
+  regex cache and a realpath cache. `unit_fp` is maintained incrementally.
 
 ## 10. `php-server`
 
@@ -258,6 +271,11 @@ Two modes (`php-server/src/main.rs:1-12`):
    `vm/websapi.rs:391-491`). Populated: **`$_SERVER`, `$_GET`, `$_POST`, `$_COOKIE`, `$_FILES`
    (multipart parsed, oracle-pinned shape), `$_REQUEST`, and `php://input`**
    (`sapi::request_body`, `php-types/src/sapi.rs:76`). This is the mode WordPress runs on.
+   *Fork:* `ferro -S … --workers N` (without `--worker`) runs that same one-shot server on N
+   threads accepting on the shared socket — the classic, php-fpm-like pool (a fresh Vm per
+   request, per-thread compile caches); `--reuse-port` (SO_REUSEPORT) lets N processes share the
+   port instead (session 9: identical throughput to N threads). `--worker` is the fork's worker
+   mode (`ferro_handle_request`).
 2. **`--axum` (feature `axum-server`, experimental)** — Axum front end → mpsc → N OS worker
    threads (`worker_pool.rs`). **It does not pass the request to PHP.** `WorkerHandlerMeta`
    (`worker_pool.rs:136`) carries only the script path and source; `set_web_request` is never

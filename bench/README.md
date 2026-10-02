@@ -12,6 +12,9 @@ Everything runs inside the dev container; nothing is installed on the host.
 | `bench/worker/bench-wrk.sh` (from the host) | HTTP throughput under `wrk`: phpr worker mode vs nginx+php-fpm+opcache vs FrankenPHP worker mode, hello and the Symfony app, one docker network | `bench/results/<date>-wrk.md` |
 | `docker/run.sh /work/php-rust/bench/worker/isolation.sh` | worker mode's request-isolation gate: one worker across N requests vs the one-shot cli-server vs the oracle | stdout |
 | `docker/run.sh /work/php-rust/bench/path-sensitivity.sh [phpr] [bench] [R]` | the same script under four path names, one binary: the heap-layout band of a section (session 4: `prop_rmw_1m` 171–201 ms) | stdout |
+| `docker/run.sh bash -c 'PHPR_A=… PHPR_B=… /work/php-rust/bench/ab.sh'` then `python3 bench/ab-summary.py <tsv>` | A/B of two ferro binaries (ABBA, 7 rounds); the summary prints per-section geomeans and the rows outside [0.85, 1.05] | TSV / stdout |
+| `bench/drupal/*` | Drupal 11: install and page parity, worker mode, wrk vs php-fpm/FrankenPHP, classic-pool scaling, op-time census, profiling tools — see `bench/drupal/README.md` | `bench/results/*-drupal-*.md` |
+| `bench/proto/` (`CARGO_TARGET_DIR=/target/proto cargo build --release`) | standalone safe-Rust VM layout prototype: ferro's frame layout vs a contiguous value stack (NOTES.md session 8, fifth pass) | stdout |
 
 Rules the harness enforces:
 

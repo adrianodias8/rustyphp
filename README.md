@@ -6,8 +6,9 @@
 vibe-coded end to end.**
 
 ```bash
-ferro script.php                         # a drop-in for `php` on the CLI
-ferro -S 0.0.0.0:8080 --worker app.php   # boot once, serve requests in a loop
+ferro script.php                                    # a drop-in for `php` on the CLI
+ferro -S 0.0.0.0:8080 -t web web/index.php --workers 8   # php-fpm-like pool: a fresh VM per request
+ferro -S 0.0.0.0:8080 --worker app.php              # boot once, serve requests in a loop
 ```
 
 Ferrophant is a fork of [francescotinti/php-rust](https://github.com/francescotinti/php-rust)
@@ -15,7 +16,8 @@ Ferrophant is a fork of [francescotinti/php-rust](https://github.com/francescoti
 work is the foundation and stays credited (see [NOTICE.md](NOTICE.md) and
 the [license](#license)). This fork changes three things: the performance
 work is decided by a profiler, every claim is a number in a committed file,
-and the runtime has a worker mode aimed at Symfony, Laravel and Drupal.
+and the runtime serves HTTP itself — a php-fpm-like pool (a fresh VM per
+request) and a worker mode — aimed at Symfony, Laravel and Drupal.
 
 ## Why this exists
 
@@ -43,26 +45,33 @@ gate that must show zero pass→fail on that corpus, a differential of 37,835
 operator cases at zero mismatches, and an interleaved A/B benchmark against
 the previous build. Nothing is "believed to be faster".
 
-## Status (2026-10-01)
+## Status (2026-10-02)
 
 | what | number | where |
 |---|---:|---|
-| `Zend/tests` + `tests/` passing (of 6,172) | 3,103 | `baseline/zend-tests.md` |
+| `Zend/tests` + `tests/` passing (of 6,172) | 3,104 | `baseline/zend-tests.md` |
 | operator differential vs `php` | 37,835 cases, 0 mismatches | `cargo test -p php-types --test differential` |
 | Composer 2.10 `require monolog/monolog` | runs; `vendor/` byte-identical | `baseline/smoke-composer.sh` |
 | Doctrine DBAL 4.5 PHPUnit suite | 4,146 tests, 1 failure (the oracle's same 1) | `baseline/smoke-dbal.sh` |
 | Drupal 11 `drush site:install standard` (SQLite) | completes; database equivalent to the oracle's | `bench/drupal/install.sh`, `MISSING_FOR_DRUPAL.md` |
 | Drupal 11 front page, one-shot and worker mode | byte-identical to `php -S` (worker: 10/10 with the documented reset) | `bench/drupal/frontpage.sh`, `worker-leaks.sh` |
+| Drupal 11 front page, warm, one request (classic) | 19 ms (was 166 ms; `php -S` without opcache: 8–10 ms) | `bench/drupal/oneshot-time.sh`, NOTES.md sessions 8–9 |
+| Drupal under `wrk`, 8 workers, classic pool | **294 req/s** vs nginx+php-fpm+opcache 1,425 (0.21×) | `bench/results/2026-10-01-drupal-wrk-classic4-w8.md` |
+| Drupal under `wrk`, 8 workers, worker mode | 141 req/s vs FrankenPHP worker 340, php-fpm 1,425 (both workers degrade run to run: Drupal state) | `bench/results/2026-10-02-drupal-wrk-worker-w8.md` |
 | Symfony HttpKernel request, in-process | 7.9× the time of `php -n` | `bench/results/2026-09-30-slices-2-3.md` |
 | Symfony under `wrk`, worker mode, 4 workers | **1.08× nginx+php-fpm+opcache**, **0.63× FrankenPHP worker** | `bench/results/2026-09-30-wrk-w4.md` |
 | same, 8 workers | 1.27× php-fpm, 1.13× FrankenPHP | `bench/results/2026-09-30-wrk-w8.md` |
 | hello world under `wrk`, 4 workers | 164 k req/s (4.6× php-fpm, 6.7× FrankenPHP) | same |
 | allocations per array write / typed call / `foreach` | 0 / 0 / 0 (were 1 / 1 / 1) | `bench/alloc/count.sh` |
 
-The interpreter is still several times slower than Zend on CPU-bound PHP
-(3.5–10× on the micro benchmarks; the dispatch loop is what is left, see
-[DECISION_KERNEL.md](DECISION_KERNEL.md)). Behind HTTP, where most of a
-request is SAPI work, the worker mode already competes.
+The interpreter is still several times slower than Zend on CPU-bound PHP:
+calls and property writes 7–19×, arrays and strings 1.4–5× on the micro
+benchmarks, and a Drupal request ~5× php-fpm+opcache per worker. Compilation
+is no longer in that number (every unit, deferred class and include is cached
+across requests); what is left is spread over dispatch, property access,
+value copies and allocation — see [DECISION_KERNEL.md](DECISION_KERNEL.md)
+and NOTES.md session 8. Behind HTTP on a framework that resets cheaply
+(Symfony), the worker mode already competes; on Drupal it does not yet.
 
 Known behaviour differences from PHP 8.5.7 are listed one per row, each
 with a failing test, in [KNOWN_DIVERGENCES.md](KNOWN_DIVERGENCES.md).
@@ -83,6 +92,9 @@ docker/run.sh /target/release/ferro -r 'echo PHP_VERSION, "\n";'
 # the gates
 docker/run.sh cargo test --release
 docker/run.sh ../baseline/gate.sh                       # zero pass->fail on the corpus
+
+# classic pool: N threads, a fresh VM per request (add --reuse-port to run several processes)
+docker/run.sh /target/release/ferro -S 0.0.0.0:8080 -t public public/index.php --workers 4
 
 # worker mode: boot the app once per worker, then loop
 docker/run.sh /target/release/ferro -S 0.0.0.0:8080 --worker bench/worker/symfony-worker.php --workers 4
@@ -150,12 +162,17 @@ NOTES.md               the session log
 
 ## Roadmap
 
-1. Slice 6, the dispatch loop (34 % of a Symfony request) — on bare metal
-   with hardware counters, not in the VM.
-2. An on-disk bytecode cache for the CLI (the 15.8 ms startup floor).
-3. Laravel and Drupal under the worker mode.
-4. A memory ceiling for workers, if a real application shows growth (the
-   soak test does not, on Symfony).
+1. The call/frame layout: a contiguous value stack with the frame state in
+   locals — the safe-Rust prototype (`bench/proto/`) halves a call; a
+   multi-site refactor of the VM.
+2. The per-worker working set (360 MB resident for one Drupal worker): it
+   scales the same on threads and processes (73 % at 8 vs php-fpm's 86 %),
+   so the lever is the size, not sharing it between threads.
+3. Destructor timing at return and generator teardown (D-24, D-25).
+4. Drupal's per-request state under worker mode: what still accumulates
+   after `resetContainer()` on both FrankenPHP and ferro.
+5. An on-disk bytecode cache for the CLI (the 15.8 ms startup floor), and
+   a bare-metal run with hardware counters.
 
 ## License
 

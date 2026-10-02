@@ -5,6 +5,17 @@
 > were open at the time and says which were closed. Re-read this decision when Laravel or Drupal
 > can be profiled, or if a bare-metal run with hardware counters contradicts the bucket table.
 
+> **Re-read against Drupal, 2026-10-02 (sessions 8–9, NOTES.md): outcome A stands.** A warm
+> Drupal 11 request (classic mode) went 166 → 19 ms inside the value model: caching the deferred
+> class declarations, the include path, and handlers measured one by one with an op-time census.
+> What is left is flat (dispatch 17 %, properties 9 %, `Zval` clone/drop 8 %, arrays 7 %,
+> allocation 7 %, …). Slice 6 was tried twice in safe Rust and measured worse (a dispatch fast
+> path: micro rows ×1.05–1.5; a frame-epoch cache: calls ×1.12) and reverted. A standalone
+> prototype (`bench/proto/`) shows a contiguous value stack halving a call in safe Rust, and
+> unchecked indexing buying nothing measurable — so §8's no-`unsafe` rule costs nothing found
+> so far. The GC (§6 row 9's "re-profile") was replaced by drop-driven destructors
+> (`vm/gcdrop.rs`, session 9): +1 corpus test, −4 % per Drupal request.
+
 PLAN.md §3. Evidence: [`PROFILE.md`](PROFILE.md), [`ARCHITECTURE_NOTES.md`](ARCHITECTURE_NOTES.md),
 [`bench/results/`](bench/results/).
 
@@ -291,8 +302,8 @@ Ordered by measured size ÷ estimated risk. None touches `php-types`' public API
 | 3 | ~~Resolve builtins and `host_builtin_canonical` at compile/link time~~ **done, session 3**, as a per-site run-time cache (`NsIc`): link-time binding would be wrong, a namespaced function declared later must still shadow the builtin. `Op::CallBuiltin`'s own lookup by name (PROFILE.md §5.4) is untouched | Symfony `handle_requests` 49.0 → 43.2 ms (0.881×) | call ops |
 | 4 | ~~`foreach` by position over a held `Rc` clone instead of a snapshot~~ **done, session 4** — the remaining gap is dispatch (row 6) | `packed_foreach_sum_1m` 0.863, `nested_pass_by_value_100k` 0.554; ~30 ns/element left, ≈6.8× the oracle (4.5 ms per million) | iterator state |
 | 5 | ~~Remove the per-array-write and per-call allocation~~ **done, session 4** — array write, typed call and `foreach` all at 0 allocations; only concat allocates | typed `function_call_1m` 0.883; `packed_index_write_1m` 0.948 | path machinery, call binder |
-| 6 | Dispatch loop: current frame held outside the `Vec`, cached stack/ops slices | up to 20.6 % | `run_loop` |
-| 7 | Bytecode cache, steps 2 and 3 of §4 — step 2 is what the unit cache already gives a worker (nothing compiles after boot); step 3 (on disk) not done, see NOTES.md session 5 §4 | 36 % of a short Symfony run; the 15.8 ms CLI floor | new module |
+| 6 | Dispatch loop: current frame held outside the `Vec`, cached stack/ops slices — **tried in session 8, reverted twice** (a fast inner loop: micro rows ×1.05–1.5; an epoch-cached frame: calls ×1.12); the measured alternative is a contiguous value stack (`bench/proto/`: calls 35 → 18 ns in safe Rust), a multi-site refactor still to start | up to 20.6 % | `run_loop` |
+| 7 | Bytecode cache, steps 2 and 3 of §4 — step 2 is what the unit cache already gives a worker (nothing compiles after boot), and since session 8 the classic server too (deferred class declarations cached, 0 misses on a warm Drupal request); step 3 (on disk) not done, see NOTES.md session 5 §4 | 36 % of a short Symfony run; the 15.8 ms CLI floor | new module |
 | 8 | ~~Worker mode~~ **done, session 5** (`ferro -S --worker`, `ferro_handle_request()`; NOTES.md session 5 §2–3): Symfony under wrk 1.08× php-fpm+opcache and 0.63× FrankenPHP at 4 workers, 1.27× / 1.13× at 8 | removes boot per request | `php-cli` server, `vm/worker.rs` |
 | 9 | **Re-profile.** Only then ask whether arrays need a new representation (C-lite) — **done once, session 4** (NOTES.md session 4 §2c): `Rc` + `RefCell` + alloc 11–31 %, still under every PLAN threshold; dispatch and compilation are what is left | — | — |
 

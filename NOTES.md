@@ -5,21 +5,22 @@ this session unless it is explicitly labelled "upstream's claim".
 
 ---
 
-# Next session — the owner's plan (given 2026-10-01), in order
+# Current plan — the owner's list (given 2026-10-02), with status
 
-1. **Drupal 11 standard install under ferro**, one-shot cli-server mode, SQLite:
-   `drush site:install standard`. Fix each first fatal with an oracle-validated `.phpt`. Record
-   every missing extension/function in `MISSING_FOR_DRUPAL.md`.
-2. **Drupal front page byte-identical to the oracle** (strip tokens), then run it in worker mode.
-   Document every piece of Drupal state that leaks between requests; do not patch Drupal — find
-   what a worker needs to reset.
-3. **wrk**: Drupal front page, anonymous, page cache off — ferro worker vs php-fpm+opcache vs
-   FrankenPHP worker. Tune FrankenPHP (`num_threads`, `GOMAXPROCS`) until it scales, and note the
-   config.
-4. If a bare-metal Linux box is available, re-run the Symfony wrk suite there (needs the owner:
-   no such machine is reachable from this environment).
+1. **wrk, Drupal worker mode** (recipe reset, drop GC): ferro vs php-fpm+opcache vs FrankenPHP,
+   4 and 8 workers, same cache settings — **done**, session 9.
+2. **Scaling**: 8 processes × 1 worker (SO_REUSEPORT) vs 1 process × 8 workers, mimalloc and the
+   system allocator, per-worker efficiency — **done**, session 9.
+3. `DECISION_CODE_SHARING.md` only if processes scale near 97 % and threads do not — **not
+   written**: threads and processes scale identically (73 %), so the condition is not met.
+4. Return-time destructor divergence in `KNOWN_DIVERGENCES.md` with a `.phpt` pinned to PHP; the
+   sentinels un-pinned from ferro's output — **done** (D-24, D-25).
+5. Composer and DBAL smoke tests under the new GC default — **done**, both unchanged.
+6. Update and review all docs — **done** (README, CLAUDE.md, ARCHITECTURE_NOTES, DECISION_KERNEL,
+   MISSING_FOR_DRUPAL, KNOWN_DIVERGENCES, bench READMEs).
 
-**No engine micro-slices until step 3 has numbers.**
+The previous plan (2026-10-01: Drupal install, front-page parity, worker leaks, wrk) is complete
+except its step 4 (a bare-metal Symfony run), which still needs a machine.
 
 ---
 
@@ -59,6 +60,34 @@ profile). A/B: oop 0.954 (`new Foo()` 0.643), `json_decode_object_5mb_x5` 0.734,
 identical, where classic reused a handle id late. Remaining known difference: PHP runs a function's
 local destructors inside the return (`[a1][a2]r`), ferro at the statement boundary (`r[a1][a2]`) —
 both engines; running them in `Ret` is the follow-up (re-entrancy in the hottest handler).
+
+**The owner's six-point follow-up (same session).**
+
+1. *Drupal worker mode under wrk* (`bench/results/2026-10-02-drupal-wrk-worker-w{4,8}.md`; all three
+   arms on copies of the same base, bodies identical to php-fpm's): 4 workers — php-fpm 753,
+   FrankenPHP 184, ferro 72 req/s; 8 workers — 1,425, 340, 141. Both worker runtimes degrade run to
+   run (FrankenPHP 549 → 340 → 278, ferro 216 → 141 → 114 at 8): state still accumulates in Drupal
+   after `resetContainer()` + the recipe statics, on either engine. With that reset a Drupal worker
+   is slower than ferro's own classic pool (294 at 8).
+2. *Scaling* (`bench/drupal/scaling.sh`, `bench/results/2026-10-01-drupal-scaling-n8.md`; classic
+   mode; ferro already ships mimalloc, so the second arm is glibc malloc via
+   `--features system-alloc`; new `--reuse-port` flag): mimalloc 1×1 52.1 req/s, 1×8 threads 305.5
+   (73 %), 8×1 processes 305.8 (73 %); system 41.6, 236.1 (71 %), 236.1 (71 %). php-fpm: 1 worker 207,
+   8 workers 1,425 (86 %). **Threads and processes scale identically**; mimalloc is +25 % per worker
+   and changes nothing in the scaling. The extra ~13 points ferro loses against php-fpm are not
+   thread-specific — duplicated code per thread is not the cause.
+3. Hence no `DECISION_CODE_SHARING.md` (its condition — processes near 97 %, threads not — is not
+   met). The per-worker working set (360 MB resident for one Drupal worker) is the candidate, and
+   it would cost processes as much as threads.
+4. D-24 (destructors at return) and D-25 (generator teardown order and timing) registered with
+   oracle-validated `.phpt`s in `baseline/divergences/`; the two drop-order sentinels now assert
+   PHP's output and are `#[ignore]`d with a pointer to them.
+5. Smoke tests on the drop GC: Composer `require monolog/monolog` — resolution identical, `vendor/`
+   byte-identical (152 files); DBAL 4.5 PHPUnit — 4,146 tests, 1 failure (the oracle's same 1),
+   5.6 s vs 0.8 s, 398 MB vs 92 MB.
+6. Docs reviewed and updated (README status/roadmap, CLAUDE.md rules and tools, ARCHITECTURE_NOTES
+   fork notes on the GC/caches/classic pool, DECISION_KERNEL re-read against Drupal,
+   MISSING_FOR_DRUPAL throughput, bench READMEs).
 
 ---
 

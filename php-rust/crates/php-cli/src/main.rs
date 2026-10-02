@@ -19,7 +19,7 @@ mod server;
 
 /// The evaluator's per-request workload is allocation-bound (Zval/PhpArray
 /// churn); mimalloc's sharded free lists stand in for Zend's bin/chunk ZMM.
-#[cfg(not(feature = "mem-census"))]
+#[cfg(not(any(feature = "mem-census", feature = "system-alloc")))]
 #[global_allocator]
 static GLOBAL_ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
 

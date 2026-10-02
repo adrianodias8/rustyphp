@@ -38,6 +38,8 @@ relocation (the scenario passes; `baseline/repro/static-prop-ref-across-include.
 | D-21 | `exp("abc")` / `sqrt([])`: the TypeError names the parameter type `int\|float` | `float` (the declared type of the math builtins) | `math-param-type-name.phpt` | session 7 |
 | D-22 | `preg_match_all()` ignores its `$offset` argument (matches from 0) | matching starts at the byte offset | `preg-match-all-offset.phpt` | session 7 |
 | D-23 | `f(...$args)` where the KNOWN function `f` has by-reference parameters is a compile error ("spread call to a by-reference function") | binds the reference elements (dynamic `$f(...$args)` already does) | `spread-to-known-byref-function.phpt` | session 7 |
+| D-24 | a returning function's locals (and `foreach` temporaries) are destructed at the caller's next statement boundary, after the caller used the return value: `echo f();` prints `r[local]` | inside the return, before the value is used: `[local]r` | `destructor-at-return.phpt` | session 9 (both GC engines; the frame's teardown ORDER already matches) |
+| D-25 | unsetting a suspended generator destructs what its frames hold at the statement boundary, outer frame first: `G[d2][d1]` | at the unset, inner (`yield from`) generator first: `[d1][d2]G` | `generator-teardown-destructors.phpt` | session 9 |
 
 Fixed by the fork (tests in `baseline/repro/`): `count()` on a `Countable` through any dynamic
 call; `isset(Class::$static)`; `.=` quadratic for every non-local target and non-string operand;

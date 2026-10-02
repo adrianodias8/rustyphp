@@ -9,6 +9,9 @@ name = "ferro"
 path = "src/main.rs"
 
 [features]
+# Scaling experiment only (NOTES.md session 9): the system allocator instead
+# of mimalloc, to price the allocator's share of multi-worker scaling.
+system-alloc = []
 # Every feature below builds an INSTRUMENTED binary: counters, probes or a
 # layout perturbation. None of them is ever used for a timing figure or a
 # parity run; the plain build is the one that is measured and shipped.
@@ -35,3 +38,4 @@ php-builtins.workspace = true
 log.workspace = true
 libc = "0.2"
 mimalloc.workspace = true
+socket2 = { version = "0.6", features = ["all"] }

@@ -1909,6 +1909,7 @@ dependencies = [
  "php-builtins",
  "php-runtime",
  "php-types",
+ "socket2",
 ]
 
 [[package]]

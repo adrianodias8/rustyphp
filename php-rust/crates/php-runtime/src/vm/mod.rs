@@ -23349,6 +23349,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "D-24 (KNOWN_DIVERGENCES.md): destructors at return run at the next statement boundary; tracked by baseline/divergences/destructor-at-return.phpt"]
     fn frame_drop_order_sentinel_iters_this_dynvars() {
         assert_eq!(
             vm_stdout(
@@ -23363,15 +23364,15 @@ mod tests {
                 function fx() { $name='dd'; $$name = new D('x1'); $local = new D('x3'); foreach ([new D('x2')] as $v) { return 'z'; } }
                 echo fx(); $n = new D('x4'); unset($n); echo '.';"
             ),
-            // Drop-driven destructors (default): Zend's teardown ORDER within
-            // each return (PHP: `[a1][a2]r[a3].[b1][this]m[b2].[c2][c1]q[c3].
-            // [x3][x2][x1]z[x4].`); the remaining difference is timing — PHP
-            // runs them inside the return, ferro at the statement boundary.
-            b"r[a1][a2][a3].m[b1][this][b2].q[c2][c1][c3].z[x3][x2][x1][x4]."
+            // PHP 8.5.7's output (the oracle). ferro matches the teardown
+            // ORDER within each return but runs the destructors at the next
+            // statement boundary (`r[a1][a2]…`): D-24.
+            b"[a1][a2]r[a3].[b1][this]m[b2].[c2][c1]q[c3].[x3][x2][x1]z[x4]."
         );
     }
 
     #[test]
+    #[ignore = "D-24/D-25 (KNOWN_DIVERGENCES.md): destructor timing at return and generator teardown; tracked by baseline/divergences/"]
     fn frame_drop_order_sentinel_generator_and_extras() {
         // RE-PINNED in WP-72 (S-72.4 mass-teardown): the shutdown tail for
         // generator-held survivors is now STORE order `[d2][d1]` (creation
@@ -23389,10 +23390,10 @@ mod tests {
                 function f5($a) { $args = func_get_args(); return 'f'; }
                 echo f5(1, new D('e1'), new D('e2')); $n = new D('e3'); unset($n); echo '.';"
             ),
-            // Drop-driven destructors (default): the generator's objects die
-            // with it at the unset's statement boundary (PHP: `[d1][d2]G[d3].
-            // [e1][e2]f[e3].` — inside the unset, inner generator first).
-            b"G[d2][d1][d3].f[e1][e2][e3]."
+            // PHP 8.5.7's output (the oracle): the generator's objects die
+            // inside the unset, inner generator first (D-25), and a call's
+            // surplus arguments with its return (D-24).
+            b"[d1][d2]G[d3].[e1][e2]f[e3]."
         );
     }
 
