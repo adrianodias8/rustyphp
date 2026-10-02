@@ -1,6 +1,0 @@
-09:44:44 == collaudo az.rev. S-182 — HEAD b623ffcf, bundle MONTATA ==
-09:44:44 canonica prima: 19a2faa83a492745
-09:48:03 (1) build ricetta canonica rc=0: phpr 19a2faa83a492745 == pin 19a2faa83a492745 AL BYTE (rilievo 2 CHIUSO)
-09:49:42 (2a) cargo test --profile dev-release rc=0: 1748 passed / 0 failed
-10:03:01 (2b) corpus-gate col runner dev-release (/Users/francescotinti/Claude/phpr-target/dev-output/dev-release/phpt-runner) rc=0: CORPUS-GATE COMPLESSIVO: rc=0 (nomi E contenuto E off↔on; rc in /Volumes/Extreme Pro/Claude/php-rust-experiment/php-rust
-10:03:01 ESITO: rilievo 2 CHIUSO · rilievo 3 CHIUSO (profilo dev-release dichiarato: batteria rc=0, corpus rc=0)

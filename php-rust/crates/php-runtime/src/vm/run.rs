@@ -4478,16 +4478,16 @@ impl<'m> super::Vm<'m> {
                             }
                         }
                     }
-                    // L-RT1 (S-183, wp182-harness/s183-criterio-rt1.md): Ret IN PLACE
-                    // ad AMMISSIONE — un frame senza `$this`, iteratori, `ext` e
-                    // variabili dinamiche (ogni funzione semplice) rilascia SOLO
-                    // slots e stack: le note GC nello STESSO ordine di
-                    // `gc_note_frame` (slots poi stack), lo svuotamento nello STESSO
-                    // ordine di `recycle_frame` (slots poi stack, front-to-back), e il
-                    // Frame residuo (campi Copy/None/vuoti: nessun Rc) muore con
-                    // `truncate` invece di viaggiare per valore attraverso `pop` +
-                    // `recycle_frame`. Ogni altro frame (main, metodi, foreach, ext)
-                    // passa dal cammino di prima, INVARIATO.
+                    // L-RT1 (upstream S-183): Ret IN PLACE for an admitted frame —
+                    // no `$this`, iterators, `ext` or dynamic variables (every plain
+                    // function) releases only slots and stack: GC notes in the SAME
+                    // order as `gc_note_frame` (slots, then stack), clearing in the
+                    // SAME order as `recycle_frame` (slots, then stack, front to
+                    // back), and the residual Frame dies by `truncate` instead of
+                    // travelling by value through `pop` + `recycle_frame` (its only
+                    // Rc-bearing field left, `ret_cell`, drops after slots and
+                    // stack, as in `recycle_frame`). Every other frame (main,
+                    // methods, foreach, ext) takes the previous path, unchanged.
                     let in_place = self.frames.len() > 1 && {
                         let f = &self.frames[top];
                         f.this.is_none() && f.iters.is_empty() && f.ext.is_none() && f.dyn_vars.is_none()

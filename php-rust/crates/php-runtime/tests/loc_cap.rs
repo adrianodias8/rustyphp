@@ -32,7 +32,7 @@ fn no_source_file_over_cap() {
     const CAP_B_MBSTRING: usize = 2032;
     const CAP_VM_MOD: usize = 26810; // +11 worker/zygote boot superglobals seeded at Vm construction; +6 unserialize E: (Ser::Enum arm, O: of an enum rejected); +73 classic-mode caches (deferred decls, preg, realpath); +75 incremental unit_fp digests, prelude-prefix skip in run_linked, trait-include negative probe; +26 include index/memo plumbing in run_include; +66 drop-driven destructor hooks (vm/gcdrop.rs: fields, note/sweep/collect branches, Zend teardown order); +1 D-24/D-25 sentinel ignores
     const CAP_VM_HOST: usize = 7909; // +5: unserialize validate/direct dispatch (vm/unser.rs); +6: positioned unserialize failures (E:) routed through unser_offset_fail
-    const CAP_VM_RUN: usize = 7650;
+    const CAP_VM_RUN: usize = 7650; // includes +29 upstream L-RT1 (S-183, Ret in place), rebased 2026-10-02
     const CAP_T_EVAL: usize = 4773;
     const CAP_T_BUILTINS: usize = 4772;
     const CAP_LOWER_MOD: usize = 4013; // +7: DeferredDecl::digest
