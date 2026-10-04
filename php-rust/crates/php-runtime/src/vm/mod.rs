@@ -31,7 +31,7 @@ use php_types::{
     convert, open_file_stream, open_php_stream, ops, ArgPlace, ArgPlaceBase, ArgPlaceStep, Closure,
     ClosureInfo, ClosureParam, ClosureRender, Diag,
     Diags, DirHandle, GenKey, GenState, GenStatus, Key, LazyKind, LeafWrite, Object, ObjectInfo, PhpArray, PhpError,
-    PhpStr, PropVis, Props, ResKind, Resource, Stream, StreamBackend, Zval,
+    PhpStr, PropVis, Props, ResKind, Resource, Stream, StreamBackend, Zval, zdrop, zset,
 };
 
 use crate::builtin::{Builtin, BuiltinRefFn, Ctx, Registry};
@@ -2770,7 +2770,7 @@ impl<'m> Frame<'m> {
         // Named locals plus register temps (Leva B stage 1): max_temps is 0
         // until the reg_lower pass emits register forms, so this is today's
         // size; register temps are ordinary slots past n_slots (plan §4).
-        slots_buf.resize((func.n_slots + func.max_temps) as usize, Zval::Undef);
+        slots_buf.resize_with((func.n_slots + func.max_temps) as usize, || Zval::Undef);
         Frame {
             func,
             module,

@@ -383,7 +383,7 @@ pub(super) fn bind_params(frame: &mut Frame, args: Vec<Zval>) {
     if frame.func.simple_call && args.len() == frame.func.n_params as usize {
         frame.argc = args.len() as u32;
         for (i, a) in args.into_iter().enumerate() {
-            frame.slots[i] = decay_arg(a);
+            zset(&mut frame.slots[i], decay_arg(a));
         }
         return;
     }
@@ -486,7 +486,7 @@ pub(super) fn build_named_frame<'m>(
     // Positional args fill the leading fixed slots; surplus goes to the variadic.
     for (i, a) in positional.into_iter().enumerate() {
         if i < fixed {
-            frame.slots[i] = if by_ref(i) { a } else { decay_arg(a) };
+            zset(&mut frame.slots[i], if by_ref(i) { a } else { decay_arg(a) });
         } else if has_variadic {
             let _ = variadic.append(if variadic_by_ref { a } else { decay_arg(a) });
         }
@@ -500,7 +500,7 @@ pub(super) fn build_named_frame<'m>(
                     String::from_utf8_lossy(&name)
                 )))
             }
-            Some(j) => frame.slots[j] = if by_ref(j) { val } else { decay_arg(val) },
+            Some(j) => zset(&mut frame.slots[j], if by_ref(j) { val } else { decay_arg(val) }),
             None if has_variadic => {
                 let val = if variadic_by_ref { val } else { decay_arg(val) };
                 variadic.insert(Key::Str(PhpStr::new(name.to_vec())), val);
@@ -1301,7 +1301,7 @@ impl<'m> Vm<'m> {
                         let mut a0 = args
                             .into_iter()
                             .next()
-                            .unwrap_or(Zval::Null)
+                            .unwrap_or_else(|| Zval::Null)
                             .deref_clone();
                         let op =
                             if canon == b"current" { PtrOp::Current } else { PtrOp::Key };
@@ -1451,7 +1451,7 @@ impl<'m> Vm<'m> {
         }
         let mut buf = [Zval::Null, Zval::Null, Zval::Null, Zval::Null];
         for slot in buf[..n].iter_mut().rev() {
-            *slot = self.frames[top].stack.pop().expect("CallNsFallback argument");
+            zset(slot, self.frames[top].stack.pop().expect("CallNsFallback argument"));
         }
         let args = &mut buf[..n];
         if args.iter().any(|a| matches!(a, Zval::ArgPlace(_))) {

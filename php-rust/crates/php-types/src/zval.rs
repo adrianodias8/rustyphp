@@ -104,6 +104,37 @@ impl Clone for Zval {
     }
 }
 
+impl Zval {
+    /// Whether dropping this value releases a reference count (Zend's
+    /// `Z_REFCOUNTED`). Scalars own nothing.
+    #[inline(always)]
+    pub fn is_refcounted(&self) -> bool {
+        !matches!(self, Zval::Undef | Zval::Null | Zval::Bool(_) | Zval::Long(_) | Zval::Double(_))
+    }
+}
+
+/// Drop `v` with the scalar case inline. `Zval` has no `Drop` impl (values are
+/// destructured by move everywhere), so its drop glue is one out-of-line
+/// function, and the optimiser cannot see that dropping a placeholder
+/// (`Undef`/`Null`) is a no-op: every `*slot = v` over one paid the call.
+/// This is Zend's `zval_ptr_dtor` shape: a tag test, and a call only for a
+/// refcounted value. Same effect as `drop(v)`, so release order is unchanged.
+#[inline(always)]
+pub fn zdrop(v: Zval) {
+    if v.is_refcounted() {
+        drop(v);
+    } else {
+        std::mem::forget(v);
+    }
+}
+
+/// `*slot = v` through [`zdrop`]: the displaced value is released after the
+/// store, as the assignment's drop would.
+#[inline(always)]
+pub fn zset(slot: &mut Zval, v: Zval) {
+    zdrop(std::mem::replace(slot, v));
+}
+
 /// Census birth funnel of the shared `Rc<RefCell<Zval>>` boxes (class
 /// `rczval`). Without the `mem-census` feature it is textually
 /// `Rc::new(RefCell::new(v))` (`#[inline]`, no census symbol in the parity

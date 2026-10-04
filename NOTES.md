@@ -24,6 +24,30 @@ except its step 4 (a bare-metal Symfony run), which still needs a machine.
 
 ---
 
+# Session 15 — 2026-10-04 — engine program by instructions per request
+
+The owner's brief: primary metric = cachegrind Ir per warm Drupal request (`SIM=0
+bench/drupal/cachegrind.sh`), secondary = interleaved `handle()`; both per commit in
+`bench/results/ir-trend.md`. Steps: (1) Zval drop/clone inline fast path; (2) property access
+through cached slots, interned names, hash sets for redeclaration scans (property excess
++19.3M → < +5M, `bcmp` < 100k calls); (3) link cached units once per process; (4) top 20
+allocation sites; (5) call/return path under 400 instructions.
+
+**Step 1 (Zval drop/clone): 180.74M → 179.81M Ir (−0.5 %); handle() 18.04 → 17.96 ms
+(php-fpm 3.80).** The premise held for few values: callgrind call counts show 71 % of the
+272k out-of-line clones and ~80 % of the 496k drops per request are of *refcounted* values,
+which pay the inc/dec anyway (Zend too). An inline scalar copy in `Clone` made things worse
+(+1.07M): LLVM emits a compare chain per inlined site instead of a 16-byte copy, and outlined
+`read_slot`/`deref_clone`. Kept: `zdrop`/`zset` (tag test, call only for refcounted) at the
+sites that drop placeholders — 100k drop calls/request gone — plus `unwrap_or_else(|| Null)`
+(the eager `Null` default was dropped through the out-of-line glue) and `resize_with`.
+A/B (`bench/ab.sh`, 7 rounds): zend_bench 0.992, zend_micro 1.027, arrays 1.002, strings
+1.015, oop 0.992, autoload 1.018, symfony 0.991. The micro sections above 1.05 (static prop
+reads, `?:`) do not touch the changed code, and cachegrind on the micro bench (N = 200k)
+counts B 0.16 % *fewer* instructions: placement, not work.
+
+---
+
 # Session 14 — 2026-10-04 — hardware-counter substitute (cachegrind), ferro vs php
 
 The owner's brief:

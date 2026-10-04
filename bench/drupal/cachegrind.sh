@@ -12,6 +12,8 @@
 # LL (its L2) 16M 16-way, 128-byte lines.
 #   docker/run.sh bash /work/php-rust/bench/drupal/cachegrind.sh
 #   TOOL=callgrind TAG=ferro-cl M=10 ...   (per-instruction counts, see cg-handlers.py)
+#   SIM=0 ...   instructions only (no cache/branch model, ~2x faster): the
+#               primary metric of bench/results/ir-trend.md
 set -euo pipefail
 ENGINE=${ENGINE:-ferro}; M=${M:-20}; WARM=${WARM:-5}; WARM_CG=${WARM_CG:-3}; PORT=${PORT:-8250}
 OUT=/scratch/cg; mkdir -p $OUT
@@ -39,6 +41,7 @@ if [[ ${TOOL:-cachegrind} == callgrind ]]; then
 else
   VG=(--tool=cachegrind --cache-sim=yes --branch-sim=yes
       --I1=196608,6,128 --D1=131072,8,128 --LL=16777216,16,128)
+  [[ ${SIM:-1} == 0 ]] && VG=(--tool=cachegrind --cache-sim=no --branch-sim=no)
 fi
 for n in 0 "$M"; do
   # up() is itself one request, so the run serves 1 + WARM_CG + n

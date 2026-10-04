@@ -402,6 +402,7 @@ impl<'m> super::Vm<'m> {
         }
         let old = store_slot(&mut self.frames[top].slots[i], v);
         self.gc_note(&old);
+        zdrop(old);
         Ok(())
     }
 
@@ -712,6 +713,7 @@ impl<'m> super::Vm<'m> {
         }
         let old = store_slot(&mut self.frames[top].slots[s as usize], stored);
         self.gc_note(&old);
+        zdrop(old);
         Ok(v)
     }
 
@@ -1007,6 +1009,7 @@ impl<'m> super::Vm<'m> {
                 #[cfg(feature = "zval-census")]
                 super::zvalcensus::note_gcnote_site_propset_old();
                 self.gc_note(&old);
+                zdrop(old);
             }
             if !DISCARD {
                 scn!(PropSet: Push = 1);
@@ -1073,6 +1076,7 @@ impl<'m> super::Vm<'m> {
                         super::zvalcensus::note_gcnote_site_propset_old();
                         self.gc_note(&old);
                         dcn!(PropSet: &old); // the old value dies here
+                        zdrop(old);
                     }
                     if !DISCARD {
                         scn!(PropSet: Push = 1);
@@ -1124,6 +1128,7 @@ impl<'m> super::Vm<'m> {
                     #[cfg(feature = "zval-census")]
                     super::zvalcensus::note_gcnote_site_propset_old();
                     self.gc_note(&old);
+                    zdrop(old);
                 }
                 if !DISCARD {
                     self.frames[top].stack.push(value);
@@ -1332,6 +1337,7 @@ impl<'m> super::Vm<'m> {
         }
         if let Some(old) = write_property_at(&target, &key, slot_idx, value.clone())? {
             self.gc_note(&old);
+            zdrop(old);
         }
         if !DISCARD {
             self.frames[top].stack.push(value);
@@ -1787,6 +1793,7 @@ impl<'m> super::Vm<'m> {
                     let v = self.frames[top].stack.pop().expect("StoreSlot on empty stack");
                     let old = store_slot(&mut self.frames[top].slots[*s as usize], v);
                     self.gc_note(&old);
+                    zdrop(old);
                 }
                 Op::LoadVarDyn => {
                     // `$$x` read: resolve the runtime name in the current frame.
@@ -1871,6 +1878,7 @@ impl<'m> super::Vm<'m> {
                     // (`$x = new T; static $x;` discards the temporary T here).
                     let old = std::mem::replace(&mut self.frames[top].slots[*slot as usize], Zval::Ref(cell));
                     self.gc_note(&old);
+                    zdrop(old);
                 }
                 Op::LoadGlobal(s) => {
                     // `$GLOBALS['x']` read: the global lives in the script frame.
@@ -1882,6 +1890,7 @@ impl<'m> super::Vm<'m> {
                     let v = self.frames[top].stack.pop().expect("StoreGlobal on empty stack");
                     let old = store_slot(&mut self.frames[0].slots[*s as usize], v);
                     self.gc_note(&old);
+                    zdrop(old);
                 }
                 Op::IncDecGlobal { slot, inc, pre } => {
                     let i = *slot as usize;
@@ -1911,6 +1920,7 @@ impl<'m> super::Vm<'m> {
                     let v = self.frames[top].stack.pop().expect("StoreSuperglobal on empty stack");
                     let old = store_slot(&mut self.superglobals[*idx as usize], v);
                     self.gc_note(&old);
+                    zdrop(old);
                 }
                 Op::GlobalsDynAssign => {
                     // `$GLOBALS[$name] = v`: resolve-or-create the global slot.
@@ -2768,7 +2778,7 @@ impl<'m> super::Vm<'m> {
                             _ => None,
                         };
                         if let Some(k) = k {
-                            let v = a.get(&k).map(|v| v.deref_clone()).unwrap_or(Zval::Null);
+                            let v = a.get(&k).map(|v| v.deref_clone()).unwrap_or_else(|| Zval::Null);
                             self.frames[top].stack.push(v);
                             continue;
                         }
@@ -3017,6 +3027,7 @@ impl<'m> super::Vm<'m> {
                     };
                     if let Some(old) = dropped {
                         self.gc_note(&old);
+                        zdrop(old);
                     }
                 }
                 Op::BindRef { target, source } => {
@@ -3040,6 +3051,7 @@ impl<'m> super::Vm<'m> {
                     // gc_019/gc_021: `$a =& $b` rebinding away from a cyclic
                     // array) — note it like any assignment's displaced value.
                     self.gc_note(&old);
+                    zdrop(old);
                 }
                 Op::PushRef(slot) => {
                     // REF-2: promote the local to a shared cell and push the ref;
@@ -3230,7 +3242,7 @@ impl<'m> super::Vm<'m> {
                     }
                 }
                 Op::ParkReturn => {
-                    let v = self.frames[top].stack.pop().unwrap_or(Zval::Null);
+                    let v = self.frames[top].stack.pop().unwrap_or_else(|| Zval::Null);
                     self.frames[top].ext_mut().pending_transfer = Some(Transfer::Return(v));
                 }
                 Op::ParkJump(addr) => {
@@ -3610,7 +3622,7 @@ impl<'m> super::Vm<'m> {
                                 let v = match self.frames[top].iters.last_mut() {
                                     Some(IterState::Object { cur_val, stage, .. }) => {
                                         *stage = ObjStage::NeedNext;
-                                        cur_val.take().unwrap_or(Zval::Null)
+                                        cur_val.take().unwrap_or_else(|| Zval::Null)
                                     }
                                     _ => Zval::Null,
                                 };
@@ -3923,7 +3935,7 @@ impl<'m> super::Vm<'m> {
                         cf.argc = n as u32;
                         for i in (0..n).rev() {
                             let a = caller[top].stack.pop().expect("call argument");
-                            cf.slots[i] = decay_arg(a);
+                            zset(&mut cf.slots[i], decay_arg(a));
                         }
                         if matches!(callee.ops.first(), Some(Op::CheckArity { .. })) {
                             cf.ip = 1;
@@ -4245,7 +4257,7 @@ impl<'m> super::Vm<'m> {
                         Some(results) if out_slots.is_empty() => {
                             let mut arr = PhpArray::new();
                             for v in results {
-                                let _ = arr.append(v.unwrap_or(Zval::Null));
+                                let _ = arr.append(v.unwrap_or_else(|| Zval::Null));
                             }
                             Zval::Array(Rc::new(arr))
                         }
@@ -4410,7 +4422,7 @@ impl<'m> super::Vm<'m> {
                     self.frames[top].stack.push(result);
                 }
                 Op::Ret => {
-                    let mut ret = self.frames[top].stack.pop().unwrap_or(Zval::Null);
+                    let mut ret = self.frames[top].stack.pop().unwrap_or_else(|| Zval::Null);
                     let func = self.frames[top].func;
                     // WP-53 (Fase 2.1): `ret_shape` folds the hint/by_ref/
                     // generator declaration facts into one precomputed byte —
@@ -5166,6 +5178,7 @@ impl<'m> super::Vm<'m> {
                                 Zval::Long(r),
                             )? {
                                 self.gc_note(&old);
+                                zdrop(old);
                             }
                             // Sweep-in-op: ONLY from the in-place path (write_property_at
                             // may gc_note the old value): an inert Sweep at ip+2 ⇒ ip+3.
@@ -5220,6 +5233,7 @@ impl<'m> super::Vm<'m> {
                             value,
                         )? {
                             self.gc_note(&old);
+                            zdrop(old);
                         }
                         self.frames[top].ip = ip + 2;
                         true
@@ -6133,7 +6147,7 @@ impl<'m> super::Vm<'m> {
                             if args.iter().any(|a| matches!(a, Zval::ArgPlace(_))) {
                                 self.materialize_arg_places(top, &mut args, None)?;
                             }
-                            let value = args.into_iter().next().map(decay_arg).unwrap_or(Zval::Null);
+                            let value = args.into_iter().next().map(decay_arg).unwrap_or_else(|| Zval::Null);
                             // Switch to the resumer on the fiber's native stack;
                             // the call evaluates to what resume() sends (or
                             // raises what throw() sends) when we are back.
@@ -6146,7 +6160,7 @@ impl<'m> super::Vm<'m> {
                                 .fiber_stack
                                 .last()
                                 .map(|c| c.obj.clone())
-                                .unwrap_or(Zval::Null);
+                                .unwrap_or_else(|| Zval::Null);
                             self.frames[top].stack.push(cur);
                             continue;
                         }
@@ -6169,7 +6183,7 @@ impl<'m> super::Vm<'m> {
                     // Extra arguments are ignored — it is an ordinary user function.
                     if let Some(func) = self.prop_hook(start, &prop, *set) {
                         let set_value =
-                            if *set { Some(args.into_iter().next().unwrap_or(Zval::Null)) } else { None };
+                            if *set { Some(args.into_iter().next().unwrap_or_else(|| Zval::Null)) } else { None };
                         if *set {
                             // A user set hook discards its body return; the call yields NULL.
                             self.frames[top].stack.push(Zval::Null);
@@ -6202,7 +6216,7 @@ impl<'m> super::Vm<'m> {
                     let ocid = object_class_id(&recv).unwrap_or(start);
                     let key = self.prop_storage_key(ocid, &prop, Some(start));
                     if *set {
-                        let v = args.into_iter().next().unwrap_or(Zval::Null);
+                        let v = args.into_iter().next().unwrap_or_else(|| Zval::Null);
                         write_property(&recv, &key, v.clone())?;
                         self.frames[top].stack.push(v);
                     } else {
@@ -6815,7 +6829,7 @@ impl<'m> super::Vm<'m> {
                         let old = {
                             let fs = FieldScope { classes: &self.classes, scope: self.frames[top].class };
                             field_get(&Zval::Ref(Rc::clone(&root)), &steps[1..], &mut keys.clone().into_iter(), fs)
-                                .unwrap_or(Zval::Null)
+                                .unwrap_or_else(|| Zval::Null)
                         };
                         #[cfg(feature = "op-census")]
                         if matches!(*op, crate::hir::BinOp::Concat) {
@@ -6830,7 +6844,7 @@ impl<'m> super::Vm<'m> {
                     if let Some(root) = self.field_lazy_root(*base, top, &steps, &keys, true)? {
                         let old = {
                             let fs = FieldScope { classes: &self.classes, scope: self.frames[top].class };
-                            field_get(&root, &steps, &mut keys.clone().into_iter(), fs).unwrap_or(Zval::Null)
+                            field_get(&root, &steps, &mut keys.clone().into_iter(), fs).unwrap_or_else(|| Zval::Null)
                         };
                         #[cfg(feature = "op-census")]
                         if matches!(*op, crate::hir::BinOp::Concat) {
@@ -6841,7 +6855,7 @@ impl<'m> super::Vm<'m> {
                         self.frames[top].stack.push(result);
                         continue;
                     }
-                    let old = self.field_value(*base, top, &steps, keys.clone()).unwrap_or(Zval::Null);
+                    let old = self.field_value(*base, top, &steps, keys.clone()).unwrap_or_else(|| Zval::Null);
                     #[cfg(feature = "op-census")]
                     if matches!(*op, crate::hir::BinOp::Concat) {
                         crate::vm::census::census_concat_site(4, &old, &rhs);
@@ -6877,7 +6891,7 @@ impl<'m> super::Vm<'m> {
                         let old = {
                             let fs = FieldScope { classes: &self.classes, scope: self.frames[top].class };
                             field_get(&Zval::Ref(Rc::clone(&root)), &steps[1..], &mut keys.clone().into_iter(), fs)
-                                .unwrap_or(Zval::Null)
+                                .unwrap_or_else(|| Zval::Null)
                         };
                         let mut newv = old.clone();
                         if *inc {
@@ -6893,7 +6907,7 @@ impl<'m> super::Vm<'m> {
                     if let Some(root) = self.field_lazy_root(*base, top, &steps, &keys, true)? {
                         let old = {
                             let fs = FieldScope { classes: &self.classes, scope: self.frames[top].class };
-                            field_get(&root, &steps, &mut keys.clone().into_iter(), fs).unwrap_or(Zval::Null)
+                            field_get(&root, &steps, &mut keys.clone().into_iter(), fs).unwrap_or_else(|| Zval::Null)
                         };
                         let mut newv = old.clone();
                         if *inc {
@@ -6905,7 +6919,7 @@ impl<'m> super::Vm<'m> {
                         self.frames[top].stack.push(if *pre { newv } else { old });
                         continue;
                     }
-                    let old = self.field_value(*base, top, &steps, keys.clone()).unwrap_or(Zval::Null);
+                    let old = self.field_value(*base, top, &steps, keys.clone()).unwrap_or_else(|| Zval::Null);
                     let mut newv = old.clone();
                     if *inc {
                         ops::increment(&mut newv, &mut self.diags)?;
@@ -7338,7 +7352,7 @@ impl<'m> super::Vm<'m> {
         for i in (0..n).rev() {
             let a = self.frames[top].stack.pop().expect("MethodCall argument");
             has_place |= matches!(a, Zval::ArgPlace(_));
-            frame.slots[i] = a;
+            zset(&mut frame.slots[i], a);
         }
         let recv = self.frames[top].stack.pop().expect("MethodCall receiver");
         if has_place {
@@ -7362,7 +7376,7 @@ impl<'m> super::Vm<'m> {
         }
         for i in 0..n {
             let a = std::mem::replace(&mut frame.slots[i], Zval::Undef);
-            frame.slots[i] = decay_arg(a);
+            zset(&mut frame.slots[i], decay_arg(a));
         }
         frame.this = Some(recv);
         frame.class = Some(defc);

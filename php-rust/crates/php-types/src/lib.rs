@@ -38,4 +38,4 @@ pub use stream::{
 pub use zstr::{PhpStr, ZStr};
 #[cfg(feature = "mem-census")]
 pub use zstr::{zstr_refcount, ZSTR_DROPS};
-pub use zval::{zcell, zcell_prop, ArgPlace, ArgPlaceBase, ArgPlaceStep, Closure, ClosureInfo, ClosureParam, ClosureRender, Zval};
+pub use zval::{zcell, zcell_prop, zdrop, zset, ArgPlace, ArgPlaceBase, ArgPlaceStep, Closure, ClosureInfo, ClosureParam, ClosureRender, Zval};
