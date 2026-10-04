@@ -261,11 +261,12 @@ impl<'m> super::Vm<'m> {
                     p.i = start + 2;
                     return Ok(None);
                 }
+                // `s:` borrows the input (one allocation: the string itself).
                 let (bytes, end) = if c == b's' {
-                    (b[q..q + len].to_vec(), q + len)
+                    (std::borrow::Cow::Borrowed(&b[q..q + len]), q + len)
                 } else {
                     match unescape_s(b, q, len) {
-                        Some(r) => r,
+                        Some((v, e)) => (std::borrow::Cow::Owned(v), e),
                         None => return Ok(None),
                     }
                 };
@@ -281,7 +282,7 @@ impl<'m> super::Vm<'m> {
                 if c == b'S' {
                     self.us_warn(Diag::Deprecated("unserialize(): Unserializing the 'S' format is deprecated".into()))?;
                 }
-                Zval::Str(PhpStr::new(bytes))
+                Zval::Str(PhpStr::new(&*bytes))
             }
             // An `R:` here is a key (values with one take the two-phase
             // path): its rule consumes it, then refuses without a var_hash.

@@ -63,3 +63,25 @@ impl<'m> super::Vm<'m> {
         }
     }
 }
+
+/// Whether a unit main can never read or write its own variable slots: every
+/// op is a declaration, a constant push, a statement sweep or the return —
+/// the body of a class file (`DeclareDeferred; Sweep; PushConst; Ret`). A
+/// fresh bridge cell for such a unit stays `Undef` and is never published,
+/// so `run_linked` skips allocating it (16k cells per Drupal request).
+pub(super) fn unit_main_scope_free(main: &Func) -> bool {
+    main.ops.iter().all(|op| {
+        matches!(
+            op,
+            Op::DeclareDeferred { .. }
+                | Op::DeclareClass { .. }
+                | Op::DeclareFn { .. }
+                | Op::DeclareTrait { .. }
+                | Op::Sweep { .. }
+                | Op::PushConst(_)
+                | Op::Pop
+                | Op::Ret
+                | Op::Nop
+        )
+    })
+}

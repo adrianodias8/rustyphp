@@ -2766,8 +2766,13 @@ impl<'m> Frame<'m> {
         func: &'m Func,
         module: &'m Module,
         mut slots_buf: Vec<Zval>,
-        stack_buf: Vec<Zval>,
+        mut stack_buf: Vec<Zval>,
     ) -> Self {
+        // A fresh (or small pooled) operand stack would grow 0 -> 4 -> 8 -> 16
+        // on the first pushes: one allocation instead (4.6k grows/request).
+        if stack_buf.capacity() < 16 {
+            stack_buf.reserve(16);
+        }
         debug_assert!(slots_buf.is_empty() && stack_buf.is_empty());
         // Census: the frame's allocs (slot resize on a pool miss) land in
         // the `frame` tag of the galloc partition.
@@ -6792,6 +6797,7 @@ impl<'m> Vm<'m> {
                 let cf = self.frames[caller].func;
                 let (s_c, s_u) = (cf.seed_slots as usize, leaked.main.seed_slots as usize);
                 let mut matched = vec![false; n_named];
+                let scope_free = linkfast::unit_main_scope_free(&leaked.main);
                 for k in 0..unit_slot_count(cf) {
                     let j = if k < s_c && k < s_u {
                         Some(k)
@@ -6834,6 +6840,9 @@ impl<'m> Vm<'m> {
                         frame.slots[i] =
                             Zval::Ref(make_cell_bridge(&mut self.frames[0].slots[slot]));
                     } else {
+                        if scope_free {
+                            continue;
+                        }
                         let cell = php_types::zcell(Zval::Undef);
                         frame.slots[i] = Zval::Ref(Rc::clone(&cell));
                         fresh_bridged.push((i, cell));

@@ -102,6 +102,26 @@ composer smoke identical, DBAL smoke same as HEAD.
 A/B: zend_bench 1.001, zend_micro 1.000, arrays 0.997, strings 1.004, oop 1.001 (magic_set
 1.079 at 4–7 % spread; untouched path), autoload 0.994, symfony 0.991.
 
+**Step 4 (allocations): 157.92M → 152.35M Ir (−3.5 %); allocations 213k → 164k per request
+(php ≈ 55k); allocator excess +14.9M → +11.1M; handle() 16.39 → 15.54 ms (php-fpm 3.98).**
+Census: `bench/drupal/cg-callers.py … "^(mi_malloc_aligned|mi_realloc_aligned|mi_zalloc_aligned)('\d+)?$"
+--sites BIN --frame …` (calls into mimalloc from engine code, grouped by the first engine frame
+of the call's inline chain). Top 20 before (s3a, per request): Vec growth `finish_grow` 29.5k
+(arrays 5.8k, frame operand stacks 4.6k, slot buffers 3.4k, KeyIndex 3.9k, bridge list 2.9k),
+`run_linked` fresh bridge cells 15.8k (+ their `Rc` box), `pop_field_keys` 8.5k, path-op
+`pop_keys` 8.5k, unserialize string `to_vec` 8.2k + its `PhpStr` 8.3k, `Key::from_bytes` 7.6k,
+`FieldIsset` key-vector copy 6.4k, `us_object` 4.8k, `str_at` 4.7k, concat 4.0k + 3.1k,
+`Props::set` 3.4k, `HintKind` clone 2.8k, `haystack_needle` 2.5k, `value_satisfies_class`
+2.4k, `make_cell` 2.2k, `substr` 1.9k. Removed: the fresh bridge cells for unit mains whose ops
+are only declarations/const/sweep/return (a class file — the cell could never be written, so
+it was never published) −4.09M alone; unserialize `s:` borrows the input; operand stacks
+reserve 16; `field_get` takes any key iterator so `FieldIsset` borrows its keys. Tried and
+dropped: `SmallVec` keys for `FieldIsset` (+0.33M: drain/collect costs more than the one
+allocation). Left: path-op key vectors (17k; most consumers take a `Vec` inside `run_loop`
+arms), array growth, string building.
+A/B: zend_bench 0.989, zend_micro 0.987, arrays 1.004, strings 1.000, oop 0.987, autoload 1.003,
+symfony 0.983; no section above 1.05.
+
 ---
 
 # Session 14 — 2026-10-04 — hardware-counter substitute (cachegrind), ferro vs php

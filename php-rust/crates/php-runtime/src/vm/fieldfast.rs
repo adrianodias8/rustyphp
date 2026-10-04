@@ -28,7 +28,7 @@ impl<'m> super::Vm<'m> {
         }
         let cur = self.frames[top].class;
         let mut v = self.base_field_cell(base, top)?.deref_clone();
-        let mut ks = keys.to_vec().into_iter();
+        let mut ks = keys.iter().cloned();
         for step in steps {
             match step {
                 FieldStep::Prop(n) => {

@@ -200,7 +200,7 @@ fn unset_into_walk(cell: &mut Zval, keys: &[Zval], i: usize, aa: &mut Option<Uns
 /// source order.
 /// The property name of a [`FieldStep::PropDyn`] step: the next stack-sourced key
 /// coerced to a string (step 51).
-pub(super) fn prop_dyn_name(keys: &mut std::vec::IntoIter<Zval>, diags: &mut Diags) -> Box<[u8]> {
+pub(super) fn prop_dyn_name(keys: &mut impl Iterator<Item = Zval>, diags: &mut Diags) -> Box<[u8]> {
     let key = keys.next().expect("field prop-dyn name");
     convert::to_zstr(&key, diags).as_bytes().into()
 }
@@ -646,7 +646,7 @@ fn field_write_prop_step(
     }
 }
 
-pub(super) fn field_get(cell: &Zval, steps: &[FieldStep], keys: &mut std::vec::IntoIter<Zval>, fs: FieldScope) -> Option<Zval> {
+pub(super) fn field_get(cell: &Zval, steps: &[FieldStep], keys: &mut impl Iterator<Item = Zval>, fs: FieldScope) -> Option<Zval> {
     if let Zval::Ref(rc) = cell {
         // BORROW-OK: shared read-walk (see silent_get_path).
         return field_get(&rc.borrow(), steps, keys, fs);
