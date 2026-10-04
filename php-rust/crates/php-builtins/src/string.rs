@@ -818,22 +818,18 @@ fn find_sub(hay: &[u8], needle: &[u8]) -> Option<usize> {
     if needle.len() > hay.len() {
         return None;
     }
-    (0..=hay.len() - needle.len()).find(|&i| &hay[i..i + needle.len()] == needle)
+    memchr::memmem::find(hay, needle)
 }
 
 /// Split `s` on every (non-overlapping) occurrence of `sep` (sep non-empty).
 fn split_all<'a>(s: &'a [u8], sep: &[u8]) -> Vec<&'a [u8]> {
+    // memmem's iterator reports non-overlapping matches left to right, the
+    // same cut points as a byte-by-byte scan that skips past each match.
     let mut parts = Vec::new();
     let mut start = 0;
-    let mut i = 0;
-    while i + sep.len() <= s.len() {
-        if &s[i..i + sep.len()] == sep {
-            parts.push(&s[start..i]);
-            i += sep.len();
-            start = i;
-        } else {
-            i += 1;
-        }
+    for i in memchr::memmem::find_iter(s, sep) {
+        parts.push(&s[start..i]);
+        start = i + sep.len();
     }
     parts.push(&s[start..]);
     parts
@@ -874,8 +870,17 @@ pub(crate) fn str_at(args: &[Zval], ctx: &mut Ctx, idx: usize, fname: &str, expe
             format!("{fname}() expects exactly {expected} arguments, {} given", args.len()),
         )
     })?;
-    if let Some(pname) = string_param_name(fname, idx) {
-        crate::null_arg_deprecation(ctx, v, fname, idx + 1, pname, "string");
+    // The deprecation only fires for NULL: resolve the parameter name (a
+    // string match over every known builtin) only then.
+    let is_null = match v {
+        Zval::Null => true,
+        Zval::Ref(c) => matches!(&*c.borrow(), Zval::Null),
+        _ => false,
+    };
+    if is_null {
+        if let Some(pname) = string_param_name(fname, idx) {
+            crate::null_arg_deprecation(ctx, v, fname, idx + 1, pname, "string");
+        }
     }
     Ok(ctx.to_zstr(v).as_bytes().to_vec())
 }
@@ -1908,7 +1913,7 @@ fn rfind_window(hay: &[u8], needle: &[u8], lo: usize, hi: usize) -> Option<usize
     if hi < lo {
         return None;
     }
-    (lo..=hi).rev().find(|&i| &hay[i..i + needle.len()] == needle)
+    memchr::memmem::rfind(&hay[lo..hi + needle.len()], needle).map(|i| lo + i)
 }
 
 /// Resolve a `strrpos`-style `$offset` into the inclusive start-position window

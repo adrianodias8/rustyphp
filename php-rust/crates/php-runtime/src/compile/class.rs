@@ -475,6 +475,9 @@ pub(super) fn compile_class(cid: ClassId, cd: &ClassDecl, ctx: &ProgramCtx) -> C
                 && pi.hooks.is_none()
         }),
         has_asym_set: prop_info.values().any(|pi| pi.set_visibility.is_some()),
+        declares_private_props: prop_info
+            .values()
+            .any(|pi| pi.visibility == Visibility::Private && pi.declaring_class == cid),
         props_template: Default::default(),
         prop_info,
     }
@@ -609,6 +612,8 @@ pub(super) fn stub_class(cd: &crate::hir::ClassDecl) -> CompiledClass {
         all_props_public: false,
         plain_set_props: false,
         has_asym_set: false,
+        // Conservative: a stub keeps the scope lookup.
+        declares_private_props: true,
         props_template: Default::default(),
     }
 }

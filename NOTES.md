@@ -46,6 +46,41 @@ A/B (`bench/ab.sh`, 7 rounds): zend_bench 0.992, zend_micro 1.027, arrays 1.002,
 reads, `?:`) do not touch the changed code, and cachegrind on the micro bench (N = 200k)
 counts B 0.16 % *fewer* instructions: placement, not work.
 
+**Step 2 (property access): 179.81M → 161.49M Ir (−10.2 %); handle() 17.49 → 16.25 ms
+(php-fpm 3.88).** Property excess vs Zend **+19.3M → +7.1M** (target < +5M: not reached);
+real `bcmp` calls **247k → 77k** per request (target < 100k: met; callgrind also lists one
+`bcmp`→`bcmp` PLT edge per call — 107k in the 354k baseline, 49k now — excluded on both sides).
+
+Why ~16 lookups per property op (callgrind call counts, real sites): the 274k "lookups" of
+HWCOUNTERS_DRUPAL.md include ~100k tail-call artifacts; the real ones were ~57k `slot_of` +
+~73k `prop_info` for ~24k property ops, ≈ 5–6 per op. They bypassed the IC on these paths:
+- `FieldIsset` (`isset($this->a[...])`, 6.4k/request): per property step two `magic_applies`
+  (each a full resolve = 1–2 `prop_info` + two `slot_of` presence scans) before discovering the
+  class has no `__isset`/`__get`, then `field_get` resolved again and read by name.
+- `resolve_prop_access` did a scope-class `prop_info` lookup before the object-class one on
+  every call (16.5k/request), though the private-shadowing rule needs a scope that declares
+  privates and a scope ≠ object class.
+- the IC is per run (`ic_epoch`) and monomorphic: every first touch and every polymorphic
+  `$this->x` in a base-class method takes the by-name fallback.
+- unserialize field writes: three name lookups per field.
+
+Fixes (each measured): magic bitmask per class per run (vm/propfast.rs) −9.15M together with
+slot-indexed presence/read and the unserialize fold; `declares_private_props` −0.79M;
+pointer-keyed resolve cache on op-owned `&'m` names for `FieldIsset` −1.21M (the same cache in
+`prop_get_fallback`/`prop_set_entry` cost more than it saved — first touches dominate there —
+reverted); inline `deref_object`/`lazy_prop_access` −0.90M; `memchr::memmem` for
+`strpos`/`explode`/`strrpos` and the null-only param-name match in `str_at` −2.12M; no value
+clone on `PropSetPop` −0.13M. Include linking: `run_linked` walked the ~1000-entry shared
+prelude prefix with pointer compares on every include (2.66M/request) and scanned the
+includer's whole function list for redeclarations (0.86M): the compile now records
+`Module::prelude_shared`, and prelude names are indexed once per run (vm/linkfast.rs) −3.76M.
+What is left in property access (+7.1M): the `prop_info` map itself (2.1M, ~21k first-touch
+lookups — interning names with a precomputed hash is the remaining lever), the `PropSetPop`
+IC path (0.86M), `slot_of` (0.66M), `ThisPropGet` (0.60M).
+A/B: zend_bench 0.993, zend_micro 0.982, arrays 0.997, strings 0.991, oop 0.995, autoload
+0.997, symfony 0.995. Gates: cargo test (only the root-only test), gate.sh 0 pass→fail,
+composer smoke identical, DBAL smoke same as HEAD.
+
 ---
 
 # Session 14 — 2026-10-04 — hardware-counter substitute (cachegrind), ferro vs php

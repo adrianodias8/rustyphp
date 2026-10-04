@@ -20,7 +20,7 @@ impl<'m> super::Vm<'m> {
         &self,
         base: FieldBase,
         top: usize,
-        steps: &[FieldStep],
+        steps: &'m [FieldStep],
         keys: &[Zval],
     ) -> Option<bool> {
         if steps.iter().any(|s| matches!(s, FieldStep::PropDyn | FieldStep::Append)) {
@@ -48,6 +48,25 @@ impl<'m> super::Vm<'m> {
                     {
                         return None;
                     }
+                    // `field_get`'s object-property hop, with the resolution
+                    // memoized on the op-owned name (vm/propfast.rs).
+                    let next = {
+                        let b = o.borrow();
+                        let found = match self.resolve_prop_memo(b.class_id as usize, n, cur) {
+                            PropAccess::Denied { .. } => None,
+                            PropAccess::Slot { key, slot } => match slot.and_then(|i| b.props.get_slot(i)) {
+                                Some(x) => Some(x),
+                                None => b.props.get(key),
+                            },
+                            PropAccess::Dynamic => b.props.get(n),
+                        };
+                        found.map(Zval::deref_clone).filter(|x| !matches!(x, Zval::Undef))
+                    };
+                    match next {
+                        Some(next) => v = next,
+                        None => return Some(false),
+                    }
+                    continue;
                 }
                 FieldStep::Index => {
                     if deref_object(&v).is_some() {
@@ -76,7 +95,7 @@ impl<'m> super::Vm<'m> {
         &mut self,
         top: usize,
         base: FieldBase,
-        steps: &[FieldStep],
+        steps: &'m [FieldStep],
     ) -> Result<bool, PhpError> {
         let keys = self.pop_field_keys(top, steps);
         if let Some(set) = self.field_isset_fast(base, top, steps, &keys) {

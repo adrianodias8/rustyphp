@@ -889,6 +889,7 @@ mod tests {
             // attribute-thunk: hand-built FnCompiler, OUTSIDE the funnel
             const_attributes: _,
             elided: _,
+            prelude_shared: _,
         } = m;
         let mut all: Vec<&Func> = vec![main];
         all.extend(functions.iter().map(|f| f.as_ref()));

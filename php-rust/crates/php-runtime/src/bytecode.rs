@@ -2243,6 +2243,11 @@ pub struct CompiledClass {
     /// per-write prop_info lookup (WP-26 quick win: the WP-25 deny cost
     /// showed up as an unconditional hash lookup per declared write).
     pub has_asym_set: bool,
+    /// Whether the class itself declares a `private` instance property. When
+    /// false, the private-shadowing rule of `resolve_prop_access` (step 1:
+    /// the scope's own private wins) cannot apply with this class as scope,
+    /// and its `prop_info` lookup is skipped.
+    pub declares_private_props: bool,
     /// The "template": the class's COMPLETE per-instance property
     /// table, snapshotted once and cloned by every later allocation. Filled at
     /// the first `alloc_object` when every default is constant (`prop_init`
@@ -2412,6 +2417,10 @@ pub struct Module {
     /// v1 (main module and flag-OFF units). Typed provenance, not a filename
     /// pun: link/hit paths branch on this, never on markers.
     pub elided: Option<u32>,
+    /// How many leading `functions` are the seeding prelude's own `Rc`s
+    /// (WP-20 reuse), counted by the compile; `run_linked` uses it to skip
+    /// the shared prefix without walking it (vm/linkfast.rs).
+    pub prelude_shared: usize,
 }
 
 impl Module {

@@ -51,6 +51,8 @@ mod builtinfast;
 mod defercache;
 mod gcdrop;
 mod fieldfast;
+mod propfast;
+mod linkfast;
 mod unser;
 use gcdrop::gcdrop_enabled;
 use defercache::{defer_unit_key, inc_index_get, resolve_absolute_include, inc_index_put, inc_memo_get, inc_memo_put, lower_neg_get, lower_neg_put, revalidated_unit_key};
@@ -795,6 +797,8 @@ pub fn vm_new<'m>(
         statics: vec![None; module.static_count],
         closure_statics: HashMap::default(),
         magic_guard: HashSet::default(),
+        magic_bits: RefCell::new(Vec::new()),
+        prop_memo: RefCell::new(Vec::new()),
         typed_refs: Vec::new(),
         created: BTreeMap::new(),
         gc_drop: gcdrop_enabled(),
@@ -882,6 +886,8 @@ pub fn vm_new<'m>(
         stream_chunk_sizes: HashMap::default(),
         seed_aliases: Vec::new(),
         prelude_fns: Vec::new(),
+        prelude_prefix_memo: HashMap::default(),
+        prelude_names: None,
         umask: 0o22,
         dom_docs: HashMap::default(),
         next_dom: 1,
@@ -3366,6 +3372,10 @@ pub struct Vm<'m> {
     /// Active magic-accessor guards (object id, kind, property) — a magic method
     /// is not re-entered for the same access while it is running (OOP-3b).
     magic_guard: HashSet<(u32, MagicKind, Vec<u8>)>,
+    /// Per class id, which property magic methods the class has (vm/propfast.rs).
+    magic_bits: RefCell<Vec<u8>>,
+    /// Direct-mapped `resolve_prop_access` cache for op-owned names (vm/propfast.rs).
+    prop_memo: RefCell<Vec<propfast::PropMemo<'m>>>,
     /// Live reference cells that alias a *typed* property's storage (PHP's
     /// typed-reference sources, narrowed to the cells phpr hands out via
     /// `&$o->typedProp` / by-ref foreach / a `&get` hook returning a typed
@@ -3759,6 +3769,10 @@ pub struct Vm<'m> {
     /// instead of recompiling ~1000 prelude functions per file — which leaked
     /// ~1.5MB per include (2.1GB retained on the WP test-suite bootstrap).
     prelude_fns: Vec<Rc<Func>>,
+    /// Per module address, the length of its `prelude_fns` prefix (vm/linkfast.rs).
+    prelude_prefix_memo: HashMap<usize, usize>,
+    /// Lowercased prelude function name -> first index (vm/linkfast.rs).
+    prelude_names: Option<HashMap<Vec<u8>, usize>>,
     /// The process umask as `umask()` reports it. phpr never changes the real
     /// process umask (no unsafe/libc); the shadow value starts at the
     /// conventional 022 and get/set semantics match PHP (set returns previous).
@@ -6650,13 +6664,10 @@ impl<'m> Vm<'m> {
         // The shared prelude prefix (the very `Rc`s of `prelude_fns`, in both
         // modules at the same indices) is "already provided" for every entry
         // by the rule below: skip it with pointer compares only.
-        let shared = leaked
-            .functions
-            .iter()
-            .zip(saved.functions.iter())
-            .zip(self.prelude_fns.iter())
-            .take_while(|((f, cf), pf)| Rc::ptr_eq(f, pf) && Rc::ptr_eq(cf, pf))
-            .count();
+        // (The three-way prefix is the shorter of the two modules' own
+        // prelude prefixes, each computed once per run: vm/linkfast.rs.)
+        let saved_prefix = self.prelude_prefix(saved);
+        let shared = self.prelude_prefix(leaked).min(saved_prefix);
         for (idx, f) in leaked.functions.iter().enumerate().skip(shared) {
             if leaked.conditional_fns.contains(&idx) {
                 continue;
@@ -6688,16 +6699,10 @@ impl<'m> Vm<'m> {
             // previous declaration may live in the linked table (an earlier
             // unit) or in the current module's own function list.
             let lower = f.name.to_ascii_lowercase();
-            let prev = self
-                .linked_functions
-                .get(&lower)
-                .map(|(m, i)| &m.functions[*i])
-                .or_else(|| {
-                    saved
-                        .functions
-                        .iter()
-                        .find(|cf| name_eq_ignore_case(&cf.name, &f.name))
-                });
+            let prev = match self.linked_functions.get(&lower) {
+                Some((m, i)) => Some(&m.functions[*i]),
+                None => self.find_fn_in_module(saved, saved_prefix, &f.name, &lower),
+            };
             if let Some(p) = prev {
                 if p.file.as_ref() != b"prelude" {
                     // Zend's non-throwable E_ERROR bail-out, located at the
@@ -10871,12 +10876,30 @@ impl<'m> Vm<'m> {
             // Symfony's Definition) lands in that property, re-mangled with
             // its declaring class, inherited privates included
             // (php_var_unserialize's properties_info lookup).
+            // One `prop_info` lookup serves the common case (a non-private
+            // declared or a dynamic name): its readonly flag and stamped slot
+            // are those of the unchanged key.
+            let classes = &self.classes;
             let k = if k.first() != Some(&0) {
-                match prop_vis_decl(&self.classes, cid, &k) {
-                    Some((Visibility::Private, decl)) => {
-                        php_types::mangle_prop_key(&self.classes[decl].name, &k)
+                match prop_info(classes, cid, &k) {
+                    Some(pi) if pi.visibility == Visibility::Private => {
+                        php_types::mangle_prop_key(&classes[pi.declaring_class].name, &k)
                     }
-                    _ => k,
+                    pi => {
+                        let (ro, slot) = pi.map_or((false, None), |pi| (pi.readonly, pi.slot));
+                        if ro {
+                            rc.borrow_mut().rare_mut().readonly_init.push(k.as_slice().into());
+                        }
+                        let mut ob = rc.borrow_mut();
+                        let res = match slot {
+                            Some(i) => ob.props.replace_slot(i, v).map(drop),
+                            None => Err(v),
+                        };
+                        if let Err(v) = res {
+                            ob.props.set(&k, v);
+                        }
+                        continue;
+                    }
                 }
             } else {
                 k
@@ -13704,7 +13727,29 @@ impl<'m> Vm<'m> {
     /// hook side that intercepts this access kind (`None` checks both sides —
     /// compound ops and unset). `magic` is the access kind's magic interceptor
     /// (`__get`/`__set`/`__isset`/`__unset`).
+    #[inline]
     fn lazy_prop_access(
+        &mut self,
+        target: Zval,
+        name: &[u8],
+        scope: Option<ClassId>,
+        hook_write: Option<bool>,
+        magic: (MagicKind, &'static [u8]),
+    ) -> Result<Zval, PhpError> {
+        // The plain-object fast path below, without the call and the handle
+        // clone (14k calls per Drupal request, nearly all plain objects).
+        if let Zval::Object(o) = &target {
+            let b = o.borrow();
+            if b.lazy.is_none() && b.proxy_instance.is_none() {
+                drop(b);
+                return Ok(target);
+            }
+        }
+        self.lazy_prop_access_slow(target, name, scope, hook_write, magic)
+    }
+
+    #[inline(never)]
+    fn lazy_prop_access_slow(
         &mut self,
         target: Zval,
         name: &[u8],
@@ -21060,7 +21105,7 @@ mod tests {
             //   Module: fn_ci, class_index;
             //   CompiledClass: class_name, info, props_layout, methods_ci,
             //     has_prop_hooks, all_props_public, plain_set_props,
-            //     has_asym_set.
+            //     has_asym_set, declares_private_props.
             // Map/set fields are SORTED before formatting (Debug order of a
             // hash container is not part of the module's identity).
             use std::fmt::Write as _;
@@ -21104,6 +21149,7 @@ mod tests {
                     all_props_public: _,
                     plain_set_props: _,
                     has_asym_set: _,
+                    declares_private_props: _,
                     props_template: _,
                 } = c;
                 let mut pattr: Vec<_> = prop_attributes.iter().collect();
@@ -21137,6 +21183,7 @@ mod tests {
                 strict,
                 const_attributes,
                 elided,
+                prelude_shared: _,
             } = m;
             let mut s = String::new();
             write!(s, "main:{main:?};").unwrap();

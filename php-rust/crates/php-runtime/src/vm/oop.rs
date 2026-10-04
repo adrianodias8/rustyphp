@@ -209,12 +209,21 @@ pub(super) fn object_class_id(v: &Zval) -> Option<ClassId> {
 
 /// The object a value resolves to (following a reference), or `None` for a
 /// non-object — for inspecting a field-path base that may be a `Ref`.
+///
+/// Inline for the direct cases (58k calls per Drupal request, most of them on
+/// a plain object or a non-object); a reference goes out of line.
+#[inline]
 pub(super) fn deref_object(v: &Zval) -> Option<Rc<RefCell<Object>>> {
     match v {
         Zval::Object(o) => Some(o.clone()),
-        Zval::Ref(rc) => deref_object(&rc.borrow()),
+        Zval::Ref(rc) => deref_object_ref(rc),
         _ => None,
     }
+}
+
+#[inline(never)]
+fn deref_object_ref(rc: &Rc<RefCell<Zval>>) -> Option<Rc<RefCell<Object>>> {
+    deref_object(&rc.borrow())
 }
 
 /// The object id of a value (following a reference), or 0 for a non-object — the
@@ -391,6 +400,7 @@ pub(super) fn prop_info<'a>(classes: &[&'a CompiledClass], class: ClassId, name:
 /// Outcome of resolving a property access `obj->name` from a given `scope`
 /// (the property-mangling resolver). Decides both *which storage slot* an access
 /// targets and *whether* it is permitted.
+#[derive(Clone, Copy)]
 pub(super) enum PropAccess<'a> {
     /// An accessible declared property: read/write under this storage key (the
     /// plain name today; a mangled `\0Class\0name` for a private once mangling is on).
@@ -425,7 +435,11 @@ pub(super) enum PropAccess<'a> {
 ///    an invisible private declared by the object's own class (or an invisible
 ///    protected) is `Denied`.
 pub(super) fn resolve_prop_access<'a>(classes: &[&'a CompiledClass], obj_class: ClassId, name: &[u8], scope: Option<ClassId>) -> PropAccess<'a> {
-    if let Some(s) = scope {
+    // Step 1 can only fire for a scope that declares privates itself; and with
+    // the scope being the object's class, step 2 reads the same entry and
+    // reaches the same outcome (a private of `s` is visible from `s`), so
+    // one lookup serves both.
+    if let Some(s) = scope.filter(|&s| s != obj_class && classes.get(s).is_none_or(|c| c.declares_private_props)) {
         if let Some(pi) = prop_info(classes, s, name) {
             if pi.visibility == Visibility::Private
                 && pi.declaring_class == s
@@ -473,7 +487,7 @@ pub(super) fn scope_private_overrides(
     name: &[u8],
     scope: Option<ClassId>,
 ) -> bool {
-    if let Some(s) = scope {
+    if let Some(s) = scope.filter(|&s| classes.get(s).is_none_or(|c| c.declares_private_props)) {
         if let Some(pi) = prop_info(classes, s, name) {
             return pi.visibility == Visibility::Private
                 && pi.declaring_class == s
@@ -508,7 +522,9 @@ impl<'a> FieldScope<'a> {
     /// backing isset/empty/`??`): an inaccessible declared property reads as
     /// absent (`None`) — PHP's `isset($o->private)` from outside is false and
     /// `$o->private ?? $d` yields `$d`, with no error (mirrors Op::PropIsset).
-    pub(super) fn prop_key_read<'n>(&self, ocid: ClassId, name: &'n [u8]) -> Option<std::borrow::Cow<'n, [u8]>>
+    /// Also returns the declared slot's index when the resolution knows it, so
+    /// the read can skip the by-name `slot_of` scan (`Props::get_slot`).
+    pub(super) fn prop_key_read<'n>(&self, ocid: ClassId, name: &'n [u8]) -> Option<(&'n [u8], Option<u32>)>
     where
         'a: 'n,
     {
@@ -516,8 +532,8 @@ impl<'a> FieldScope<'a> {
             // Borrowed straight from the class table (WP-29): the resolved
             // key used to be copied per Prop step — a per-access allocation
             // on every mixed-path walk.
-            PropAccess::Slot { key: k, .. } => Some(std::borrow::Cow::Borrowed(k)),
-            PropAccess::Dynamic => Some(std::borrow::Cow::Borrowed(name)),
+            PropAccess::Slot { key: k, slot } => Some((k, slot)),
+            PropAccess::Dynamic => Some((name, None)),
             PropAccess::Denied { .. } => None,
         }
     }
@@ -994,6 +1010,11 @@ impl<'m> Vm<'m> {
         magic_name: &[u8],
     ) -> Option<(ClassId, usize, u32)> {
         let cid = o.borrow().class_id as usize;
+        // No such magic method: nothing to dispatch, whatever the property's
+        // state (vm/propfast.rs) — skip the resolve and the presence scans.
+        if !self.class_has_magic(cid, magic_name) {
+            return None;
+        }
         let access = resolve_prop_access(&self.classes, cid, name, cur_class);
         self.magic_applies_resolved(o, name, &access, kind, magic_name)
     }
@@ -1013,6 +1034,9 @@ impl<'m> Vm<'m> {
         kind: MagicKind,
         magic_name: &[u8],
     ) -> Option<(ClassId, usize, u32)> {
+        if !self.class_has_magic(o.borrow().class_id as usize, magic_name) {
+            return None;
+        }
         let (cid, oid, present, accessible) = {
             let obj = o.borrow();
             let cid = obj.class_id as usize;

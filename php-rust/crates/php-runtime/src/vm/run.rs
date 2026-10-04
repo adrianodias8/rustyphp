@@ -902,7 +902,7 @@ impl<'m> super::Vm<'m> {
         &mut self,
         top: usize,
         obj: Zval,
-        name: &Rc<[u8]>,
+        name: &'m Rc<[u8]>,
         ic: &crate::bytecode::PropIc,
     ) -> Result<(), PhpError> {
         let sk = crate::bytecode::PropIc::scope_key(self.frames[top].class);
@@ -966,7 +966,7 @@ impl<'m> super::Vm<'m> {
         top: usize,
         obj: Zval,
         mut value: Zval,
-        name: &Rc<[u8]>,
+        name: &'m Rc<[u8]>,
         ic: &crate::bytecode::PropIc,
     ) -> Result<(), PhpError> {
         let cur = self.frames[top].class;
@@ -1005,13 +1005,14 @@ impl<'m> super::Vm<'m> {
                 Some(ocid) => self.prop_decl_storage_key(ocid, name),
                 None => Cow::Borrowed(&name[..]),
             };
-            if let Some(old) = write_property(&target, &key, value.clone())? {
+            let keep = if DISCARD { None } else { Some(value.clone()) };
+            if let Some(old) = write_property(&target, &key, value)? {
                 #[cfg(feature = "zval-census")]
                 super::zvalcensus::note_gcnote_site_propset_old();
                 self.gc_note(&old);
                 zdrop(old);
             }
-            if !DISCARD {
+            if let Some(value) = keep {
                 scn!(PropSet: Push = 1);
                 self.frames[top].stack.push(value);
             }
@@ -1069,16 +1070,17 @@ impl<'m> super::Vm<'m> {
                             }
                         }
                     }
-                    if let Some(old) =
-                        write_property_at(&target, name, Some(slot), value.clone())?
-                    {
+                    // PropSetPop (DISCARD) never pushes: move the value in
+                    // instead of a clone that dies at the end of the op.
+                    let keep = if DISCARD { None } else { Some(value.clone()) };
+                    if let Some(old) = write_property_at(&target, name, Some(slot), value)? {
                         #[cfg(feature = "zval-census")]
                         super::zvalcensus::note_gcnote_site_propset_old();
                         self.gc_note(&old);
                         dcn!(PropSet: &old); // the old value dies here
                         zdrop(old);
                     }
-                    if !DISCARD {
+                    if let Some(value) = keep {
                         scn!(PropSet: Push = 1);
                         self.frames[top].stack.push(value);
                     }
@@ -1124,13 +1126,14 @@ impl<'m> super::Vm<'m> {
                 if let Some(i) = slot {
                     ic.fill(fcid, crate::bytecode::PropIc::scope_key(cur), i);
                 }
-                if let Some(old) = write_property_at(&target, name, slot, value.clone())? {
+                let keep = if DISCARD { None } else { Some(value.clone()) };
+                if let Some(old) = write_property_at(&target, name, slot, value)? {
                     #[cfg(feature = "zval-census")]
                     super::zvalcensus::note_gcnote_site_propset_old();
                     self.gc_note(&old);
                     zdrop(old);
                 }
-                if !DISCARD {
+                if let Some(value) = keep {
                     self.frames[top].stack.push(value);
                 }
                 return Ok(());
@@ -1335,11 +1338,12 @@ impl<'m> super::Vm<'m> {
                 }
             }
         }
-        if let Some(old) = write_property_at(&target, &key, slot_idx, value.clone())? {
+        let keep = if DISCARD { None } else { Some(value.clone()) };
+        if let Some(old) = write_property_at(&target, &key, slot_idx, value)? {
             self.gc_note(&old);
             zdrop(old);
         }
-        if !DISCARD {
+        if let Some(value) = keep {
             self.frames[top].stack.push(value);
         }
         Ok(())
@@ -1349,7 +1353,7 @@ impl<'m> super::Vm<'m> {
         &mut self,
         top: usize,
         target: Zval,
-        name: &Rc<[u8]>,
+        name: &'m Rc<[u8]>,
         ic: &crate::bytecode::PropIc,
     ) -> Result<(), PhpError> {
         let cur = self.frames[top].class;

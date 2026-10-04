@@ -300,6 +300,7 @@ fn compile_program_impl_mode(
         && link.is_none())
     .then(crate::alloc_census::A1Window::open);
     let mut functions: Vec<std::rc::Rc<Func>> = Vec::with_capacity(program.functions.len());
+    let mut prelude_shared = 0;
     for (idx, fd) in program.functions.iter().enumerate() {
         #[cfg(feature = "census-instrumentation")]
         if idx == crate::alloc_census::prelude_fn_count() {
@@ -314,6 +315,9 @@ fn compile_program_impl_mode(
         // a fresh compile rather than mis-binding.
         if let Some(pf) = prelude.get(idx) {
             if pf.name == fd.name && !program.conditional_fns.contains(&idx) {
+                if prelude_shared == idx {
+                    prelude_shared += 1;
+                }
                 functions.push(std::rc::Rc::clone(pf));
                 #[cfg(feature = "mem-census")]
                 {
@@ -483,6 +487,7 @@ fn compile_program_impl_mode(
         strict: program.strict,
         const_attributes,
         elided: link.is_some().then_some(elided_classes),
+        prelude_shared,
     };
     // Fase 1.1 (WP-48): compiled modules are leaked for the life of the
     // process — release the push-growth capacity slack before linking.

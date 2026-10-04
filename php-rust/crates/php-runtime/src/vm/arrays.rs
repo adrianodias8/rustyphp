@@ -672,8 +672,12 @@ pub(super) fn field_get(cell: &Zval, steps: &[FieldStep], keys: &mut std::vec::I
                         let obj = o.borrow();
                         // Denied (inaccessible declared) reads as absent here:
                         // this walker backs isset/empty/`??` only.
-                        let key = fs.prop_key_read(obj.class_id as usize, name)?;
-                        match obj.props.get(key.as_ref()) {
+                        let (key, slot) = fs.prop_key_read(obj.class_id as usize, name)?;
+                        let v = match slot.and_then(|i| obj.props.get_slot(i)) {
+                            Some(v) => Some(v),
+                            None => obj.props.get(key),
+                        };
+                        match v {
                             Some(v) => field_get(v, rest, keys, fs),
                             None => None,
                         }
