@@ -81,6 +81,27 @@ A/B: zend_bench 0.993, zend_micro 0.982, arrays 0.997, strings 0.991, oop 0.995,
 0.997, symfony 0.995. Gates: cargo test (only the root-only test), gate.sh 0 pass→fail,
 composer smoke identical, DBAL smoke same as HEAD.
 
+**Step 3 (per-request linking): 161.49M → 157.92M Ir (−2.2 %); handle() 15.24 → 15.04 ms
+(php-fpm 3.62, a faster host hour).** Include/linking excess vs Zend **+10.1M → +4.2M**
+(step 2's prelude-prefix fix included). Findings, by cost per request:
+- `run_linked` bridged an include made from a function (Composer's `includeFile`, every class
+  file) by scanning the includer's names once per unit slot: a seeded unit main carries the
+  whole global-name seed prefix (~40 slots), so ~31k scans, ~16k fresh `Rc` cells and ~16k name
+  copies per request. Now the includer's (few) names are matched into the unit (a seed index
+  is the same name in both, since both prefixes are prefixes of `seed_globals`); unmatched slots
+  are handled in index order as before; the fresh-cell list keeps the slot index. −2.33M.
+- `user_wrapper_url` copied every include path and scanned it byte by byte for `://` (790 Ir per
+  include); a debug-only class-name compare ran on every dynamic class resolve. −1.14M.
+- **Not built: linking cached units once per process.** What a per-process linked image could
+  still remove is the per-include cache bookkeeping (`unit_fp`, `unit_cache_get`,
+  `revalidated_unit_key`, include index/memo puts, class remap: ≈1.1M together) plus the
+  remaining fresh bridge cells (≈1M, removable only with a per-unit slot-use analysis). In
+  classic mode class ids, declaration order and autoload side effects are per request, so a
+  process-wide image is the zygote design under another name — a decision for the owner, with
+  a measured ceiling of ≈2M Ir (1.3 %).
+A/B: zend_bench 1.001, zend_micro 1.000, arrays 0.997, strings 1.004, oop 1.001 (magic_set
+1.079 at 4–7 % spread; untouched path), autoload 0.994, symfony 0.991.
+
 ---
 
 # Session 14 — 2026-10-04 — hardware-counter substitute (cachegrind), ferro vs php

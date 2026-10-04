@@ -120,15 +120,19 @@ pub(super) fn user_wrapper_url(
     v: &Zval,
     wrappers: &std::collections::HashMap<Vec<u8>, Vec<u8>>,
 ) -> Option<Vec<u8>> {
-    let s = match v.deref_clone() {
-        Zval::Str(s) => s.as_bytes().to_vec(),
-        _ => return None,
+    // Borrowed scan; the bytes are copied only for a wrapper URL (this runs
+    // on every include and filesystem builtin call).
+    let check = |s: &[u8]| -> Option<Vec<u8>> {
+        let pos = memchr::memmem::find(s, b"://")?;
+        wrappers.contains_key(&s[..pos].to_ascii_lowercase()).then(|| s.to_vec())
     };
-    let pos = s.windows(3).position(|w| w == b"://")?;
-    if wrappers.contains_key(&s[..pos].to_ascii_lowercase()) {
-        Some(s)
-    } else {
-        None
+    match v {
+        Zval::Str(s) => check(s.as_bytes()),
+        Zval::Ref(r) => match &*r.borrow() {
+            Zval::Str(s) => check(s.as_bytes()),
+            _ => None,
+        },
+        _ => None,
     }
 }
 

@@ -6749,7 +6749,7 @@ impl<'m> Vm<'m> {
         // into the includer's dyn_vars after the run — but only if the unit
         // actually DEFINED it (an eval that merely reads `$x` must not create
         // `$x` in the caller).
-        let mut fresh_bridged: Vec<(Vec<u8>, Rc<RefCell<Zval>>)> = Vec::new();
+        let mut fresh_bridged: Vec<(usize, Rc<RefCell<Zval>>)> = Vec::new();
         if let Some(caller) = scope_bridge {
             // Is the includer itself running at GLOBAL scope? Walk the bridge
             // chain: a top-level include-of-include bottoms out at frame 0
@@ -6783,18 +6783,37 @@ impl<'m> Vm<'m> {
                     frame.slots[i] = Zval::Ref(make_cell_bridge(&mut self.frames[0].slots[i]));
                 }
             } else {
+                // Name-matched pairs, found from the INCLUDER's few names
+                // rather than by scanning them once per unit slot (a seeded
+                // unit carries the whole global-name prefix, ~40 slots, and
+                // Composer includes every class file from a function). Both
+                // seed prefixes are prefixes of the same `seed_globals`, so
+                // an index inside both is the same name (vm/linkfast.rs).
+                let cf = self.frames[caller].func;
+                let (s_c, s_u) = (cf.seed_slots as usize, leaked.main.seed_slots as usize);
+                let mut matched = vec![false; n_named];
+                for k in 0..unit_slot_count(cf) {
+                    let j = if k < s_c && k < s_u {
+                        Some(k)
+                    } else {
+                        unit_slot_name(&self.seed_globals, cf, k)
+                            .and_then(|name| unit_slot_pos(&self.seed_globals, &leaked.main, name))
+                    };
+                    let Some(j) = j.filter(|&j| j < n_named) else { continue };
+                    matched[j] = true;
+                    if let Some(slot) = self.frames[caller].slots.get_mut(k) {
+                        frame.slots[j] = Zval::Ref(make_cell_bridge(slot));
+                    }
+                }
                 for i in 0..n_named {
+                    if matched[i] {
+                        continue;
+                    }
                     let Some(name) = unit_slot_name(&self.seed_globals, &leaked.main, i)
                     else {
                         continue;
                     };
-                    if let Some(cs) =
-                        unit_slot_pos(&self.seed_globals, self.frames[caller].func, name)
-                    {
-                        if let Some(slot) = self.frames[caller].slots.get_mut(cs) {
-                            frame.slots[i] = Zval::Ref(make_cell_bridge(slot));
-                        }
-                    } else if let Some(dyn_slot) = self.frames[caller]
+                    if let Some(dyn_slot) = self.frames[caller]
                         .dyn_vars
                         .as_deref_mut()
                         .and_then(|d| d.get_mut(name))
@@ -6817,7 +6836,7 @@ impl<'m> Vm<'m> {
                     } else {
                         let cell = php_types::zcell(Zval::Undef);
                         frame.slots[i] = Zval::Ref(Rc::clone(&cell));
-                        fresh_bridged.push((name.to_vec(), cell));
+                        fresh_bridged.push((i, cell));
                     }
                 }
             }
@@ -6840,8 +6859,13 @@ impl<'m> Vm<'m> {
         // fresh_bridged above): only names the unit left DEFINED.
         if let Some(caller) = scope_bridge {
             if caller != 0 && caller < self.frames.len() {
-                for (name, cell) in fresh_bridged {
+                for (i, cell) in fresh_bridged {
                     if !matches!(&*cell.borrow(), Zval::Undef) {
+                        // The unit's name table is immutable and the seed
+                        // table only grows, so slot `i` still names it.
+                        let name = unit_slot_name(&self.seed_globals, &leaked.main, i)
+                            .expect("bridged slot has a name")
+                            .to_vec();
                         self.frames[caller].dyn_vars_mut().insert(name, Zval::Ref(cell));
                     }
                 }
@@ -12620,7 +12644,9 @@ impl<'m> Vm<'m> {
                 match self.resolve_class_autoload(name)? {
                     Some(id) => {
                         let got = &self.classes[id].name;
-                        if !got.eq_ignore_ascii_case(name) {
+                        if log::log_enabled!(target: "phpr::attr", log::Level::Debug)
+                            && !got.eq_ignore_ascii_case(name)
+                        {
                             log::debug!(
                                 target: "phpr::attr",
                                 "resolve_dynamic_class MISMATCH: asked {:?} got cid {} = {:?}",

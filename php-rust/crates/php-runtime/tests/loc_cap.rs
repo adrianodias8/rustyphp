@@ -30,9 +30,9 @@ fn no_source_file_over_cap() {
     const SLACK_MAX: usize = 200;
     const CAP_C_MOD: usize = 2062; // +5 prelude_shared count
     const CAP_B_MBSTRING: usize = 2032;
-    const CAP_VM_MOD: usize = 26857; // +11 worker/zygote boot superglobals seeded at Vm construction; +6 unserialize E: (Ser::Enum arm, O: of an enum rejected); +73 classic-mode caches (deferred decls, preg, realpath); +75 incremental unit_fp digests, prelude-prefix skip in run_linked, trait-include negative probe; +26 include index/memo plumbing in run_include; +66 drop-driven destructor hooks (vm/gcdrop.rs: fields, note/sweep/collect branches, Zend teardown order); +1 D-24/D-25 sentinel ignores; +47 engine program step 2: magic/memo/link-cache fields, lazy_prop_access inline split, single-lookup unserialize fields
+    const CAP_VM_MOD: usize = 26883; // +11 worker/zygote boot superglobals seeded at Vm construction; +6 unserialize E: (Ser::Enum arm, O: of an enum rejected); +73 classic-mode caches (deferred decls, preg, realpath); +75 incremental unit_fp digests, prelude-prefix skip in run_linked, trait-include negative probe; +26 include index/memo plumbing in run_include; +66 drop-driven destructor hooks (vm/gcdrop.rs: fields, note/sweep/collect branches, Zend teardown order); +1 D-24/D-25 sentinel ignores; +47 engine program step 2: magic/memo/link-cache fields, lazy_prop_access inline split, single-lookup unserialize fields; +26 step 3: include bridging from the includer's names, debug-only class-name check
     const CAP_VM_HOST: usize = 7909; // +5: unserialize validate/direct dispatch (vm/unser.rs); +6: positioned unserialize failures (E:) routed through unser_offset_fail
-    const CAP_VM_RUN: usize = 7650; // includes +29 upstream L-RT1 (S-183, Ret in place), rebased 2026-10-02
+    const CAP_VM_RUN: usize = 7652; // +2 borrowed user_wrapper_url scan; includes +29 upstream L-RT1 (S-183, Ret in place), rebased 2026-10-02
     const CAP_T_EVAL: usize = 4773;
     const CAP_T_BUILTINS: usize = 4772;
     const CAP_LOWER_MOD: usize = 4013; // +7: DeferredDecl::digest
