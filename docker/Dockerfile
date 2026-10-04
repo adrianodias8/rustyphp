@@ -55,3 +55,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # run on a `--features system-alloc` build (mimalloc bypasses malloc).
 RUN apt-get update && apt-get install -y --no-install-recommends heaptrack \
     && rm -rf /var/lib/apt/lists/*
+
+# Session 14: valgrind (cachegrind as a hardware-counter substitute, the Docker
+# VM exposes no PMU) and the -dev headers to rebuild the oracle from
+# /usr/src/php.tar.xz with -g: the official binary is stripped, so per-function
+# and per-line attribution needs a symbol-carrying twin (bench/drupal/php-dbg.sh).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        valgrind libcurl4-openssl-dev libonig-dev libsodium-dev libargon2-dev \
+        libpng-dev libjpeg-dev libfreetype-dev libwebp-dev \
+    && rm -rf /var/lib/apt/lists/*

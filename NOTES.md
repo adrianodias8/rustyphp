@@ -24,6 +24,73 @@ except its step 4 (a bare-metal Symfony run), which still needs a machine.
 
 ---
 
+# Session 14 — 2026-10-04 — hardware-counter substitute (cachegrind), ferro vs php
+
+The owner's brief:
+
+1. Add valgrind to the dev image.
+2. Run 20 warm Drupal front-page requests on both engines under `cachegrind --cache-sim=yes`
+   (ferro classic; php-cli with `opcache.enable_cli=1` and the file cache warm).
+3. Show the top 20 functions on each side and map the comparable pieces.
+4. Write `HWCOUNTERS_DRUPAL.md`: instruction and miss ratios, the verdict (instruction bloat vs
+   memory stalls), and the top 5 handlers by excess instructions vs Zend.
+
+**handle(): 17.67 ms vs php-fpm 3.79 ms (4.66×).** The engine did not change.
+
+- **Setup.**
+  - The image gained `valgrind` 3.24 plus the `-dev` headers to rebuild the oracle with `-g`
+    (`bench/drupal/php-dbg.sh`, from the image's own tarball and CFLAGS). The official binary is
+    stripped.
+  - The `-g` php twin and a line-tables ferro build (`/target/cg`) count the same instructions as
+    the shipped binaries to within 0.1 %.
+  - Per-request numbers are (run with 20 more requests − run without) / 20
+    (`bench/drupal/cachegrind.sh`).
+  - The cache model is the host M2 Max P-core: D1 128K, I1 192K, LL 16M, 128-byte lines.
+- **Counters per request:**
+
+  | | ferro | php | ratio |
+  |---|---:|---:|---:|
+  | instructions | 181.2M | 38.8M | **4.67×** |
+  | L1D misses | 1.19M | 0.23M | 5.2× |
+  | L1I misses | 497k | 88k | 5.7× |
+  | LL misses | 150k | 0.2k | — |
+  | mispredicts | 2.70M | 0.74M | 3.7× |
+
+  The same two servers natively: 20.2 vs 5.05 ms, **3.99×**.
+- **Verdict: instruction bloat.**
+  - Ferro's CPI is ≈ 0.85× php's.
+  - Its miss and mispredict rates per instruction are php-like: L1D 6.6 vs 5.9 per 1k Ir,
+    mispredicts 14.9 vs 19.0.
+  - Only the 16 MB-LL misses are ferro-specific, and the measured IPC shows they cost little on
+    the real chip.
+  - At its own CPI, php's instruction count would take ferro ≈ 4.3 ms.
+- **Attribution.**
+  - callgrind `--dump-instr` plus DWARF inline chains (gimli `addr2line -i`) map every
+    `run_loop`/`execute_ex` address to its `Op::X` arm or Zend handler (`cg-handlers.py`).
+  - Subsystems come from a rule table (`cg-buckets.py`).
+  - Callgrind's inclusive costs are garbage for both VMs (hybrid jumps; `run_loop'2` recursion),
+    so all costs are exclusive.
+- **Top 5 handler families by excess Ir/request:**
+
+  | # | family | excess | detail |
+  |---|---|---:|---|
+  | 1 | property access | +19.3M | 274k name lookups, `PropInfo` map + `slot_of`, ≈ 16 per property op; Zend uses a runtime-cache offset |
+  | 2 | user call + return | +13.0M | ≈ 940 vs ≈ 180 Ir per call |
+  | 3 | include / per-request linking | +10.1M | linear redeclare name scans in `run_linked`, `unit_slot_pos` |
+  | 4 | arrays | +8.5M | |
+  | 5 | operand load/store ops | +6.7M | no Zend equivalent |
+
+  - The dispatch prologue itself is +10.6M: 29 Ir per op for frame/ip/bounds bookkeeping.
+  - Runtime-wide excess:
+    - allocator +14.9M: 206k allocations vs ≈ 55k;
+    - out-of-line `Zval` drop/clone +12.5M;
+    - `bcmp` name compares +12.1M (354k calls vs 34k).
+- Nothing in the engine was changed; what to do with it is the owner's call.
+
+Details: `HWCOUNTERS_DRUPAL.md`.
+
+---
+
 # Session 13 — 2026-10-04 — Zend-style operand specialisation, measurement first
 
 The owner's brief:

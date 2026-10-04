@@ -53,7 +53,11 @@ Single-request timing and analysis (inside the image):
 | `fold.py`, `buckets.py`, `within.py`, `hotlines.sh` | perf script analysis: self/inclusive/callers, by subsystem, a function's own machinery, hot source lines |
 | `heap-profile.sh`, `heap-buckets.py` | one classic worker's memory: RSS per allocator, heaptrack's live-between-requests bytes by owner and site (`MEMORY_DRUPAL.md`) |
 | `opcache-size.php` | what opcache holds for one front page (CLI, `-d opcache.enable_cli=1`) |
+| `cachegrind.sh` | per-request Ir, D1/LL misses and mispredicts under cachegrind (`ENGINE=ferro\|php`, run with M more requests minus run without; `TOOL=callgrind` for per-address counts); `php-dbg.sh` builds the `-g` oracle twin it needs |
+| `cg-funcs.py`, `cg-handlers.py`, `cg-buckets.py` | cachegrind per function/file; per interpreter handler (inline-chain resolved, `Op::X` arms vs Zend handlers); both engines grouped into comparable pieces (`HWCOUNTERS_DRUPAL.md`) |
+| `cg-walltime.sh` | native wall time of the same two servers, interleaved (instruction ratio vs time ratio) |
 
 Results: `MISSING_FOR_DRUPAL.md` (what was missing, install and page parity),
+`HWCOUNTERS_DRUPAL.md` (cachegrind, ferro vs php),
 `bench/results/*-drupal-*.md` (every wrk and scaling run), `MEMORY_DRUPAL.md` and `NOTES.md`
 (sessions 7–10).
