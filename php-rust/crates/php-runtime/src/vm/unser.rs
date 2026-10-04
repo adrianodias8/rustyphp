@@ -506,7 +506,7 @@ impl<'m> super::Vm<'m> {
         }
         p.i = e + 2;
         let n = n as usize;
-        let has = |vm: &Self, m: &[u8]| cid.is_some_and(|c| resolve_method_runtime(&vm.classes, c, m).is_some());
+        let has = |vm: &Self, m: &'static [u8]| cid.is_some_and(|c| vm.resolve_method_static(c, m).is_some());
         let has_unserialize = has(self, b"__unserialize");
         if let Some(c) = cid.filter(|_| !has_unserialize) {
             if self.class_index.get(&b"serializable"[..]).is_some_and(|&s| self.instance_of(c, s)) {

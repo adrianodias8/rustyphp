@@ -122,6 +122,34 @@ arms), array growth, string building.
 A/B: zend_bench 0.989, zend_micro 0.987, arrays 1.004, strings 1.000, oop 0.987, autoload 1.003,
 symfony 0.983; no section above 1.05.
 
+**Step 5 (call/return): 152.35M → 151.78M Ir (−0.4 %); handle() 15.59 → 15.50 ms (php-fpm
+3.79). Target (< 400 Ir per call) not reached: ≈ 945 → ≈ 905 Ir per call.** Annotation of one
+call + return, Ir per call (17,036 returns per request; callgrind self cost, before this step):
+
+| piece | Ir/call | where it goes |
+|---|---:|---|
+| `resolve_method_runtime` | 120 | IC misses (per-run IC, cold every request; polymorphic sites) and literal lookups (`__construct` per `new`, `__unserialize`, magics): a miss walks every ancestor's method list with a case-insensitive compare (797k), a hit verifies the name case-insensitively (552k) |
+| `Op::Ret` | 120 | `slots.clear()` 20 (out-of-line drop glue per slot, scalars included), pop + `func` reload 25, ret-shape/flags/ext checks, `gc_note` of every slot and temp |
+| `methodcall_fast` | 106 | IC check, frame from the pool, args popped and decayed one by one (`zset` + `decay_arg`), receiver/class/LSB stores |
+| `recycle_frame` + `Frame` drop glue + pool put + truncate | 190 | the ~180-byte `Frame` moved by value 3–4 times per call (pool → local → `frames.push`; `pop` → recycle); per-field teardown even when empty |
+| `Frame::with_buffers` | 67 | `resize_with(Undef)` slot fill 27, struct init |
+| params: `coerce_param_hints` + `coerce_or_check_hint` + `bind_params` + `enter_callee` | 170 | per-parameter hint dispatch; `HintKind` was CLONED per checked parameter (+38 with its drop) — removed |
+| rest (dispatch_instance_call, value_satisfies_class, invoke paths, ...) | ~170 | |
+
+Zend's ≈ 180: the frame is built in place on the VM stack (no moves), CVs are a contiguous
+zval array with inline `zval_ptr_dtor` (a tag test per CV), and `INIT_METHOD_CALL`'s runtime
+cache makes a monomorphic method hit two loads. Getting under 400 here needs the frame
+redesign (in-place frames on one Zval stack, per-slot inline release) — the same territory as
+the killed step-6(b) spike, so an owner decision, not an incremental change. Done this step:
+hints borrowed (−0.65M of clone/drop, 2.8k allocations) and a per-run memo for literal method
+names keyed by the `'static` name's address (sound: the table only grows and a class's
+methods never change).
+A/B: zend_bench 1.005, zend_micro 0.997, arrays 0.992, strings 1.001, oop 0.991, autoload
+1.006, symfony 0.997.
+
+**Session total: 180.74M → 151.78M Ir per request (−16.0 %), ratio to php 4.66× → 3.91×;
+handle() 18.04 → 15.50 ms on the interleaved phase bench (php-fpm 3.79–3.98 across runs).**
+
 ---
 
 # Session 14 — 2026-10-04 — hardware-counter substitute (cachegrind), ferro vs php

@@ -1651,14 +1651,14 @@ impl<'m> Vm<'m> {
             if func.param_by_ref.get(i).copied().unwrap_or(false) {
                 continue;
             }
-            let Some(hint) = func.param_hints.get(i).cloned().flatten() else {
+            let Some(hint) = func.param_hints.get(i).and_then(|h| h.as_ref()) else {
                 continue;
             };
             if matches!(self.frames[top].slots[i], Zval::Undef) {
                 continue;
             }
             let val = self.frames[top].slots[i].clone();
-            match self.coerce_or_check_hint(val, &hint, strict) {
+            match self.coerce_or_check_hint(val, hint, strict) {
                 Ok(c) => self.frames[top].slots[i] = c,
                 Err(given) => {
                     return Err(self.arg_type_error(

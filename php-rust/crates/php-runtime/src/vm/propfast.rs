@@ -53,12 +53,12 @@ impl<'m> super::Vm<'m> {
         }
         let mut m = MAGIC_KNOWN;
         for (bit, name) in [
-            (MAGIC_GET, &b"__get"[..]),
+            (MAGIC_GET, &b"__get"[..] as &'static [u8]),
             (MAGIC_SET, b"__set"),
             (MAGIC_ISSET, b"__isset"),
             (MAGIC_UNSET, b"__unset"),
         ] {
-            if oop::resolve_method_runtime(&self.classes, cid, name).is_some() {
+            if self.resolve_method_static(cid, name).is_some() {
                 m |= bit;
             }
         }
@@ -110,5 +110,25 @@ impl<'m> super::Vm<'m> {
             t[i] = PropMemo { name: p, len: name.len() as u32, cid: cid as u32, scope: sk, res };
         }
         res
+    }
+}
+
+impl<'m> super::Vm<'m> {
+    /// `resolve_method_runtime` for a literal method name (`__construct`,
+    /// `__unserialize`, the property magics), memoized per run: a miss walks
+    /// every ancestor's method list case-insensitively, and these names are
+    /// asked of the same few hundred classes over and over. A `'static` name's
+    /// address is a sound key; the answer is fixed once the class is in the
+    /// table (it only grows, and a class's methods never change).
+    pub(super) fn resolve_method_static(&self, cid: ClassId, name: &'static [u8]) -> Option<(ClassId, usize)> {
+        let key = (cid, name.as_ptr() as usize);
+        if let Some(&r) = self.method_memo.borrow().get(&key) {
+            return r;
+        }
+        let r = oop::resolve_method_runtime(&self.classes, cid, name);
+        if cid < self.classes.len() {
+            self.method_memo.borrow_mut().insert(key, r);
+        }
+        r
     }
 }

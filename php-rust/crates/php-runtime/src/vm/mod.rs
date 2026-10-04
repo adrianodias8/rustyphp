@@ -798,6 +798,7 @@ pub fn vm_new<'m>(
         closure_statics: HashMap::default(),
         magic_guard: HashSet::default(),
         magic_bits: RefCell::new(Vec::new()),
+        method_memo: RefCell::new(HashMap::default()),
         prop_memo: RefCell::new(Vec::new()),
         typed_refs: Vec::new(),
         created: BTreeMap::new(),
@@ -3379,6 +3380,8 @@ pub struct Vm<'m> {
     magic_guard: HashSet<(u32, MagicKind, Vec<u8>)>,
     /// Per class id, which property magic methods the class has (vm/propfast.rs).
     magic_bits: RefCell<Vec<u8>>,
+    /// (class id, literal name address) -> method (vm/propfast.rs).
+    method_memo: RefCell<HashMap<(usize, usize), Option<(ClassId, usize)>>>,
     /// Direct-mapped `resolve_prop_access` cache for op-owned names (vm/propfast.rs).
     prop_memo: RefCell<Vec<propfast::PropMemo<'m>>>,
     /// Live reference cells that alias a *typed* property's storage (PHP's
@@ -13006,7 +13009,7 @@ impl<'m> Vm<'m> {
         if !matches!(cc.instantiable, Instantiable::Yes) {
             return Ok(());
         }
-        let Some((defc, midx)) = resolve_method_runtime(&self.classes, cid, b"__construct") else {
+        let Some((defc, midx)) = self.resolve_method_static(cid, b"__construct") else {
             return Ok(());
         };
         let vis = self.classes[defc].methods[midx].visibility;
