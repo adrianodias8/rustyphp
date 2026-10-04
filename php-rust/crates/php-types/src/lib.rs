@@ -36,4 +36,6 @@ pub use stream::{
     open_data_stream, open_file_stream, open_php_stream, DirHandle, ResKind, Resource, Stream, StreamBackend,
 };
 pub use zstr::{PhpStr, ZStr};
+#[cfg(feature = "mem-census")]
+pub use zstr::{zstr_refcount, ZSTR_DROPS};
 pub use zval::{zcell, zcell_prop, ArgPlace, ArgPlaceBase, ArgPlaceStep, Closure, ClosureInfo, ClosureParam, ClosureRender, Zval};

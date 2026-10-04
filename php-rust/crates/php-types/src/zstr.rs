@@ -186,9 +186,22 @@ impl Clone for ZStr {
     }
 }
 
+/// Census builds only: every ZStr handle drop (refcount decrement), read as
+/// per-op deltas by the operand-kind census (vm/opndcensus.rs).
+#[cfg(feature = "mem-census")]
+pub static ZSTR_DROPS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Census builds only: the current refcount of a string handle.
+#[cfg(feature = "mem-census")]
+pub fn zstr_refcount(s: &ZStr) -> usize {
+    s.rc.get()
+}
+
 impl Drop for ZStr {
     #[inline]
     fn drop(&mut self) {
+        #[cfg(feature = "mem-census")]
+        ZSTR_DROPS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let n = self.rc.get() - 1;
         self.rc.set(n);
         if n == 0 {

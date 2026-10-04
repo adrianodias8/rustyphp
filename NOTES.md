@@ -24,6 +24,46 @@ except its step 4 (a bare-metal Symfony run), which still needs a machine.
 
 ---
 
+# Session 13 — 2026-10-04 — Zend-style operand specialisation, measurement first
+
+The owner's brief:
+
+1. `ZEND_VM_NOTES.md`: how Zend's operand kinds, freeing and specialised handlers work
+   (php-8.5.7 `zend_vm_def.h`/`zend_vm_gen.php`, worked examples ADD, FETCH_OBJ_R, SEND_VAR).
+2. A Drupal census of operand kinds and clones/drops for the top 15 ops, and an estimate of
+   what borrowing CV/CONST operands and moving TMP operands would remove.
+3. Only if that is ≥ ~2 ms: monomorphised `Operand` handlers for the top 5 ops behind a
+   feature flag, killed below 1 ms. No dispatch changes.
+
+**handle(): 18.01 ms vs php-fpm 3.90 ms (4.62×)**, and 18.31 vs 3.82 ms (4.79×) in a first run. The engine did not change this session. Session 12 measured 16.27 vs 3.55 ms (4.58×) with the same code; today's host is slower for both arms.
+
+- **Step 1.** `ZEND_VM_NOTES.md` covers all of it, with every claim cited to file:line in php-src
+  php-8.5.7, plus the `ZEND_RETURN` CV move.
+- **Step 2.** New census `vm/opndcensus.rs`, run with `bench/drupal/opnd.sh`. It is built only
+  with `op-census` + `mem-census`. The other code it adds is a census-only `ZStr` drop counter
+  and refcount accessor in php-types, and one cfg'd hook line in `run.rs`.
+  - Ferrophant's TMPs are already moves: 52.9k Rc TMP operands per request, 0 clones.
+  - The avoidable pairs:
+    - CV/CONST/THIS operands cloned and then dropped by their consumer: 46.2k;
+    - `Ret` of a CV, which Zend moves: 3.6k;
+    - CONST strings Zend gets free as interned literals: 4.3k;
+    - total ≈ 54k per request.
+  - At 1.8–2.4 ns (hot) to 4.7 ns (cold) per Rc clone+drop, that is **0.11–0.27 ms**. With the
+    isset handlers' internal clones (29k) it is ≤ 0.42 ms. Every Rc clone in the request would
+    be only 0.4–1.0 ms.
+- **Step 3: not built.** The census is ~5× below the 2 ms bar.
+- Leads the census exposed (not started):
+  - `FieldIsset` copies ~3.4 values per execution, where Zend's `ISSET_ISEMPTY_*` take no
+    reference;
+  - `PropSetPop` gets `$this` through a cloned `Op::This` (2.8k object pairs).
+
+  Both are small. The time is still in CallNsFallback (20 % of op time), Ret (13 %) and
+  FieldIsset (6 %).
+
+Details: `bench/results/2026-10-04-operand-census.md`.
+
+---
+
 # Session 12 — 2026-10-02 — step 6(c): file_exists and unserialize
 
 The owner's revision of step 6: (c) first — find why `file_exists` costs 1.4 µs in-request, add a

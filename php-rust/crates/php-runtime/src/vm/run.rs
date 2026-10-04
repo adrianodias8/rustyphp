@@ -1652,6 +1652,8 @@ impl<'m> super::Vm<'m> {
                     &self.frames[top].stack,
                     &self.frames[top].slots,
                 );
+                #[cfg(feature = "mem-census")]
+                super::census::opnd::note(op, &self.frames, top);
             }
             // Default fall-through advance. Jumps overwrite `ip`; `Call` advances
             // the *caller* before pushing the callee; `Ret` discards this frame.

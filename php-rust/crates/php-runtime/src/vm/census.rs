@@ -726,6 +726,11 @@ pub fn census_arm() -> bool {
     true
 }
 
+// Operand-kind / clone / drop census per op (ZEND_VM_NOTES.md step 2).
+#[cfg(all(feature = "op-census", feature = "mem-census"))]
+#[path = "opndcensus.rs"]
+pub mod opnd;
+
 /// Record one op (census-on path only).
 #[cfg(feature = "op-census")]
 #[cold]
@@ -775,6 +780,8 @@ fn op_time_enabled() -> bool {
 }
 
 pub fn census_dump() {
+    #[cfg(all(feature = "op-census", feature = "mem-census"))]
+    opnd::dump();
     let report = match CENSUS.with(|c| c.borrow_mut().take()) {
         Some(census) => census.render(),
         None => return,
