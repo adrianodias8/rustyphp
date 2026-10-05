@@ -14520,10 +14520,10 @@ impl<'m> Vm<'m> {
             .iter()
             .filter(|s| matches!(s, FieldStep::Index | FieldStep::PropDyn))
             .count();
-        let mut keys: Vec<Zval> =
-            (0..n).map(|_| self.frames[top].stack.pop().expect("field index key")).collect();
-        keys.reverse();
-        keys
+        // The keys are the top `n` operands, already in source order.
+        let stack = &mut self.frames[top].stack;
+        let at = stack.len().checked_sub(n).expect("field index key");
+        stack.split_off(at)
     }
 
     fn field_value(&self, base: FieldBase, top: usize, steps: &[FieldStep], keys: Vec<Zval>) -> Option<Zval> {

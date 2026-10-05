@@ -51,16 +51,27 @@ impl<'m> super::Vm<'m> {
                 return m;
             }
         }
+        // The walk `resolve_method_runtime` does for each magic name, done
+        // once: this class's own methods, then the parent's (memoized) bits.
         let mut m = MAGIC_KNOWN;
-        for (bit, name) in [
-            (MAGIC_GET, &b"__get"[..] as &'static [u8]),
-            (MAGIC_SET, b"__set"),
-            (MAGIC_ISSET, b"__isset"),
-            (MAGIC_UNSET, b"__unset"),
-        ] {
-            if self.resolve_method_static(cid, name).is_some() {
-                m |= bit;
+        let Some(class) = self.classes.get(cid) else { return MAGIC_KNOWN };
+        for meth in &class.methods {
+            let n = &meth.name[..];
+            if n.len() >= 5 && n[0] == b'_' && n[1] == b'_' {
+                for (bit, magic) in [
+                    (MAGIC_GET, &b"__get"[..]),
+                    (MAGIC_SET, b"__set"),
+                    (MAGIC_ISSET, b"__isset"),
+                    (MAGIC_UNSET, b"__unset"),
+                ] {
+                    if n.eq_ignore_ascii_case(magic) {
+                        m |= bit;
+                    }
+                }
             }
+        }
+        if let Some(p) = class.parent {
+            m |= self.class_magic(p);
         }
         let mut t = self.magic_bits.borrow_mut();
         if t.len() <= cid {

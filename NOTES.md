@@ -88,6 +88,18 @@ allocator bucket is unchanged (15.0M).
 A/B: zend_bench 0.991, zend_micro 0.988, arrays 0.986, strings 0.991, oop 0.916, autoload 1.001,
 symfony 0.944; above 1.05 only `ary2` (7 vs 8 ms) and `Foo::$x = 0` (spread 26–54 %).
 
+**Stage 1, ranked items: 148.63M → 147.47M Ir (−0.8 %); handle() 17.74 → 17.84 ms (php-fpm 4.43,
+a loaded host: within noise).** `class_has_magic` cost 1.52M, nearly all in recomputing each
+touched class's bits every request through four `resolve_method_static` lookups; now one pass
+over the class's own `methods` (the chain walk `resolve_method_runtime` does) OR the parent's
+memoized bits. `pop_field_keys` pops via one `split_off` (same order). Tried and reverted: a
+reused key buffer for `field_isset_op` (+0.1M — drain/extend cost more than mimalloc's
+~60–70 Ir alloc+free pair; allocation count alone is not the metric). Allocation census now
+159k/request: Vec growth 26.4k, strings 8.9k, `pop_keys` 8.5k, `Key::from_bytes` 7.7k,
+`field_isset_op` keys 6.4k, unserialize 4.8k, concat 4.0k.
+A/B: zend_bench 1.000, zend_micro 1.001, arrays 1.003, strings 0.997, oop 0.992, autoload 0.981,
+symfony 0.993; nothing above 1.05.
+
 ---
 
 # Session 15 — 2026-10-04 — engine program by instructions per request
