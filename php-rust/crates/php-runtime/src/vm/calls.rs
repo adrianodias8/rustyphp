@@ -1654,10 +1654,11 @@ impl<'m> Vm<'m> {
             let Some(hint) = func.param_hints.get(i).and_then(|h| h.as_ref()) else {
                 continue;
             };
-            if matches!(self.frames[top].slots[i], Zval::Undef) {
+            let slot = &self.frames[top].slots[i];
+            if matches!(slot, Zval::Undef) || super::callfast::hint_accepts_as_is(&self.classes, slot, hint) {
                 continue;
             }
-            let val = self.frames[top].slots[i].clone();
+            let val = slot.clone();
             match self.coerce_or_check_hint(val, hint, strict) {
                 Ok(c) => self.frames[top].slots[i] = c,
                 Err(given) => {

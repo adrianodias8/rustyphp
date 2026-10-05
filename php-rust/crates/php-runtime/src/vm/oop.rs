@@ -610,9 +610,13 @@ pub(super) fn prop_readonly_decl(classes: &[&CompiledClass], class: ClassId, nam
 /// A typed instance property's declaring class and declared type, or `None` if
 /// untyped / dynamic. The untyped-redeclaration-cancels-type shadowing is already
 /// baked into `PropInfo.type_hint`.
-pub(super) fn prop_type_decl(classes: &[&CompiledClass], class: ClassId, name: &[u8]) -> Option<(ClassId, TypeHint)> {
+pub(super) fn prop_type_decl<'a>(
+    classes: &[&'a CompiledClass],
+    class: ClassId,
+    name: &[u8],
+) -> Option<(ClassId, &'a TypeHint)> {
     let pi = prop_info(classes, class, name)?;
-    pi.type_hint.clone().map(|h| (pi.declaring_class, h))
+    pi.type_hint.as_ref().map(|h| (pi.declaring_class, h))
 }
 
 /// A declared instance property's visibility and declaring class, or `None` if

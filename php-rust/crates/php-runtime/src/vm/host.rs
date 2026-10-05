@@ -7342,7 +7342,7 @@ impl<'m> super::Vm<'m> {
                     if by_ref {
                         let cell = prop_ref_cell(&o, &key);
                         if let Some((decl, hint)) = prop_type_decl(&self.classes, cid, &display) {
-                            self.register_typed_ref(&cell, &o, decl, &display, hint);
+                            self.register_typed_ref(&cell, &o, decl, &display, hint.clone());
                         }
                         let mut argv = vec![Zval::Ref(cell), key_z];
                         if let Some(e) = &extra {

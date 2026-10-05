@@ -53,6 +53,7 @@ mod gcdrop;
 mod fieldfast;
 mod propfast;
 mod linkfast;
+mod callfast;
 mod unser;
 use gcdrop::gcdrop_enabled;
 use defercache::{defer_unit_key, inc_index_get, resolve_absolute_include, inc_index_put, inc_memo_get, inc_memo_put, lower_neg_get, lower_neg_put, revalidated_unit_key};
@@ -4782,6 +4783,13 @@ impl<'m> Vm<'m> {
             self.gc_note(exc);
         }
         if let Some(this) = &frame.this {
+            self.gc_note_this(this);
+        }
+    }
+
+    /// [`Self::gc_note_frame`]'s rule for a dying frame's `$this`.
+    fn gc_note_this(&mut self, this: &Zval) {
+        {
             // A finished `__destruct`'s receiver has already been removed from
             // `created`, so the sweep cannot cascade it: if this frame holds its
             // last reference, do that cascade here before it is freed (otherwise
@@ -11904,6 +11912,9 @@ impl<'m> Vm<'m> {
         let Some((decl, hint)) = prop_type_decl(&self.classes, ocid, name) else {
             return Ok(value);
         };
+        if callfast::hint_accepts_as_is(&self.classes, &value, hint) {
+            return Ok(value);
+        }
         // Zend names the CLASS of an object value in the mismatch message
         // ("Cannot assign stdClass to …"); the scalar coercion layer only
         // knows "object".
@@ -13696,7 +13707,7 @@ impl<'m> Vm<'m> {
             let cur = cell.borrow().clone();
             let coerced = self.coerce_typed_prop_write(cid, &name, cur)?;
             *cell.borrow_mut() = coerced;
-            self.register_typed_ref(cell, &o, decl, &name, hint);
+            self.register_typed_ref(cell, &o, decl, &name, hint.clone());
         }
         Ok(())
     }
@@ -15212,7 +15223,7 @@ impl<'m> Vm<'m> {
         let Some(o) = base_val.map(|v| self.proxy_view(v)).as_ref().and_then(deref_object) else { return };
         let cid = o.borrow().class_id as usize;
         if let Some((decl, hint)) = prop_type_decl(&self.classes, cid, name) {
-            self.register_typed_ref(cell, &o, decl, name, hint);
+            self.register_typed_ref(cell, &o, decl, name, hint.clone());
         }
     }
 

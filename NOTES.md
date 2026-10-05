@@ -67,6 +67,27 @@ stable; new 882–917M with 0–3 padding allocations before the loop): the per-
 long-lived buffers shift that loop's argument arrays onto `mi_find_page`. The Drupal
 allocator bucket is unchanged (15.0M).
 
+**Stage 1 item 2, call/return (first part): 149.98M → 148.63M Ir (−0.9 %); handle() 16.68 →
+15.38 ms (php-fpm 4.17, a slow host hour).**
+- Tried first and parked (`FrameStack`: live frames plus retired frames reused in place, no
+  frame moved by value): NET WORSE, +0.6M callgrind / +1.4M cachegrind. Frame moves were
+  never the cost: a retired-frame `Ret` still pays ~120 Ir in GC notes and per-slot drop
+  glue, and every slow-path push grew a replace + pool put. (A first version also leaked one
+  retired frame per slow push, which made `truncate` memmove thousands of frames: +8.4M.)
+- Kept: L-RT1's in-place `Ret` extended to frames with `$this` (methods) −0.39M together with
+  the method fast path building its frame inside `frames`; `hint_accepts_as_is` (a value that
+  already satisfies its hint skips clone + `coerce_or_check_hint`, Zend's
+  `ZEND_TYPE_CONTAINS_CODE` test) on parameters −0.58M, typed-property writes (no class-name
+  String built first, hint borrowed) −0.22M, returns (`ret_hint_check`, out of `run_loop`)
+  −0.16M.
+- Per call now (s2c): `resolve_method_runtime` 1.76M, `Ret` 1.67M, `with_buffers` 1.41M,
+  `methodcall_fast` 1.14M, `Frame` drop glue 0.72M (the residual frame on `truncate`).
+- `.phpt` `call-return-in-place` (release order at method return, coercion vs as-is, typed
+  props, return types); results are stored before use because destruction at the return
+  itself is D-24.
+A/B: zend_bench 0.991, zend_micro 0.988, arrays 0.986, strings 0.991, oop 0.916, autoload 1.001,
+symfony 0.944; above 1.05 only `ary2` (7 vs 8 ms) and `Foo::$x = 0` (spread 26–54 %).
+
 ---
 
 # Session 15 — 2026-10-04 — engine program by instructions per request

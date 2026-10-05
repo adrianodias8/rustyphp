@@ -3735,7 +3735,7 @@ impl<'m> super::Vm<'m> {
                                             // enforcing its type through `$v`.
                                             let cid = o.borrow().class_id as usize;
                                             if let Some((decl, hint)) = prop_type_decl(&self.classes, cid, &display) {
-                                                self.register_typed_ref(&cell, &o, decl, &display, hint);
+                                                self.register_typed_ref(&cell, &o, decl, &display, hint.clone());
                                             }
                                             break Some((cell, display));
                                         }
@@ -4443,15 +4443,7 @@ impl<'m> super::Vm<'m> {
                         // (both excluded from RS_HINT at construction); the
                         // init-thunk / magic path (`ret_cell`) carries no hint.
                         if shape & Func::RS_HINT != 0 && self.frames[top].ret_cell.is_none() {
-                            let hint = func.ret_hint.as_ref().expect("RS_HINT implies ret_hint");
-                            // The function's own unit governs its return check.
-                            let strict = self.frames[top].module.strict;
-                            match self.coerce_or_check_hint(ret, hint, strict) {
-                                Ok(c) => ret = c,
-                                Err(given) => {
-                                    return Err(self.return_type_error(func, hint, &given))
-                                }
-                            }
+                            ret = self.ret_hint_check(top, func, ret)?;
                         }
                         // A by-ref function that returned a plain value (the
                         // in-body notice already fired) still hands the caller
@@ -4496,33 +4488,19 @@ impl<'m> super::Vm<'m> {
                             }
                         }
                     }
-                    // L-RT1 (upstream S-183): Ret IN PLACE for an admitted frame —
-                    // no `$this`, iterators, `ext` or dynamic variables (every plain
-                    // function) releases only slots and stack: GC notes in the SAME
-                    // order as `gc_note_frame` (slots, then stack), clearing in the
-                    // SAME order as `recycle_frame` (slots, then stack, front to
-                    // back), and the residual Frame dies by `truncate` instead of
-                    // travelling by value through `pop` + `recycle_frame` (its only
-                    // Rc-bearing field left, `ret_cell`, drops after slots and
-                    // stack, as in `recycle_frame`). Every other frame (main,
-                    // methods, foreach, ext) takes the previous path, unchanged.
+                    // L-RT1 (upstream S-183), extended to methods (parity stage 1):
+                    // Ret IN PLACE for a frame with no iterators, `ext` or dynamic
+                    // variables — `gc_note_frame`'s notes, `recycle_frame`'s
+                    // release order, and the residual Frame dies by `truncate`
+                    // instead of travelling by value through `pop` +
+                    // `recycle_frame`. Main, foreach and ext frames take the
+                    // previous path.
                     let in_place = self.frames.len() > 1 && {
                         let f = &self.frames[top];
-                        f.this.is_none() && f.iters.is_empty() && f.ext.is_none() && f.dyn_vars.is_none()
+                        f.iters.is_empty() && f.ext.is_none() && f.dyn_vars.is_none()
                     };
                     if in_place {
-                        let mut slots = std::mem::take(&mut self.frames[top].slots);
-                        let mut stack = std::mem::take(&mut self.frames[top].stack);
-                        for v in &slots {
-                            self.gc_note(v);
-                        }
-                        for v in &stack {
-                            self.gc_note(v);
-                        }
-                        slots.clear();
-                        stack.clear();
-                        self.frames.truncate(top);
-                        self.frame_pool.put(slots, stack);
+                        self.ret_in_place(top);
                     } else {
                         let dead = self.frames.pop().expect("Ret pops the active frame");
                         if self.frames.is_empty() && !self.final_flush {
@@ -7344,6 +7322,13 @@ impl<'m> super::Vm<'m> {
         let Some((defc, midx, cid)) = fast else { return Ok(false) };
         let callee = &self.classes[defc].methods[midx].func;
         let m = self.class_mod(defc);
+        if !self.frames[top].stack[self.frames[top].stack.len() - n..]
+            .iter()
+            .any(|a| matches!(a, Zval::ArgPlace(_)))
+        {
+            self.methodcall_enter_in_place(top, n, callee, m, (defc, cid), deref);
+            return Ok(true);
+        }
         let mut frame = self.pooled_frame(callee, m);
         // Value-context copy of a `&m()` return (WP-53).
         if deref && callee.by_ref && !callee.is_generator {
