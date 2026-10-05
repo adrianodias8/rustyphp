@@ -11971,7 +11971,16 @@ impl<'m> Vm<'m> {
     /// implicit class (`Closure`; `Generator`/`Iterator`/`Traversable`); a real
     /// object walks its ancestry. A non-object or an unknown name is `false`.
     fn value_satisfies_class(&self, v: &Zval, name: &[u8]) -> bool {
-        let lc = name.strip_prefix(b"\\").unwrap_or(name).to_ascii_lowercase();
+        let bare = name.strip_prefix(b"\\").unwrap_or(name);
+        if let Zval::Object(o) = v {
+            // The hint names the object's own class, spelled as declared: no
+            // lowercase key, no index lookup.
+            if self.classes.get(o.borrow().class_id as usize).is_some_and(|c| *c.name == *bare) {
+                return true;
+            }
+        }
+        let key = LcKey::new(bare);
+        let lc = key.as_slice();
         match v {
             Zval::Closure(_) => lc == b"closure",
             Zval::Generator(_) => {
@@ -11981,7 +11990,7 @@ impl<'m> Vm<'m> {
                 // A value satisfies a class/interface type hint if it is-a that
                 // type — including implemented interfaces (transitively), not just
                 // the parent chain. Mirrors `instanceof` (`is_instance_of`).
-                matches!(self.class_index.get(&lc[..]),
+                matches!(self.class_index.get(lc),
                     Some(&target) if self.instance_of(o.borrow().class_id as usize, target))
             }
             Zval::Ref(r) => self.value_satisfies_class(&r.borrow(), name),
@@ -12360,7 +12369,7 @@ impl<'m> Vm<'m> {
                     .iter()
                     .map(|s| match s {
                         ArgPlaceStep::Index => FieldStep::Index,
-                        ArgPlaceStep::Prop(n) => FieldStep::Prop(n.clone()),
+                        ArgPlaceStep::Prop(n) => FieldStep::Prop(php_types::intern_name(n)),
                         // `f($a[])` to a by-ref param: field_cell appends a
                         // fresh element and aliases it (PclZip, WP-17).
                         ArgPlaceStep::Append => FieldStep::Append,
@@ -13672,7 +13681,7 @@ impl<'m> Vm<'m> {
             return Ok(());
         }
         let name: Box<[u8]> = match &steps[0] {
-            FieldStep::Prop(n) => n.clone(),
+            FieldStep::Prop(n) => Box::<[u8]>::from(&n[..]),
             FieldStep::PropDyn => {
                 let Some(k) = keys.first().cloned() else { return Ok(()) };
                 let n = self.dyn_prop_name_value(&k)?;
@@ -13725,7 +13734,7 @@ impl<'m> Vm<'m> {
         write: bool,
     ) -> Result<Option<Zval>, PhpError> {
         let n: Box<[u8]> = match steps.first() {
-            Some(FieldStep::Prop(n)) => n.clone(),
+            Some(FieldStep::Prop(n)) => Box::<[u8]>::from(&n[..]),
             // A dynamic first step's name is the first popped key (an object
             // name converts via __toString, warning-free).
             Some(FieldStep::PropDyn) => match keys.first() {
@@ -15344,7 +15353,7 @@ impl<'m> Vm<'m> {
         steps: &[FieldStep],
     ) -> Result<Option<Rc<RefCell<Zval>>>, PhpError> {
         let name: Box<[u8]> = match steps.first() {
-            Some(FieldStep::Prop(n)) => n.clone(),
+            Some(FieldStep::Prop(n)) => Box::<[u8]>::from(&n[..]),
             _ => return Ok(None),
         };
         let base_val = match base {
@@ -18079,6 +18088,9 @@ fn relocate_module_class_ids(module: &mut Module, remap: &[ClassId], static_base
         // B1); only the id column changes, so the hash ordering is intact.
         for e in cc.methods_ci.iter_mut() {
             e.1 = remap[e.1 as usize] as u32;
+        }
+        for e in cc.methods_exact.values_mut() {
+            e.0 = remap[e.0 as usize] as u32;
         }
         for pi in cc.prop_info.values_mut() {
             pi.declaring_class = remap[pi.declaring_class];
@@ -21170,6 +21182,7 @@ mod tests {
                     props_layout: _,
                     methods,
                     methods_ci: _,
+                    methods_exact: _,
                     abstract_methods,
                     abstract_sigs,
                     own_prop_vis,

@@ -28,11 +28,11 @@ fn rs_files(dir: &Path, out: &mut Vec<PathBuf>) {
 fn no_source_file_over_cap() {
     const CAP_NEW: usize = 2000;
     const SLACK_MAX: usize = 200;
-    const CAP_C_MOD: usize = 2062; // +5 prelude_shared count
+    const CAP_C_MOD: usize = 2064; // +5 prelude_shared count; +2 op names interned at emission (compile/intern.rs)
     const CAP_B_MBSTRING: usize = 2032;
-    const CAP_VM_MOD: usize = 26895; // +11 worker/zygote boot superglobals seeded at Vm construction; +6 unserialize E: (Ser::Enum arm, O: of an enum rejected); +73 classic-mode caches (deferred decls, preg, realpath); +75 incremental unit_fp digests, prelude-prefix skip in run_linked, trait-include negative probe; +26 include index/memo plumbing in run_include; +66 drop-driven destructor hooks (vm/gcdrop.rs: fields, note/sweep/collect branches, Zend teardown order); +1 D-24/D-25 sentinel ignores; +47 engine program step 2: magic/memo/link-cache fields, lazy_prop_access inline split, single-lookup unserialize fields; +26 step 3: include bridging from the includer's names, debug-only class-name check; +9 step 4: operand-stack pre-reserve, scope-free unit skip; +3 step 5: literal-name method memo field
+    const CAP_VM_MOD: usize = 26908; // +13 parity stage 1: exact-name method table relocation and sig field, value_satisfies_class without the lowercase allocation; +11 worker/zygote boot superglobals seeded at Vm construction; +6 unserialize E: (Ser::Enum arm, O: of an enum rejected); +73 classic-mode caches (deferred decls, preg, realpath); +75 incremental unit_fp digests, prelude-prefix skip in run_linked, trait-include negative probe; +26 include index/memo plumbing in run_include; +66 drop-driven destructor hooks (vm/gcdrop.rs: fields, note/sweep/collect branches, Zend teardown order); +1 D-24/D-25 sentinel ignores; +47 engine program step 2: magic/memo/link-cache fields, lazy_prop_access inline split, single-lookup unserialize fields; +26 step 3: include bridging from the includer's names, debug-only class-name check; +9 step 4: operand-stack pre-reserve, scope-free unit skip; +3 step 5: literal-name method memo field
     const CAP_VM_HOST: usize = 7909; // +5: unserialize validate/direct dispatch (vm/unser.rs); +6: positioned unserialize failures (E:) routed through unser_offset_fail
-    const CAP_VM_RUN: usize = 7652; // +2 borrowed user_wrapper_url scan; includes +29 upstream L-RT1 (S-183, Ret in place), rebased 2026-10-02
+    const CAP_VM_RUN: usize = 7644; // -8 dynamic-property deprecation moved out of line (vm/propfast.rs); +2 borrowed user_wrapper_url scan; includes +29 upstream L-RT1 (S-183, Ret in place), rebased 2026-10-02
     const CAP_T_EVAL: usize = 4773;
     const CAP_T_BUILTINS: usize = 4772;
     const CAP_LOWER_MOD: usize = 4013; // +7: DeferredDecl::digest
@@ -42,7 +42,7 @@ fn no_source_file_over_cap() {
     const CAP_B_FILE: usize = 2761;
     const CAP_C_EXPR: usize = 2779;
     const CAP_B_DATE: usize = 2458;
-    const CAP_BYTECODE: usize = 2474; // +8: MethodIc keyed on (receiver, calling scope); +9 CompiledClass::declares_private_props, Module::prelude_shared
+    const CAP_BYTECODE: usize = 2478; // +4 CompiledClass::methods_exact; +8: MethodIc keyed on (receiver, calling scope); +9 CompiledClass::declares_private_props, Module::prelude_shared
     const CAP_PREG: usize = 2295;
     const CAP_MEMCENSUS: usize = 2262;
     const CAP_LOWER_CLASS: usize = 2195;

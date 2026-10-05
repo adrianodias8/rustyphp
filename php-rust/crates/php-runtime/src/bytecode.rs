@@ -1971,7 +1971,7 @@ pub enum FieldBase {
 pub enum FieldStep {
     Index,
     Append,
-    Prop(Box<[u8]>),
+    Prop(Rc<[u8]>),
     /// `->$n` / `->{expr}` — a dynamic property step whose name is taken from the
     /// operand stack at run time (pushed in source order, like an `Index` key),
     /// step 51.
@@ -2164,6 +2164,10 @@ pub struct CompiledClass {
     /// fallback). ⚠️ carries ClassIds — relocated at unit link like
     /// `prop_info.declaring_class` (the remap keeps the hash order intact).
     pub methods_ci: Box<[(u64, u32, u32)]>,
+    /// The same leaf-wins table keyed by each winning declaration's exact
+    /// name, interned: a call spelled as declared resolves by pointer
+    /// (PARITY_PLAN.md stage 1); other spellings fall back to `methods_ci`.
+    pub methods_exact: php_types::NameTable<(u32, u32)>,
     /// Names of abstract methods this class carries unimplemented (own,
     /// interface- or trait-required) — `get_class_methods` reports them.
     pub abstract_methods: Vec<Box<[u8]>>,
@@ -2219,7 +2223,7 @@ pub struct CompiledClass {
     /// `readonly_props` / `prop_types` / `prop_hooks` fields and the
     /// `resolve_prop_decl` / `resolve_readonly_decl` / `resolve_prop_type` parent
     /// walks. (`own_prop_vis` is kept solely for ordered per-class enumeration.)
-    pub prop_info: HashMap<Box<[u8]>, PropInfo>,
+    pub prop_info: php_types::NameTable<PropInfo>,
     /// Whether ANY entry of `prop_info` carries hooks — the VM's property
     /// fast paths skip the per-access hook lookups entirely when false
     /// (the overwhelmingly common case).

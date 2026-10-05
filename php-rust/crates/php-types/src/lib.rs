@@ -10,6 +10,7 @@ mod diag;
 pub mod dtoa;
 mod generator;
 pub mod numstr;
+pub mod name;
 mod object;
 pub mod ops;
 pub mod sapi;
@@ -35,6 +36,7 @@ pub use object::{dtor_pending, free_object_id, pop_pending_dtor, release_quarant
 pub use stream::{
     open_data_stream, open_file_stream, open_php_stream, DirHandle, ResKind, Resource, Stream, StreamBackend,
 };
+pub use name::{intern_name, intern_rc, NameTable};
 pub use zstr::{PhpStr, ZStr};
 #[cfg(feature = "mem-census")]
 pub use zstr::{zstr_refcount, ZSTR_DROPS};

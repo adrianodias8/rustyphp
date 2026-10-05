@@ -161,6 +161,11 @@ pub(super) fn resolve_method_runtime(classes: &[&CompiledClass], start: ClassId,
     // the safety net should a linked chain ever exceed what the compiling
     // unit saw.
     if let Some(class) = classes.get(start) {
+        // Pointer probe only: a miss (other spelling, runtime-built or
+        // undefined name) costs no byte hash before the paths below.
+        if let Some(&(cid, midx)) = class.methods_exact.get_ptr(name) {
+            return Some((cid as usize, midx as usize));
+        }
         let tbl = &class.methods_ci;
         // Below this size the direct chain scan (early-exit byte compare)
         // beats hash+bsearch — same trade as PropsLayout's HASH_SCAN_MIN.

@@ -1303,11 +1303,7 @@ impl<'m> super::Vm<'m> {
                 && !o.borrow().props.contains(&key)
                 && !self.allows_dynamic_props(ocid)
             {
-                let cls = String::from_utf8_lossy(&self.classes[ocid].name).into_owned();
-                let prop = String::from_utf8_lossy(name).into_owned();
-                self.diags.push(Diag::Deprecated(format!(
-                    "Creation of dynamic property {cls}::${prop} is deprecated"
-                )));
+                self.deprecate_dynamic_prop(top, ocid, name);
             }
             // Typed-property write enforcement: coerce the value to the
             // property's declared type (or TypeError). The assignment
@@ -3287,7 +3283,7 @@ impl<'m> super::Vm<'m> {
                         .iter()
                         .map(|s| match s {
                             FieldStep::Index => ArgPlaceStep::Index,
-                            FieldStep::Prop(n) => ArgPlaceStep::Prop(n.clone()),
+                            FieldStep::Prop(n) => ArgPlaceStep::Prop(Box::<[u8]>::from(&n[..])),
                             FieldStep::Append => ArgPlaceStep::Append,
                             _ => unreachable!("PushArgPlace step"),
                         })
@@ -7095,7 +7091,7 @@ impl<'m> super::Vm<'m> {
                     // returns to uninitialized (typed_properties_002's
                     // `unset($obj->$a)`), a plain one is removed.
                     let single_name: Option<Box<[u8]>> = match &steps[..] {
-                        [FieldStep::Prop(n)] => Some(n.clone()),
+                        [FieldStep::Prop(n)] => Some(Box::<[u8]>::from(&n[..])),
                         [FieldStep::PropDyn] => match keys.first().cloned() {
                             Some(k) => Some(self.dyn_prop_name_value(&k)?),
                             None => None,
@@ -7419,7 +7415,7 @@ impl<'m> super::Vm<'m> {
             // `return $this->x;` in the wrapper's `&__get`).
             let guarded_ref_fetch = 'grf: {
                 let n: Box<[u8]> = match &steps[..] {
-                    [FieldStep::Prop(n)] => n.clone(),
+                    [FieldStep::Prop(n)] => Box::<[u8]>::from(&n[..]),
                     [FieldStep::PropDyn] => match keys.first().cloned() {
                         Some(k) => self.dyn_prop_name_value(&k)?,
                         None => break 'grf false,
@@ -7480,7 +7476,7 @@ impl<'m> super::Vm<'m> {
             // detached NULL cell — nothing materializes).
             let makeref_magic: Option<Rc<RefCell<Zval>>> = 'makeref_magic: {
                 let n: Box<[u8]> = match &steps[..] {
-                    [FieldStep::Prop(n)] => n.clone(),
+                    [FieldStep::Prop(n)] => Box::<[u8]>::from(&n[..]),
                     [FieldStep::PropDyn] => {
                         let Some(k) = keys.first().cloned() else { break 'makeref_magic None };
                         self.dyn_prop_name_value(&k)?
@@ -7582,11 +7578,7 @@ impl<'m> super::Vm<'m> {
                         && !o.borrow().props.contains(n.as_ref())
                         && !self.allows_dynamic_props(ocid)
                     {
-                        let cls = String::from_utf8_lossy(&self.classes[ocid].name).into_owned();
-                        let prop = String::from_utf8_lossy(n).into_owned();
-                        self.diags.push(Diag::Deprecated(format!(
-                            "Creation of dynamic property {cls}::${prop} is deprecated"
-                        )));
+                        self.deprecate_dynamic_prop(top, ocid, n);
                     }
                 }
             }

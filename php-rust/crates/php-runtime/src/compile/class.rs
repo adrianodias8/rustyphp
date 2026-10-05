@@ -363,11 +363,11 @@ pub(super) fn compile_class(cid: ClassId, cd: &ClassDecl, ctx: &ProgramCtx) -> C
     // non-readonly redeclaration clears the inherited type / readonly), and then
     // folds in the already-flattened `prop_hooks`. Every declared property (backed
     // or virtual) gets an entry; storage stays name-keyed via `storage_key`.
-    let mut prop_info: rustc_hash::FxHashMap<Box<[u8]>, PropInfo> = rustc_hash::FxHashMap::default();
+    let mut prop_info: php_types::NameTable<PropInfo> = php_types::NameTable::default();
     for &x in &chain {
         for p in &ctx.classes[x].props {
             prop_info.insert(
-                p.name.clone(),
+                &p.name,
                 PropInfo {
                     visibility: p.visibility,
                     set_visibility: p.set_visibility,
@@ -432,6 +432,10 @@ pub(super) fn compile_class(cid: ClassId, cd: &ClassDecl, ctx: &ProgramCtx) -> C
             }
         }
     }
+    let mut methods_exact = php_types::NameTable::default();
+    for &(_, x, i) in mtab.values() {
+        methods_exact.insert(&ctx.classes[x as usize].methods[i as usize].decl.name, (x, i));
+    }
     let mut methods_ci: Vec<(u64, u32, u32)> = mtab.into_values().collect();
     methods_ci.sort_unstable();
     let methods_ci = methods_ci.into_boxed_slice();
@@ -453,6 +457,7 @@ pub(super) fn compile_class(cid: ClassId, cd: &ClassDecl, ctx: &ProgramCtx) -> C
         info: Rc::new(ObjectInfo::from_entries_typed(vis_entries, prop_type_displays)),
         methods,
         methods_ci,
+        methods_exact,
         abstract_methods: cd.abstract_methods.clone(),
         abstract_sigs,
         own_prop_vis,
@@ -593,6 +598,7 @@ pub(super) fn stub_class(cd: &crate::hir::ClassDecl) -> CompiledClass {
         info: Rc::new(ObjectInfo::from_entries(Vec::new())),
         methods: Vec::new(),
         methods_ci: Box::new([]),
+        methods_exact: Default::default(),
         abstract_methods: Vec::new(),
         abstract_sigs: Vec::new(),
         own_prop_vis: Vec::new(),

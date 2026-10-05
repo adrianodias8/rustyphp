@@ -182,7 +182,7 @@ impl<'a> super::FnCompiler<'a> {
                     self.expr(k)?;
                     steps.push(FieldStep::Index);
                 }
-                PlaceStep::Prop(name) => steps.push(FieldStep::Prop(name.clone())),
+                PlaceStep::Prop(name) => steps.push(FieldStep::Prop(php_types::intern_name(name))),
                 // `->$n` / `->{expr}`: the name expression is emitted here (in source
                 // order, consumed at run time beneath the value, like an index key)
                 // and the VM resolves it to a property name (step 51).
@@ -875,7 +875,7 @@ impl<'a> super::FnCompiler<'a> {
                         temps.push(Some(t));
                     }
                     PlaceStep::Prop(name) => {
-                        steps.push(FieldStep::Prop(name.clone()));
+                        steps.push(FieldStep::Prop(php_types::intern_name(name)));
                         temps.push(None);
                     }
                     PlaceStep::Append => unreachable!("filtered above"),

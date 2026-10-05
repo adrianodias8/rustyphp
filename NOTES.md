@@ -24,6 +24,51 @@ except its step 4 (a bare-metal Symfony run), which still needs a machine.
 
 ---
 
+# Session 16 — 2026-10-05 — parity plan, stage 1 item 1 (interning)
+
+The owner's brief: write `PARITY_PLAN.md` (parity in Ir/request, three stages, gates, Zend
+references per item; done, 0cce34b9), then continue stage 1.
+
+**Stage 1 item 1, interning: 151.78M → 149.98M Ir (−1.2 %); handle() 15.46 → 15.37 ms
+(php-fpm 3.70).** Bucket report at session start (`cg-report.sh s15end`, callgrind 153.3M):
+calls+return +12.3M, allocator +11.1M, dispatch +10.6M, copy/drop +10.3M, other +9.4M,
+strings +8.5M, arrays +8.4M, hash +7.4M, property +7.1M, operand ops +6.7M. What was done:
+- `php_types::name`: a per-thread interner (`intern_name`) and `NameTable<V>`, a byte-keyed
+  map plus an open-addressing table of key ADDRESSES. A lookup made with the allocation a key
+  was built from hits by pointer; anything else falls back to bytes, so correctness never
+  depends on interning. `prop_info` is a `NameTable` (iteration order = the replaced map's).
+- Op names interned at emission (`compile/intern.rs`): property and method ops.
+  `FieldStep::Prop` is now an interned `Rc<[u8]>` (it was a `Box`, so the path ops —
+  `$this->a->b[...]`, isset/unset paths — could never hit). Measured with a miss log on a warm
+  request: declared-name pointer misses 9.3k → 2.2k; the remaining ~6.4k misses are dynamic
+  properties (undeclared names) and unserialize field names. `prop_info` lookups −2.1M.
+- `CompiledClass::methods_exact`: the leaf-wins method table keyed by the winning
+  declaration's exact spelling, POINTER probe only (a byte fallback cost more than the old
+  linear scan on small classes and on misses: `magic_call` +364 Ir/call, fcc +105). −0.54M.
+- `value_satisfies_class`: exact own-class-name check first, `LcKey` instead of an allocating
+  lowercase. −0.45M.
+- Not interning: `KeyIndex::lookup` (3.45M) is array keys — `PhpStr` already caches its hash
+  like `zend_string`; the cost is scan-mode compares and fresh-string hashing (arrays item).
+  SipHash 1.6M is the include-cache fingerprints (`unit_fp`, collision-sensitive; include
+  item). Class-index lookups that remain are ~10k/request, half on unserialize names.
+- The −12M goal written for item 1 in PARITY_PLAN.md was wrong: most of the hash and string
+  buckets are not identifier lookups.
+- Fix found on the way: "Creation of dynamic property" was reported on the NEXT statement's
+  line (queued diag flushed later); now stamped with the assigning op's line
+  (`deprecate_dynamic_prop`, out of line, so the `PropSet` arm shrank). `.phpt`s:
+  `dynamic-property-deprecation-line`, `interned-name-lookups` (both PASS on the oracle).
+A/B (`bench/ab.sh`, 7 rounds, before the pointer-only method probe): zend_bench 1.012,
+zend_micro 1.001, arrays 1.002, strings 1.000, oop 1.014, autoload 0.994, symfony 0.997.
+Above 1.05: `first_class_callable` 1.114, `magic_call` 1.084, `getter_setter_fluent` 1.052.
+Instruction counts (200k iterations): fluent −40 Ir/iteration (timing noise); fcc +50;
+magic_call +53 Ir/call from the method-table pointer probe on the 3–4 misses per `__call`
+dispatch, plus a mimalloc slow-path share that moves with the startup heap (HEAD 865M
+stable; new 882–917M with 0–3 padding allocations before the loop): the per-class tables'
+long-lived buffers shift that loop's argument arrays onto `mi_find_page`. The Drupal
+allocator bucket is unchanged (15.0M).
+
+---
+
 # Session 15 — 2026-10-04 — engine program by instructions per request
 
 The owner's brief: primary metric = cachegrind Ir per warm Drupal request (`SIM=0

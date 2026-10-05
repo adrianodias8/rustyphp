@@ -2011,7 +2011,7 @@ impl<'a> super::FnCompiler<'a> {
                                         self.expr(k)?;
                                         steps.push(FieldStep::Index);
                                     }
-                                    PlaceStep::Prop(n) => steps.push(FieldStep::Prop(n.clone())),
+                                    PlaceStep::Prop(n) => steps.push(FieldStep::Prop(php_types::intern_name(n))),
                                     PlaceStep::Append => steps.push(FieldStep::Append),
                                     _ => unreachable!("filtered above"),
                                 }

@@ -132,3 +132,18 @@ impl<'m> super::Vm<'m> {
         r
     }
 }
+
+impl<'m> super::Vm<'m> {
+    /// Queue PHP 8.2's "Creation of dynamic property" deprecation, stamped
+    /// with the line of the op that creates the property (frame `top`): the
+    /// flush can land on the next statement's line.
+    #[inline(never)]
+    pub(super) fn deprecate_dynamic_prop(&mut self, top: usize, ocid: ClassId, prop: &[u8]) {
+        let cls = String::from_utf8_lossy(&self.classes[ocid].name).into_owned();
+        let prop = String::from_utf8_lossy(prop).into_owned();
+        let before = self.diags.len();
+        self.diags.push(Diag::Deprecated(format!("Creation of dynamic property {cls}::${prop} is deprecated")));
+        let line = self.cur_line(top);
+        self.mark_pending_diag_lines(before, line);
+    }
+}

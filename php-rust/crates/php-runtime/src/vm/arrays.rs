@@ -2095,7 +2095,7 @@ impl<'m> Vm<'m> {
                     }
                 }
                 let mut steps: Vec<FieldStep> = Vec::with_capacity(rest.len() + 1);
-                steps.push(FieldStep::Prop(name.clone().into_boxed_slice()));
+                steps.push(FieldStep::Prop(php_types::intern_name(&name)));
                 steps.extend(rest);
                 let mut objz = Zval::Object(o.clone());
                 let mut dropped = Vec::new();

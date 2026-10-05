@@ -42,6 +42,7 @@ use crate::hir::{
 
 mod class;
 mod func;
+mod intern;
 pub(crate) mod reg_lower;
 mod expr;
 mod assign;
@@ -810,8 +811,9 @@ impl<'a> FnCompiler<'a> {
 
     /// Append `op`, returning its address. Records the current source line in the
     /// parallel `lines` table (EXC-3b).
-    fn emit(&mut self, op: Op) -> Addr {
+    fn emit(&mut self, mut op: Op) -> Addr {
         let at = self.ops.len() as Addr;
+        intern::intern_op_names(&mut op);
         self.ops.push(op);
         self.lines.push(self.cur_line);
         at
